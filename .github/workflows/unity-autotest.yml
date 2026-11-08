@@ -76,7 +76,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Публикация результатов в ветку autotest-results
-        if: always() && steps.secrets.outputs.ok == 'true'
+        if: (success() || failure()) && steps.secrets.outputs.ok == 'true'
         run: |
           mkdir -p autotest-out
           cp unity/Logs/*.log autotest-out/ 2>/dev/null || true
@@ -92,7 +92,7 @@ jobs:
           git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" autotest-results
 
       - uses: actions/upload-artifact@v4
-        if: always() && steps.secrets.outputs.ok == 'true'
+        if: (success() || failure()) && steps.secrets.outputs.ok == 'true'
         with:
           name: autotest
           path: autotest-out
