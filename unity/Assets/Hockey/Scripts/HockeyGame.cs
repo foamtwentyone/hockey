@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Hockey
 {
-    public class HockeyGame : MonoBehaviour
+    public partial class HockeyGame : MonoBehaviour
     {
         const float Step = 1f / 60;
         static readonly string[] SlotColors = { "#ffd23f", "#5cf28a", "#ff7ad9", "#4fe3ff", "#ffa94d", "#b48cff" };
@@ -90,6 +90,7 @@ namespace Hockey
             menuCam = MakeCamera("MenuCam");
             menuCam.fieldOfView = 50;
             finder = new LanFinder();
+            StartAutotestIfRequested();
         }
 
         Camera MakeCamera(string name)
@@ -435,7 +436,7 @@ namespace Hockey
             view = null;
             if ((mode == Mode.Local || mode == Mode.Host) && sim != null && screen == UiScreen.Match)
             {
-                if (!(paused && mode == Mode.Local))
+                if (!(paused && mode == Mode.Local) && !autoFreeze)
                 {
                     acc += Mathf.Min(0.25f, Time.unscaledDeltaTime);
                     var inputs = new Dictionary<string, PlayerInput>();
@@ -443,7 +444,7 @@ namespace Hockey
                     {
                         inputs.Clear();
                         if (host != null) foreach (var k in host.ClientKeys) if (host.TryGetInput(k, out var ri)) inputs[k] = ri;
-                        foreach (var s in sources) inputs[s.Key] = paused ? new PlayerInput() : GameInput.Read(s);
+                        foreach (var s in sources) inputs[s.Key] = paused ? new PlayerInput() : ReadSource(s);
                         sim.Step(Step, inputs);
                         acc -= Step;
                         steps++;
