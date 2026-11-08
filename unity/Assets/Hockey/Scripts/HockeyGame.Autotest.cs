@@ -76,7 +76,10 @@ namespace Hockey
         IEnumerator Shot(string name)
         {
             yield return new WaitForEndOfFrame();
-            var tex = ScreenCapture.CaptureScreenshotAsTexture();
+            // ReadPixels из кадра целиком (с интерфейсом) — без модуля ScreenCapture
+            var tex = new Texture2D(Screen.width, Screen.height, TextureFormat.RGB24, false);
+            tex.ReadPixels(new Rect(0, 0, Screen.width, Screen.height), 0, 0);
+            tex.Apply();
             string path = Path.Combine(autotestDir, name + ".png");
             File.WriteAllBytes(path, tex.EncodeToPNG());
             Destroy(tex);
