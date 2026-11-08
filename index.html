@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Дворовый хоккей 3D</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="lib/peerjs.min.js"></script>
+  <script type="importmap">
+    { "imports": { "three": "./lib/three/three.module.js", "three/addons/": "./lib/three/addons/" } }
+  </script>
+</head>
+<body>
+  <div id="game"></div>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div id="scoreboard">
+      <div class="team red"><span class="tname">КРАСНЫЕ</span><span id="s0" class="tscore">0</span></div>
+      <div class="clock"><span id="clock">3:00</span><span id="ot" class="hidden">ОВЕРТАЙМ</span></div>
+      <div class="team blue"><span id="s1" class="tscore">0</span><span class="tname">СИНИЕ</span></div>
+    </div>
+    <div id="banner" class="hidden"><div id="bannerBig"></div><div id="bannerSmall"></div></div>
+    <div id="viewOverlays"></div>
+    <canvas id="minimap" width="240" height="124"></canvas>
+    <div id="netinfo" class="hidden"></div>
+    <div id="hint">Esc — пауза · H — управление · M — звук</div>
+    <div id="help" class="hidden"></div>
+  </div>
+
+  <!-- Главное меню -->
+  <div id="menu" class="screen">
+    <div class="panel">
+      <h1>ДВОРОВЫЙ<br/><span>ХОККЕЙ 3D</span></h1>
+      <label class="field">Твоё имя <input id="name" maxlength="14" placeholder="Игрок" /></label>
+
+      <div class="settings">
+        <label>Игроков в команде
+          <select id="skaters"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option></select>
+        </label>
+        <label>Время матча
+          <select id="duration"><option value="120">2 мин</option><option value="180" selected>3 мин</option><option value="300">5 мин</option><option value="480">8 мин</option></select>
+        </label>
+        <label>Боты
+          <select id="difficulty"><option value="0">Легко</option><option value="1" selected>Нормально</option><option value="2">Сложно</option></select>
+        </label>
+      </div>
+
+      <div class="buttons">
+        <button id="btnSolo" class="big">🏒 Играть против ботов</button>
+        <div class="row">
+          <button id="btnSplit">👥 Вдвоём на одном экране</button>
+          <select id="splitMode"><option value="vs">друг против друга</option><option value="coop">в одной команде</option></select>
+        </div>
+        <button id="btnHost" class="big online">🌐 Создать онлайн-матч</button>
+        <div class="row">
+          <input id="joinCode" maxlength="5" placeholder="КОД" />
+          <button id="btnJoin" class="online">Подключиться</button>
+        </div>
+      </div>
+      <div id="menuMsg" class="msg"></div>
+      <details class="controls">
+        <summary>Управление</summary>
+        <div id="controlsText"></div>
+      </details>
+    </div>
+  </div>
+
+  <!-- Лобби -->
+  <div id="lobby" class="screen hidden">
+    <div class="panel">
+      <h2 id="lobbyTitle">Онлайн-матч</h2>
+      <div id="codeBox" class="hidden">
+        <div class="codeLabel">Код матча — отправь друзьям:</div>
+        <div id="lobbyCode">·····</div>
+        <button id="btnCopy">Скопировать ссылку</button>
+      </div>
+      <div id="lobbyStatus" class="msg"></div>
+      <div class="teams">
+        <div class="tcol red"><h3>Красные</h3><ul id="team0"></ul></div>
+        <div class="tcol blue"><h3>Синие</h3><ul id="team1"></ul></div>
+      </div>
+      <div class="lobbyHint">Свободные места займут боты. Нажми на игрока (или «Сменить команду»), чтобы перейти в другую команду.</div>
+      <div class="buttons">
+        <button id="btnSwitch">Сменить команду</button>
+        <button id="btnStart" class="big">Начать матч</button>
+        <button id="btnLeave" class="ghost">Выйти</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Пауза -->
+  <div id="pause" class="screen hidden">
+    <div class="panel small">
+      <h2>Пауза</h2>
+      <div class="buttons">
+        <button id="btnResume" class="big">Продолжить</button>
+        <button id="btnQuit" class="ghost">Выйти в меню</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Конец матча -->
+  <div id="end" class="screen hidden">
+    <div class="panel">
+      <h2 id="endTitle">Матч окончен</h2>
+      <div id="endScore"></div>
+      <table id="stats"></table>
+      <div class="buttons">
+        <button id="btnAgain" class="big">Ещё матч</button>
+        <button id="btnMenu" class="ghost">В меню</button>
+      </div>
+      <div id="endWait" class="msg"></div>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
