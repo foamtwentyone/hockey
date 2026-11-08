@@ -12,7 +12,8 @@ namespace Hockey
 {
     public class KayKitCharacter
     {
-        public Transform Model, HandR, Head, StickBlade;
+        public Transform Model, HandR, Head, StickBlade, Stick;
+        float stickLen;
         public bool Goalie;
         PlayableGraph graph;
         AnimationMixerPlayable baseMix, upperMix;
@@ -164,6 +165,7 @@ namespace Hockey
             var s = HandR.lossyScale;
             stick.localScale = new Vector3(1 / Mathf.Max(1e-4f, s.x), 1 / Mathf.Max(1e-4f, s.y), 1 / Mathf.Max(1e-4f, s.z));
             float len = Goalie ? 1.1f : 1.25f;
+            Stick = stick; stickLen = len;
             void P(Mesh m, Material mt, Vector3 pos, Vector3 scale)
             {
                 var p = new GameObject("p");
@@ -360,6 +362,33 @@ namespace Hockey
             upperLayerW += (upper - upperLayerW) * k;
             Apply();
             graph.Evaluate(0);
+            AimStick(s);
+        }
+
+        /// После анимации наводим клюшку из руки на точку на льду справа-спереди (замах — вверх-назад, бросок — вперёд).
+        void AimStick(PlayerView s)
+        {
+            if (Stick == null || Model == null) return;
+            var fwd = Model.forward; fwd.y = 0;
+            if (fwd.sqrMagnitude < 1e-4f) return;
+            fwd.Normalize();
+            var right = Vector3.Cross(Vector3.up, fwd);
+            float g = Stick.lossyScale.y;
+            float L = (stickLen - 0.25f) * g;
+            var h = Stick.position;
+            var target = Model.position + (fwd * (Goalie ? 0.75f : 0.95f) + right * (Goalie ? 0.05f : 0.32f)) * g;
+            float drop = h.y - (Model.position.y + 0.04f);
+            var hor = target - h; hor.y = 0;
+            Vector3 dir;
+            if (drop >= L || hor.sqrMagnitude < 1e-4f) dir = Vector3.down;
+            else dir = (hor.normalized * Mathf.Sqrt(L * L - drop * drop) + Vector3.down * drop) / L;
+            var wind = (-fwd * 0.45f + Vector3.up * 0.85f + right * 0.3f).normalized;
+            var follow = (fwd * 0.9f + Vector3.up * 0.1f - right * 0.4f).normalized;
+            dir = Vector3.Slerp(dir, wind, Mathf.Clamp01(s.Charge) * 0.9f);
+            if (swingT < 0.35f) dir = Vector3.Slerp(dir, follow, Mathf.Sin(swingT / 0.35f * Mathf.PI));
+            var bladeFwd = Vector3.ProjectOnPlane(fwd, dir);
+            if (bladeFwd.sqrMagnitude < 1e-4f) bladeFwd = Vector3.ProjectOnPlane(right, dir);
+            Stick.rotation = Quaternion.LookRotation(bladeFwd.normalized, -dir);
         }
     }
 }

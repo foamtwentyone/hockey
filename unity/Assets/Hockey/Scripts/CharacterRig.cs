@@ -219,10 +219,10 @@ namespace Hockey
             }
 
             // клюшка
-            var handle = new Vector3(0.12f, 0.2f, 0.3f);
+            var handle = new Vector3(-0.12f, 0.2f, 0.3f);
             c.StickPivot = Group("stick", c.Torso, handle);
             float torsoWorldY = c.Hips.localPosition.y + c.Torso.localPosition.y;
-            var bladeTarget = new Vector3(-0.3f, 0.03f - torsoWorldY, 0.97f);
+            var bladeTarget = new Vector3(0.3f, 0.03f - torsoWorldY, 0.97f);
             var dir = bladeTarget - handle;
             float len = dir.magnitude;
             var orient = Group("orient", c.StickPivot, Vector3.zero);

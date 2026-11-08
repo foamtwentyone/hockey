@@ -424,7 +424,7 @@ namespace Hockey
         public static void Blade(Player p, out float bx, out float bz)
         {
             float fx = MathF.Sin(p.H), fz = MathF.Cos(p.H);
-            float rx = -fz, rz = fx;
+            float rx = fz, rz = -fx;   // правая сторона игрока (клюшка в правой руке)
             bx = p.X + fx * 0.95f + rx * 0.28f;
             bz = p.Z + fz * 0.95f + rz * 0.28f;
         }
