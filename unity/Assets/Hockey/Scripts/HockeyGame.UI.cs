@@ -133,9 +133,9 @@ namespace Hockey
         float Slider(string label, float v, float min, float max, string fmt)
         {
             GUILayout.BeginHorizontal();
-            GUILayout.Label(label, sLabel, GUILayout.Width(250));
-            v = GUILayout.HorizontalSlider(v, min, max, sSliderBg, sThumb, GUILayout.Width(260));
-            GUILayout.Label(fmt, sSmall, GUILayout.Width(70));
+            GUILayout.Label(label, sLabel, GUILayout.Width(235));
+            v = GUILayout.HorizontalSlider(v, min, max, sSliderBg, sThumb, GUILayout.Width(190));
+            GUILayout.Label(fmt, sSmall, GUILayout.Width(62));
             GUILayout.EndHorizontal();
             return v;
         }
@@ -143,7 +143,7 @@ namespace Hockey
         bool Toggle(string label, bool v)
         {
             GUILayout.BeginHorizontal();
-            GUILayout.Label(label, sLabel, GUILayout.Width(250));
+            GUILayout.Label(label, sLabel, GUILayout.Width(235));
             var st = v ? Btn("#4fe39a", "#1fa863", 17) : Btn("#5a5f8a", "#40446e", 17);
             if (GUILayout.Button(v ? "ВКЛ" : "ВЫКЛ", st, GUILayout.Width(120))) { v = !v; audioFx.Ui(true); }
             GUILayout.EndHorizontal();
@@ -565,12 +565,13 @@ namespace Hockey
                 widths.Add(kw); total += kw + aw + 34;
             }
             float x = area.x + (area.width - total) / 2, y = area.yMax - 120;
+            GUI.Label(new Rect(x - 12, y - 8, total + 4, 46), "", sTag);
             for (int i = 0; i < items.Count; i++)
             {
                 GUI.Label(new Rect(x, y, widths[i], 30), items[i].key, sKey);
                 x += widths[i] + 6;
                 var aw = sSmall.CalcSize(new GUIContent(items[i].act)).x;
-                GUI.Label(new Rect(x, y + 3, aw + 4, 28), items[i].act, sSmall);
+                GUI.Label(new Rect(x, y + 3, aw + 4, 28), $"<color=#ffffff>{items[i].act}</color>", sSmall);
                 x += aw + 28;
             }
         }

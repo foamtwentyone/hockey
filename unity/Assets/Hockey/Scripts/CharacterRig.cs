@@ -146,17 +146,21 @@ namespace Hockey
                 float s = i == 0 ? 1 : -1;
                 Part(RB(0.08f, 0.14f, 0.12f, 0.04f), skinM, new Vector3(s * 0.38f, 0.3f, 0.02f), c.Head);           // уши
             }
-            var face = Group("face", c.Head, new Vector3(0, 0, goalie ? 0.03f : 0));
+            var face = Group("face", c.Head, Vector3.zero);
             for (int i = 0; i < 2; i++)
             {
                 float s = i == 0 ? 1 : -1;
                 Part(MeshKit.Capsule(0.045f, 0.13f), eye, new Vector3(s * 0.14f, 0.3f, 0.315f), face, false, new Vector3(1, 1, 0.5f));
                 Part(MeshKit.Sphere(0.018f, 8, 0), eyeHi, new Vector3(s * 0.14f + 0.014f, 0.33f, 0.335f), face, false);
+                if (goalie) continue; // у вратаря лицо закрыто маской — видны только глаза
                 Part(RB(0.13f, 0.035f, 0.03f, 0.015f, 0), hairM, new Vector3(s * 0.15f, 0.42f, 0.32f), face, false, null, new Vector3(0, 0, -s * 8));
                 Part(MeshKit.Sphere(0.055f, 10, 0), cheek, new Vector3(s * 0.235f, 0.19f, 0.3f), face, false, new Vector3(1, 0.7f, 0.35f));
             }
-            Part(MeshKit.Sphere(0.045f, 10, 0.1f), skinM, new Vector3(0, 0.23f, 0.335f), face, false, new Vector3(1.1f, 0.85f, 0.8f));
-            Part(RB(0.11f, 0.03f, 0.02f, 0.012f, 0), mouth, new Vector3(0, 0.135f, 0.325f), face, false);
+            if (!goalie)
+            {
+                Part(MeshKit.Sphere(0.045f, 10, 0.1f), skinM, new Vector3(0, 0.23f, 0.335f), face, false, new Vector3(1.1f, 0.85f, 0.8f));
+                Part(RB(0.11f, 0.03f, 0.02f, 0.012f, 0), mouth, new Vector3(0, 0.135f, 0.325f), face, false);
+            }
             // волосы
             Part(RB(0.64f, 0.22f, 0.14f, 0.06f), hairM, new Vector3(0, 0.36f, -0.3f), c.Head);
             for (int i = 0; i < 2; i++) Part(RB(0.08f, 0.18f, 0.16f, 0.035f), hairM, new Vector3((i == 0 ? 1 : -1) * 0.355f, 0.4f, 0.1f), c.Head);
@@ -165,19 +169,21 @@ namespace Hockey
 
             if (goalie)
             {
-                Part(RB(0.8f, 0.72f, 0.72f, 0.28f, 0.1f), white, new Vector3(0, 0.36f, -0.03f), c.Head);
-                Part(RB(0.24f, 0.73f, 0.73f, 0.08f, 0.1f), jersey, new Vector3(0, 0.37f, -0.03f), c.Head);
-                var bars = Group("cage", c.Head, new Vector3(0, 0.26f, 0.37f));
+                // маска: белый шлем с тонкой полосой цвета команды и решёткой; глаза видны в окошке
+                Part(RB(0.8f, 0.72f, 0.66f, 0.28f, 0.1f), white, new Vector3(0, 0.36f, -0.06f), c.Head);
+                Part(RB(0.12f, 0.73f, 0.67f, 0.05f, 0.1f), jersey, new Vector3(0, 0.37f, -0.06f), c.Head);
+                Part(RB(0.62f, 0.12f, 0.08f, 0.04f, 0.05f), white, new Vector3(0, 0.46f, 0.29f), c.Head);
+                var bars = Group("cage", c.Head, new Vector3(0, 0.25f, 0.35f));
                 for (int i = -2; i <= 2; i++) Part(RB(0.02f, 0.36f, 0.02f, 0.008f, 0), cage, new Vector3(i * 0.075f, 0, 0), bars, false);
                 for (int i = -1; i <= 1; i++) Part(RB(0.38f, 0.02f, 0.02f, 0.008f, 0), cage, new Vector3(0, i * 0.1f, 0), bars, false);
             }
             else
             {
-                Part(RB(0.82f, 0.36f, 0.76f, 0.2f, 0.08f), helmet, new Vector3(0, 0.6f, -0.04f), c.Head);
-                Part(RB(0.14f, 0.37f, 0.77f, 0.06f, 0.05f), helmetDark, new Vector3(0, 0.61f, -0.04f), c.Head);
-                Part(RB(0.84f, 0.05f, 0.78f, 0.02f, 0), helmetDark, new Vector3(0, 0.44f, -0.04f), c.Head);
-                for (int i = 0; i < 2; i++) Part(RB(0.09f, 0.22f, 0.24f, 0.05f), helmet, new Vector3((i == 0 ? 1 : -1) * 0.4f, 0.36f, 0.0f), c.Head);
-                Part(RB(0.2f, 0.18f, 0.02f, 0.05f, 0), Mats.Cutout(Tex.Number(number), Color.white), new Vector3(0, 0.6f, 0.37f), c.Head, false);
+                // шлем плотно сидит на голове: купол, гребень и наушники
+                Part(RB(0.78f, 0.3f, 0.7f, 0.15f, 0.08f), helmet, new Vector3(0, 0.6f, -0.03f), c.Head);
+                Part(RB(0.1f, 0.06f, 0.6f, 0.03f, 0), helmetDark, new Vector3(0, 0.76f, -0.05f), c.Head);
+                Part(RB(0.79f, 0.03f, 0.71f, 0.012f, 0), helmetDark, new Vector3(0, 0.46f, -0.03f), c.Head);
+                for (int i = 0; i < 2; i++) Part(RB(0.07f, 0.18f, 0.2f, 0.035f), helmet, new Vector3((i == 0 ? 1 : -1) * 0.38f, 0.38f, 0.0f), c.Head);
             }
 
             // руки: плечо-капсула, налокотник, круглая перчатка

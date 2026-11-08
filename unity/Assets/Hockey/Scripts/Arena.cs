@@ -191,7 +191,7 @@ namespace Hockey
 
             // прожекторы и лучи света
             var lamp = Mats.Emissive("#fff4d6", 1.4f);
-            var beamMat = Mats.Fade("#fff1c4", 0.05f, true);
+            var beamMat = Mats.Fade("#fff1c4", 0.035f, true);
             for (int i = -2; i <= 2; i++)
                 foreach (float z in new[] { -13f, 13f })
                 {

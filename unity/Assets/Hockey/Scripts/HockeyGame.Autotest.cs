@@ -153,11 +153,12 @@ namespace Hockey
                 // бонусы: великан и заморозка
                 me.X = 0; me.Z = 5; me.H = dir > 0 ? Mathf.PI / 2 : -Mathf.PI / 2; me.Vx = 0; me.Vz = 0;
                 sim.Items.Clear();
-                sim.Items.Add(new Item { X = dir * 3, Z = 5, Type = (int)Buff.Giant, Life = 12 });
-                sim.Items.Add(new Item { X = dir * 7, Z = 5, Type = (int)Buff.Frozen, Life = 12 });
+                sim.Items.Add(new Item { X = dir * 1.6f, Z = 5, Type = (int)Buff.Giant, Life = 12 });
+                sim.Items.Add(new Item { X = dir * 4.5f, Z = 5, Type = (int)Buff.Frozen, Life = 12 });
                 sim.Items.Add(new Item { X = dir * 4, Z = 9, Type = (int)Buff.Turbo, Life = 12 });
                 sim.Items.Add(new Item { X = -dir * 4, Z = 9, Type = (int)Buff.Mega, Life = 12 });
                 autoInput = Toward(dir, 0);
+                foreach (var v in views) v.Init = false; // камера сразу за спину после телепорта
                 yield return Wait(0.2f);
                 yield return Shot("12_items");
                 yield return Wait(0.6f);

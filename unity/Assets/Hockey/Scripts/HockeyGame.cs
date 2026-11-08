@@ -559,7 +559,7 @@ namespace Hockey
                 if (view.Phase == Phase.End && !endShown)
                 {
                     if (endTimer < 0) { endTimer = 1.2f; fx.ConfettiRain(Vector3.zero, 400); }
-                    endTimer -= dt;
+                    endTimer -= Time.unscaledDeltaTime;
                     if (endTimer <= 0) { endShown = true; paused = false; }
                 }
             }

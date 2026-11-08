@@ -81,12 +81,12 @@ namespace Hockey
                     c = Mix(c, red, Cover(ax - Rink.GoalX, 0.05f, pxm) * (az < 12.5f ? 1 : 0));
                     // центр: эмблема-звезда в круге
                     float dc = Mathf.Sqrt(wx * wx + z * z);
-                    if (dc < 3.6f)
+                    if (dc < 3.2f)
                     {
-                        c = Mix(c, Mix(logoB, Color.white, 0.55f), Cover(dc - 1.8f, 1.8f, pxm) * 0.55f);
-                        c = Mix(c, logoB, Cover(dc - 3.3f, 0.16f, pxm));
-                        if (InStar(wx, z, 2.4f)) c = Mix(c, logoA, 0.95f);
-                        if (InStar(wx, z, 1.3f)) c = Mix(c, Color.white, 0.9f);
+                        c = Mix(c, Mix(logoB, Color.white, 0.7f), Cover(dc - 1.5f, 1.5f, pxm) * 0.45f);
+                        c = Mix(c, logoB, Cover(dc - 3.0f, 0.1f, pxm) * 0.8f);
+                        if (InStar(wx, z, 1.9f)) c = Mix(c, logoA, 0.55f);
+                        if (InStar(wx, z, 1.0f)) c = Mix(c, Color.white, 0.6f);
                     }
                     c = Mix(c, blue, Cover(dc - 4.5f, 0.08f, pxm));
                     c = Mix(c, blue, Cover(dc, 0.25f, pxm));
