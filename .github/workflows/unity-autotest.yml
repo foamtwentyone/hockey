@@ -1,0 +1,93 @@
+# Сборка Unity-версии и автотест со скриншотами на серверах GitHub.
+# Нужны секреты репозитория: UNITY_LICENSE (содержимое Unity_lic.ulf), UNITY_EMAIL, UNITY_PASSWORD.
+# Без них задача просто пропускается. Скриншоты и лог публикуются в ветку autotest-results.
+name: Unity autotest
+
+on:
+  push:
+    paths:
+      - 'unity/**'
+      - '.github/workflows/unity-autotest.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: unity-autotest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  autotest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+      UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+      UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+    steps:
+      - name: Проверка секретов
+        id: secrets
+        run: |
+          if [ -z "$UNITY_LICENSE" ] || [ -z "$UNITY_EMAIL" ] || [ -z "$UNITY_PASSWORD" ]; then
+            echo "Секреты Unity не заданы — пропускаем сборку."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.secrets.outputs.ok == 'true'
+
+      - uses: actions/cache@v4
+        if: steps.secrets.outputs.ok == 'true'
+        with:
+          path: unity/Library
+          key: Library-${{ hashFiles('unity/Assets/**', 'unity/Packages/**', 'unity/ProjectSettings/**') }}
+          restore-keys: Library-
+
+      - name: Сборка (Linux)
+        if: steps.secrets.outputs.ok == 'true'
+        uses: game-ci/unity-builder@v4
+        with:
+          projectPath: unity
+          targetPlatform: StandaloneLinux64
+          buildMethod: Hockey.EditorTools.HockeyBuild.Build
+          allowDirtyBuild: true
+
+      - name: Автотест под виртуальным экраном
+        if: steps.secrets.outputs.ok == 'true'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb libgl1-mesa-dri libglu1-mesa > /dev/null
+          sudo chmod -R a+rwX unity/Build || true
+          mkdir -p autotest-out
+          ls -la unity/Build || true
+          timeout 600 xvfb-run -a -s "-screen 0 1280x720x24" \
+            unity/Build/Hockey.x86_64 -autotest -autotestDir "$PWD/autotest-out" \
+            -screen-fullscreen 0 -screen-width 1280 -screen-height 720 -force-glcore \
+            -logFile "$PWD/autotest-out/player.log" || echo "Игра завершилась с кодом $?"
+          ls -la autotest-out
+
+      - name: Публикация результатов в ветку autotest-results
+        if: always() && steps.secrets.outputs.ok == 'true'
+        run: |
+          mkdir -p autotest-out
+          cp unity/Logs/*.log autotest-out/ 2>/dev/null || true
+          SRC_SHA=$(git rev-parse --short HEAD)
+          cd autotest-out
+          echo "Коммит: $GITHUB_SHA ($GITHUB_REF_NAME), запуск: $GITHUB_RUN_ID" > RUN.txt
+          git init -q
+          git config user.name "autotest-bot"
+          git config user.email "autotest-bot@users.noreply.github.com"
+          git checkout -q -b autotest-results
+          git add -A
+          git commit -q -m "Автотест для $SRC_SHA"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" autotest-results
+
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.secrets.outputs.ok == 'true'
+        with:
+          name: autotest
+          path: autotest-out
+          if-no-files-found: ignore
