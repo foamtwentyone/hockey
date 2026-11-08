@@ -9,7 +9,7 @@ namespace Hockey
         const int Rate = 44100;
         readonly AudioSource[] pool;
         int next;
-        readonly AudioSource crowd;
+        readonly AudioSource crowd, music;
         readonly Dictionary<string, AudioClip> clips = new Dictionary<string, AudioClip>();
         float crowdTarget = 0.12f, crowdHold;
         public bool Muted;
@@ -34,6 +34,22 @@ namespace Hockey
             clips["whistle"] = Mix(Tone(2900, 0.35f, 0.25f, Wave.Sine, 120), Tone(2950, 0.35f, 0.08f, Wave.Square, 100));
             clips["horn"] = Mix(Tone(196, 1.6f, 0.3f, Wave.Saw, 0), Tone(247, 1.6f, 0.22f, Wave.Saw, 0));
             clips["goal"] = Mix(Mix(Tone(220, 2.2f, 0.25f, Wave.Saw, 0), Tone(277, 2.2f, 0.2f, Wave.Saw, 0)), Tone(330, 2.2f, 0.2f, Wave.Saw, 0));
+
+            clips["jump"] = Tone(320, 0.22f, 0.35f, Wave.Sine, 420);
+            clips["dive"] = Mix(Noise(0.3f, 0.12f, 0.5f), Tone(500, 0.25f, 0.2f, Wave.Triangle, -300));
+            clips["land"] = Mix(Noise(0.12f, 0.03f, 0.8f), Tone(110, 0.12f, 0.4f, Wave.Sine, -50));
+            clips["stop"] = Noise(0.35f, 0.7f, 0.35f);
+            clips["powerup"] = Arp(new[] { 523f, 659f, 784f, 1047f }, 0.07f, 0.25f);
+            clips["freeze"] = Mix(Arp(new[] { 1568f, 1319f, 1175f, 1047f }, 0.06f, 0.2f), Noise(0.5f, 0.9f, 0.15f));
+            clips["mega"] = Mix(Tone(70, 0.5f, 0.7f, Wave.Sine, -30), Noise(0.4f, 0.1f, 0.6f));
+            clips["spawn"] = Mix(Tone(880, 0.25f, 0.15f, Wave.Sine, 0), Tone(1320, 0.3f, 0.1f, Wave.Sine, 0));
+            clips["click"] = Tone(660, 0.05f, 0.25f, Wave.Triangle, 200);
+            clips["hover"] = Tone(990, 0.03f, 0.08f, Wave.Sine, 0);
+
+            music = host.AddComponent<AudioSource>();
+            music.clip = MusicLoop();
+            music.loop = true; music.volume = 0; music.spatialBlend = 0;
+            music.Play();
 
             crowd = host.AddComponent<AudioSource>();
             crowd.clip = CrowdLoop();
@@ -99,6 +115,75 @@ namespace Hockey
             return Make(o);
         }
 
+        static AudioClip Arp(float[] notes, float step, float vol)
+        {
+            int n = (int)((notes.Length * step + 0.25f) * Rate);
+            var d = new float[n];
+            for (int k = 0; k < notes.Length; k++)
+            {
+                int start = (int)(k * step * Rate), len = (int)(0.25f * Rate);
+                for (int i = 0; i < len && start + i < n; i++)
+                {
+                    float t = i / (float)Rate;
+                    float env = Mathf.Min(1, i / (Rate * 0.005f)) * Mathf.Exp(-t * 12);
+                    float ph = t * notes[k];
+                    d[start + i] += ((ph - Mathf.Floor(ph)) < 0.5f ? 1 : -1) * 0.5f * env * vol + Mathf.Sin(ph * Mathf.PI * 2) * env * vol * 0.5f;
+                }
+            }
+            return Make(d);
+        }
+
+        /// Весёлая фоновая петля: бас, аккорды и мелодия (4 такта, 120 BPM).
+        static AudioClip MusicLoop()
+        {
+            const float bpm = 124; float beat = 60 / bpm;
+            int bars = 4; float dur = bars * 4 * beat;
+            int n = (int)(dur * Rate);
+            var d = new float[n];
+            float[][] chords = { new[] { 261.6f, 329.6f, 392f }, new[] { 196f, 246.9f, 293.7f }, new[] { 220f, 261.6f, 329.6f }, new[] { 174.6f, 220f, 261.6f } };
+            float[] scale = { 523.3f, 587.3f, 659.3f, 784f, 880f, 1046.5f };
+            int[] melody = { 0, 2, 3, 2, 4, 3, 2, -1, 1, 3, 4, 3, 5, 4, 3, -1, 2, 3, 4, 2, 3, 1, 0, -1, 3, 2, 1, 2, 0, 0, -1, -1 };
+            void Note(float freq, float start, float len, float vol, int wave)
+            {
+                int s0 = (int)(start * Rate), cnt = (int)(len * Rate);
+                for (int i = 0; i < cnt && s0 + i < n; i++)
+                {
+                    float t = i / (float)Rate;
+                    float env = Mathf.Min(1, i / (Rate * 0.004f)) * Mathf.Exp(-t * (wave == 2 ? 3 : 7));
+                    float ph = t * freq; ph -= Mathf.Floor(ph);
+                    float sgl = wave == 0 ? (ph < 0.5f ? 1 : -1) * 0.6f : wave == 1 ? 1 - 4 * Mathf.Abs(ph - 0.5f) : Mathf.Sin(ph * Mathf.PI * 2);
+                    d[s0 + i] += sgl * env * vol;
+                }
+            }
+            for (int b = 0; b < bars; b++)
+            {
+                var ch = chords[b];
+                for (int q = 0; q < 4; q++)
+                {
+                    float t0 = (b * 4 + q) * beat;
+                    Note(ch[0] / 2, t0, beat * 0.9f, 0.22f, 1);                       // бас
+                    Note(ch[q % 3], t0 + beat * 0.5f, beat * 0.4f, 0.05f, 0);         // «чик» аккорда
+                    Note(ch[(q + 1) % 3], t0 + beat * 0.5f, beat * 0.4f, 0.04f, 0);
+                    // хай-хэт
+                    int hs = (int)((t0 + beat * 0.5f) * Rate);
+                    for (int i = 0; i < Rate * 0.03f && hs + i < n; i++) d[hs + i] += ((float)rnd.NextDouble() * 2 - 1) * 0.05f * Mathf.Exp(-i / (Rate * 0.008f));
+                    // «бочка»
+                    int ks = (int)(t0 * Rate);
+                    for (int i = 0; i < Rate * 0.12f && ks + i < n; i++) { float t = i / (float)Rate; d[ks + i] += Mathf.Sin(t * Mathf.PI * 2 * (90 - t * 300)) * 0.25f * Mathf.Exp(-t * 25); }
+                }
+                for (int e = 0; e < 8; e++)
+                {
+                    int m = melody[(b * 8 + e) % melody.Length];
+                    if (m >= 0) Note(scale[m], (b * 4 + e * 0.5f) * beat, beat * 0.45f, 0.09f, 2);
+                }
+            }
+            for (int i = 0; i < n; i++) d[i] = Mathf.Clamp(d[i], -1, 1) * 0.8f;
+            return Make(d);
+        }
+
+        public void SetMusic(bool on) { musicOn = on; }
+        bool musicOn = true;
+
         static AudioClip CrowdLoop()
         {
             int n = Rate * 3;
@@ -122,7 +207,7 @@ namespace Hockey
         {
             if (Muted || !clips.TryGetValue(key, out var c)) return;
             var s = pool[next++ % pool.Length];
-            s.pitch = pitch; s.volume = vol;
+            s.pitch = pitch; s.volume = vol * Settings.Sfx;
             s.PlayOneShot(c);
         }
 
@@ -132,8 +217,12 @@ namespace Hockey
         {
             crowdHold -= dt;
             if (crowdHold <= 0) crowdTarget = Mathf.MoveTowards(crowdTarget, 0.12f, dt * 0.1f);
-            crowd.volume = Muted ? 0 : Mathf.MoveTowards(crowd.volume, crowdTarget, dt * 1.5f);
+            crowd.volume = Muted ? 0 : Mathf.MoveTowards(crowd.volume, crowdTarget * Settings.Crowd, dt * 1.5f);
+            music.volume = Muted ? 0 : Mathf.MoveTowards(music.volume, musicOn ? Settings.Music * 0.35f : Settings.Music * 0.12f, dt * 0.5f);
+            AudioListener.volume = Settings.Master;
         }
+
+        public void Ui(bool click) => Play(click ? "click" : "hover", click ? 0.6f : 0.4f);
 
         public void Event(GameEvent e)
         {
@@ -156,6 +245,14 @@ namespace Hockey
                 case EvType.Whistle: Play("whistle", 0.7f); break;
                 case EvType.Goal: Play("goal", 0.9f); Cheer(0.9f, 3.5f); break;
                 case EvType.Horn: case EvType.End: case EvType.Overtime: Play("horn", 0.8f); break;
+                case EvType.Jump: Play("jump", 0.6f, pr); break;
+                case EvType.Dive: Play("dive", 0.6f, pr); break;
+                case EvType.Land: Play("land", Mathf.Min(1, e.Value / 8), pr); break;
+                case EvType.Stop: Play("stop", Mathf.Min(0.6f, e.Value / 14), pr); break;
+                case EvType.PowerUp: Play("powerup", 0.8f); Cheer(0.25f, 0.5f); break;
+                case EvType.Freeze: Play("freeze", 0.9f); break;
+                case EvType.MegaShot: Play("mega", 1f); Cheer(0.35f, 0.6f); break;
+                case EvType.ItemSpawn: Play("spawn", 0.5f); break;
             }
         }
     }

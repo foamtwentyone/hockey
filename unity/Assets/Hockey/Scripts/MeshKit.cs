@@ -10,6 +10,7 @@ namespace Hockey
         public readonly List<Vector3> V = new List<Vector3>();
         public readonly List<Vector3> N = new List<Vector3>();
         public readonly List<Vector2> UV = new List<Vector2>();
+        public readonly List<Color> C = new List<Color>();
         public readonly List<int> T = new List<int>();
 
         /// Треугольник с проверкой ориентации: лицевая сторона смотрит по направлению desired.
@@ -20,7 +21,8 @@ namespace Hockey
             else { T.Add(a); T.Add(b); T.Add(c); }
         }
 
-        public int Vert(Vector3 p, Vector3 n, Vector2 uv) { V.Add(p); N.Add(n); UV.Add(uv); return V.Count - 1; }
+        public int Vert(Vector3 p, Vector3 n, Vector2 uv) { V.Add(p); N.Add(n); UV.Add(uv); C.Add(Color.white); return V.Count - 1; }
+        public int Vert(Vector3 p, Vector3 n, Vector2 uv, Color c) { V.Add(p); N.Add(n); UV.Add(uv); C.Add(c); return V.Count - 1; }
 
         public void Quad(Vector3 a, Vector3 b, Vector3 c, Vector3 d, Vector3 na, Vector3 nb, Vector3 nc, Vector3 nd, Vector3 desired,
             Vector2 ua, Vector2 ub, Vector2 uc, Vector2 ud)
@@ -43,7 +45,7 @@ namespace Hockey
         {
             var m = new Mesh { name = name };
             if (V.Count > 65000) m.indexFormat = IndexFormat.UInt32;
-            m.SetVertices(V); m.SetNormals(N); m.SetUVs(0, UV); m.SetTriangles(T, 0);
+            m.SetVertices(V); m.SetNormals(N); m.SetUVs(0, UV); m.SetColors(C); m.SetTriangles(T, 0);
             m.RecalculateBounds();
             return m;
         }
@@ -54,7 +56,8 @@ namespace Hockey
         static readonly Dictionary<string, Mesh> cache = new Dictionary<string, Mesh>();
 
         // ------------------------------------------------ скруглённый кубик
-        public static void RoundedBoxData(MeshBuilder mb, Vector3 size, float r, int m, Matrix4x4 xf, Vector2 uvOverride, bool useUvOverride)
+        /// shade — насколько темнее низ кубика (мягкое «запечённое» затенение, как у игрушечных моделей).
+        public static void RoundedBoxData(MeshBuilder mb, Vector3 size, float r, int m, Matrix4x4 xf, Vector2 uvOverride, bool useUvOverride, float shade = 0.2f)
         {
             Vector3 half = size * 0.5f;
             r = Mathf.Min(r, Mathf.Min(half.x, Mathf.Min(half.y, half.z)) - 0.002f);
@@ -76,7 +79,9 @@ namespace Hockey
                         dir = dir.sqrMagnitude < 1e-10f ? n : dir.normalized;
                         Vector3 pos = inner + dir * r;
                         Vector2 uv = useUvOverride ? uvOverride : new Vector2((float)i / (su.Count - 1), (float)j / (sv.Count - 1));
-                        mb.Vert(xf.MultiplyPoint3x4(pos), xf.MultiplyVector(dir).normalized, uv);
+                        float t = Mathf.Clamp01((pos.y + half.y) / Mathf.Max(1e-4f, size.y));
+                        float g = 1 - shade * (1 - Mathf.SmoothStep(0, 1, t));
+                        mb.Vert(xf.MultiplyPoint3x4(pos), xf.MultiplyVector(dir).normalized, uv, new Color(g, g, g, 1));
                     }
                 Vector3 desired = xf.MultiplyVector(n);
                 int w = su.Count;
@@ -101,18 +106,91 @@ namespace Hockey
             return s;
         }
 
-        public static Mesh RoundedBox(float w, float h, float d, float r, int m = 3)
+        public static Mesh RoundedBox(float w, float h, float d, float r, int m = 3, float shade = 0.2f)
         {
-            string key = $"rb{w:F3}|{h:F3}|{d:F3}|{r:F3}|{m}";
+            string key = $"rb{w:F3}|{h:F3}|{d:F3}|{r:F3}|{m}|{shade:F2}";
             if (cache.TryGetValue(key, out var mesh)) return mesh;
             var mb = new MeshBuilder();
-            RoundedBoxData(mb, new Vector3(w, h, d), r, m, Matrix4x4.identity, Vector2.zero, false);
+            RoundedBoxData(mb, new Vector3(w, h, d), r, m, Matrix4x4.identity, Vector2.zero, false, shade);
             mesh = mb.ToMesh(key);
             cache[key] = mesh;
             return mesh;
         }
 
-        public static Mesh Box(float w, float h, float d) => RoundedBox(w, h, d, 0.004f, 1);
+        /// Вывернутая наизнанку копия меша (для купола неба).
+        public static Mesh Flip(Mesh src)
+        {
+            var m = Object.Instantiate(src);
+            var t = m.triangles;
+            for (int i = 0; i < t.Length; i += 3) (t[i + 1], t[i + 2]) = (t[i + 2], t[i + 1]);
+            m.triangles = t;
+            var n = m.normals;
+            for (int i = 0; i < n.Length; i++) n[i] = -n[i];
+            m.normals = n;
+            return m;
+        }
+
+        public static Mesh Box(float w, float h, float d) => RoundedBox(w, h, d, 0.004f, 1, 0);
+
+        /// Сфера (UV-сфера), с лёгким затенением снизу.
+        public static Mesh Sphere(float r, int seg = 16, float shade = 0.2f)
+        {
+            string key = $"sph{r:F3}|{seg}|{shade:F2}";
+            if (cache.TryGetValue(key, out var mesh)) return mesh;
+            var mb = new MeshBuilder();
+            int rings = seg / 2;
+            for (int i = 0; i <= rings; i++)
+                for (int j = 0; j <= seg; j++)
+                {
+                    float th = i * Mathf.PI / rings, ph = j * Mathf.PI * 2 / seg;
+                    var n = new Vector3(Mathf.Sin(th) * Mathf.Cos(ph), Mathf.Cos(th), Mathf.Sin(th) * Mathf.Sin(ph));
+                    float g = 1 - shade * (1 - Mathf.SmoothStep(0, 1, n.y * 0.5f + 0.5f));
+                    mb.Vert(n * r, n, new Vector2((float)j / seg, 1 - (float)i / rings), new Color(g, g, g, 1));
+                }
+            for (int i = 0; i < rings; i++)
+                for (int j = 0; j < seg; j++)
+                {
+                    int a = i * (seg + 1) + j, b = a + 1, c = a + seg + 2, d = a + seg + 1;
+                    var center = (mb.V[a] + mb.V[c]) * 0.5f;
+                    mb.Tri(a, b, c, center); mb.Tri(a, c, d, center);
+                }
+            mesh = mb.ToMesh(key);
+            cache[key] = mesh;
+            return mesh;
+        }
+
+        /// Капсула-«боб» вдоль Y (для глаз, рук и т.п.).
+        public static Mesh Capsule(float r, float h, int seg = 14)
+        {
+            string key = $"cap{r:F3}|{h:F3}|{seg}";
+            if (cache.TryGetValue(key, out var mesh)) return mesh;
+            var mb = new MeshBuilder();
+            int rings = seg / 2;
+            float half = Mathf.Max(0, h / 2 - r);
+            for (int i = 0; i <= rings + 1; i++)
+            {
+                int ii = i <= rings / 2 ? i : i - 1;
+                float th = ii * Mathf.PI / rings;
+                float yo = i <= rings / 2 ? half : -half;
+                for (int j = 0; j <= seg; j++)
+                {
+                    float ph = j * Mathf.PI * 2 / seg;
+                    var n = new Vector3(Mathf.Sin(th) * Mathf.Cos(ph), Mathf.Cos(th), Mathf.Sin(th) * Mathf.Sin(ph));
+                    mb.Vert(n * r + Vector3.up * yo, n, new Vector2((float)j / seg, (float)i / (rings + 1)));
+                }
+            }
+            for (int i = 0; i < rings + 1; i++)
+                for (int j = 0; j < seg; j++)
+                {
+                    int a = i * (seg + 1) + j, b = a + 1, c = a + seg + 2, d = a + seg + 1;
+                    var nrm = mb.N[a] + mb.N[c];
+                    if (nrm.sqrMagnitude < 1e-6f) nrm = mb.V[a] + mb.V[c];
+                    mb.Tri(a, b, c, nrm); mb.Tri(a, c, d, nrm);
+                }
+            mesh = mb.ToMesh(key);
+            cache[key] = mesh;
+            return mesh;
+        }
 
         public static Mesh Cylinder(float radius, float height, int seg = 14)
         {
@@ -237,7 +315,7 @@ namespace Hockey
         }
 
         /// Кольцевая стенка вокруг площадки (борта, трибуны).
-        public static Mesh RingWall(float innerOff, float outerOff, float y0, float y1, bool inner = true, bool outer = true, bool top = true)
+        public static Mesh RingWall(float innerOff, float outerOff, float y0, float y1, bool inner = true, bool outer = true, bool top = true, float uMeters = 4)
         {
             var mb = new MeshBuilder();
             var pi = Perimeter(innerOff); var po = Perimeter(outerOff);
@@ -247,7 +325,7 @@ namespace Hockey
                 int j = (i + 1) % n;
                 var a = pi[i]; var b = pi[j]; var c = po[i]; var d = po[j];
                 var na = new Vector3(a.Nx, 0, a.Nz); var nb = new Vector3(b.Nx, 0, b.Nz);
-                float u0 = a.S / 4, u1 = (j == 0 ? a.S + 1 : b.S) / 4;
+                float u0 = a.S / uMeters, u1 = (j == 0 ? Length(pi) : b.S) / uMeters;
                 if (inner)
                     mb.Quad(new Vector3(a.X, y0, a.Z), new Vector3(b.X, y0, b.Z), new Vector3(b.X, y1, b.Z), new Vector3(a.X, y1, a.Z),
                         -na, -nb, -nb, -na, -(na + nb), new Vector2(u0, 0), new Vector2(u1, 0), new Vector2(u1, 1), new Vector2(u0, 1));
@@ -278,23 +356,32 @@ namespace Hockey
     public static class Mats
     {
         static readonly Dictionary<string, Material> cache = new Dictionary<string, Material>();
-        static Material baseOpaque, baseCutout, baseFade, baseOpaqueEm, baseFadeEm;
+        static Material baseToon, baseStandard, baseCutout, baseFade, baseFadeEm;
         static bool init;
+        public static bool ToonAvailable { get; private set; }
 
         static void Init()
         {
             if (init) return;
             init = true;
-            // Материалы из Resources гарантируют, что шейдер и нужные варианты попадут в сборку.
-            baseOpaque = Resources.Load<Material>("HockeyOpaque");
+            // Материалы из Resources гарантируют, что шейдеры и нужные варианты попадут в сборку.
+            baseToon = Resources.Load<Material>("HockeyToon");
+            baseStandard = Resources.Load<Material>("HockeyOpaque");
             baseCutout = Resources.Load<Material>("HockeyCutout");
             baseFade = Resources.Load<Material>("HockeyFade");
+            baseFadeEm = Resources.Load<Material>("HockeyFadeEmissive");
             var std = Shader.Find("Standard");
-            if (baseOpaque == null) baseOpaque = new Material(std);
+            if (baseStandard == null) baseStandard = new Material(std);
             if (baseCutout == null) { baseCutout = new Material(std); SetupCutout(baseCutout); }
             if (baseFade == null) { baseFade = new Material(std); SetupFade(baseFade); }
-            baseOpaqueEm = Resources.Load<Material>("HockeyOpaqueEmissive") ?? baseOpaque;
-            baseFadeEm = Resources.Load<Material>("HockeyFadeEmissive") ?? baseFade;
+            if (baseFadeEm == null) baseFadeEm = baseFade;
+            if (baseToon == null)
+            {
+                var toon = Shader.Find("Hockey/Toon");
+                if (toon != null && toon.isSupported) baseToon = new Material(toon);
+            }
+            ToonAvailable = baseToon != null;
+            if (baseToon == null) baseToon = baseStandard;
         }
 
         public static void SetupCutout(Material m)
@@ -318,13 +405,31 @@ namespace Hockey
 
         public static Color Hex(string hex) { ColorUtility.TryParseHtmlString(hex, out var c); return c; }
 
+        static Material NewToon(Color c, float gloss, Texture tex = null)
+        {
+            Init();
+            var m = new Material(baseToon) { color = c };
+            if (tex != null) m.mainTexture = tex;
+            if (ToonAvailable) m.SetFloat("_Gloss", gloss);
+            else { m.SetFloat("_Glossiness", gloss * 0.8f); m.SetFloat("_Metallic", 0); }
+            return m;
+        }
+
+        /// Основной материал: мягкий мультяшный шейдер. smooth — сила блика.
         public static Material Get(string hex, float smooth = 0.25f, float metal = 0)
         {
             string key = $"o{hex}|{smooth}|{metal}";
             if (cache.TryGetValue(key, out var m)) return m;
-            Init();
-            m = new Material(baseOpaque) { color = Hex(hex) };
-            m.SetFloat("_Glossiness", smooth); m.SetFloat("_Metallic", metal);
+            m = NewToon(Hex(hex), Mathf.Clamp01(smooth * 0.9f + metal * 0.5f));
+            cache[key] = m;
+            return m;
+        }
+
+        public static Material Toon(Texture tex, string hex = "#ffffff", float gloss = 0.15f)
+        {
+            string key = $"t{tex.GetInstanceID()}|{hex}|{gloss}";
+            if (cache.TryGetValue(key, out var m)) return m;
+            m = NewToon(Hex(hex), gloss, tex);
             cache[key] = m;
             return m;
         }
@@ -333,31 +438,36 @@ namespace Hockey
         {
             string key = $"e{hex}|{intensity}";
             if (cache.TryGetValue(key, out var m)) return m;
-            Init();
-            m = new Material(baseOpaqueEm) { color = Hex(hex) };
+            m = NewToon(Hex(hex), 0.2f);
             m.EnableKeyword("_EMISSION");
             m.SetColor("_EmissionColor", Hex(hex) * intensity);
             cache[key] = m;
             return m;
         }
 
-        public static Material Textured(Texture tex, float smooth = 0.3f)
+        /// Без освещения (небо, экраны). Цвет вершин учитывается.
+        public static Material Unlit(Texture tex, string hex = "#ffffff")
         {
             Init();
-            var m = new Material(baseOpaque) { mainTexture = tex, color = Color.white };
-            m.SetFloat("_Glossiness", smooth);
+            var m = new Material(baseToon) { color = Hex(hex) };
+            if (tex != null) m.mainTexture = tex;
+            if (ToonAvailable) m.SetFloat("_Unlit", 1);
+            else { m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor", Color.white); if (tex != null) m.SetTexture("_EmissionMap", tex); m.color = Color.black; }
             return m;
         }
 
-        public static Material TexturedEmissive(Texture tex)
+        /// Стандартный PBR-материал (лёд с отражениями).
+        public static Material Standard(Texture tex, float smooth)
         {
             Init();
-            var m = new Material(baseOpaqueEm) { mainTexture = tex, color = Color.white };
-            m.EnableKeyword("_EMISSION");
-            m.SetTexture("_EmissionMap", tex);
-            m.SetColor("_EmissionColor", Color.white);
+            var m = new Material(baseStandard) { mainTexture = tex, color = Color.white };
+            m.SetFloat("_Glossiness", smooth); m.SetFloat("_Metallic", 0);
             return m;
         }
+
+        public static Material Textured(Texture tex, float smooth = 0.3f) => NewToon(Color.white, smooth * 0.5f, tex);
+
+        public static Material TexturedEmissive(Texture tex) => Unlit(tex);
 
         public static Material Cutout(Texture tex, Color color)
         {

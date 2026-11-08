@@ -1,4 +1,5 @@
-// Главный скрипт: меню, лобби, режимы игры, игровой цикл, камеры «из-за спины», HUD.
+// «ШАЙБЯТКИ» — главный скрипт: режимы игры, игровой цикл, камеры «из-за спины», эффекты.
+// Интерфейс — в HockeyGame.UI.cs, автотест — в HockeyGame.Autotest.cs.
 // Создаётся автоматически в любой сцене — достаточно нажать Play.
 using System.Collections.Generic;
 using UnityEngine;
@@ -7,6 +8,7 @@ namespace Hockey
 {
     public partial class HockeyGame : MonoBehaviour
     {
+        public const string GameTitle = "ШАЙБЯТКИ";
         const float Step = 1f / 60;
         static readonly string[] SlotColors = { "#ffd23f", "#5cf28a", "#ff7ad9", "#4fe3ff", "#ffa94d", "#b48cff" };
 
@@ -19,18 +21,18 @@ namespace Hockey
 #pragma warning restore CS0618
 
         enum Mode { None, Local, Host, Client }
-        enum UiScreen { Menu, Lobby, Match }
 
         class View
         {
-            public Camera Cam; public int Follow = -1; public float Yaw; public bool Init; public Vector3 Pos, Look;
-            public Rect Rect;
+            public Camera Cam; public int Follow = -1; public InputSource Src;
+            public float Yaw, Pitch = 0.32f, LastManual = -10; public bool Init;
+            public Vector3 Pos, Look; public Rect Rect;
+            public string Toast; public Color ToastColor; public float ToastT;
         }
 
         // ---------- состояние ----------
         Mode mode = Mode.None;
-        UiScreen screen = UiScreen.Menu;
-        Sim sim, demo;
+        Sim sim;
         readonly ViewState simView = new ViewState(), netView = new ViewState();
         ViewState view;
         List<RosterEntry> roster = new List<RosterEntry>();
@@ -47,23 +49,27 @@ namespace Hockey
         readonly List<ViewState> snaps = new List<ViewState>();
         double offset; bool offsetInit;
         readonly ViewState interp = new ViewState();
-        bool paused, showHelp, endShown; float endTimer = -1;
+        bool paused, endShown; float endTimer = -1;
         string message = "";
         string playerName, address;
-        int splitMode;
+        bool splitCoop;
+        PlayerInput clientInput;
 
         // ---------- рендер ----------
         Arena arena;
         GameAudio audioFx;
+        Fx fx;
         readonly List<CharacterRig> chars = new List<CharacterRig>();
         readonly List<GameObject> extras = new List<GameObject>();
         readonly Dictionary<int, Transform> rings = new Dictionary<int, Transform>();
-        Transform puck, puckRing;
+        readonly List<CharacterRig> showcase = new List<CharacterRig>();
+        Transform puck, puckRing, puckFire;
         LineRenderer trail;
         readonly List<Vector3> trailPts = new List<Vector3>();
         readonly List<View> views = new List<View>();
         Camera menuCam;
         float shake, time;
+        bool inMatch => screen == UiScreen.Match;
 
         // ================================================================ запуск
         void Awake()
@@ -78,19 +84,30 @@ namespace Hockey
 #pragma warning restore CS0618
             gameObject.AddComponent<AudioListener>();
 
+            Settings.Load();
             playerName = PlayerPrefs.GetString("hockey.name", "Игрок");
             address = PlayerPrefs.GetString("hockey.addr", "192.168.1.");
             cfg.Skaters = PlayerPrefs.GetInt("hockey.skaters", 3);
             cfg.Duration = PlayerPrefs.GetInt("hockey.duration", 180);
             cfg.Difficulty = PlayerPrefs.GetInt("hockey.diff", 1);
+            cfg.Arcade = PlayerPrefs.GetInt("hockey.arcade", 1) == 1;
 
             arena = new Arena(transform);
             audioFx = new GameAudio(gameObject);
+            fx = new Fx(transform);
             BuildPuck();
             menuCam = MakeCamera("MenuCam");
-            menuCam.fieldOfView = 50;
+            menuCam.fieldOfView = 40;
+            BuildShowcase();
+            ApplySettings();
             finder = new LanFinder();
             StartAutotestIfRequested();
+        }
+
+        void ApplySettings()
+        {
+            arena.SetQuality(Settings.Quality);
+            Settings.ApplyDisplay();
         }
 
         Camera MakeCamera(string name)
@@ -99,8 +116,8 @@ namespace Hockey
             go.transform.SetParent(transform, false);
             var c = go.AddComponent<Camera>();
             c.clearFlags = CameraClearFlags.SolidColor;
-            c.backgroundColor = Mats.Hex("#1a2033");
-            c.fieldOfView = 62; c.nearClipPlane = 0.1f; c.farClipPlane = 300;
+            c.backgroundColor = Mats.Hex("#1b1f4a");
+            c.fieldOfView = Settings.Fov; c.nearClipPlane = 0.1f; c.farClipPlane = 400;
             c.allowMSAA = true;
             return c;
         }
@@ -111,26 +128,52 @@ namespace Hockey
             go.transform.SetParent(transform, false);
             var body = new GameObject("body");
             body.transform.SetParent(go.transform, false);
-            body.transform.localPosition = new Vector3(0, 0.035f, 0);
-            body.AddComponent<MeshFilter>().sharedMesh = MeshKit.Cylinder(0.13f, 0.07f, 20);
-            body.AddComponent<MeshRenderer>().sharedMaterial = Mats.Get("#141418", 0.6f);
+            body.transform.localPosition = new Vector3(0, 0.04f, 0);
+            body.AddComponent<MeshFilter>().sharedMesh = MeshKit.Cylinder(0.14f, 0.08f, 22);
+            body.AddComponent<MeshRenderer>().sharedMaterial = Mats.Get("#1a1a22", 0.9f);
+            var fire = new GameObject("fire");
+            fire.transform.SetParent(go.transform, false);
+            fire.transform.localPosition = new Vector3(0, 0.1f, 0);
+            fire.AddComponent<MeshFilter>().sharedMesh = MeshKit.Sphere(0.3f, 12, 0);
+            var fmr = fire.AddComponent<MeshRenderer>();
+            fmr.sharedMaterial = Mats.Fade("#ff6a2e", 0.55f, true);
+            fmr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            puckFire = fire.transform;
             puck = go.transform;
 
             var ring = new GameObject("PuckRing");
             ring.transform.SetParent(transform, false);
-            ring.AddComponent<MeshFilter>().sharedMesh = MeshKit.FlatRing(0.28f, 0.36f);
+            ring.AddComponent<MeshFilter>().sharedMesh = MeshKit.FlatRing(0.3f, 0.4f);
             var rr = ring.AddComponent<MeshRenderer>();
-            rr.sharedMaterial = Mats.Fade("#5fe1ff", 0.6f, true);
+            rr.sharedMaterial = Mats.Fade("#5fe1ff", 0.65f, true);
             rr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             puckRing = ring.transform;
 
             var tr = new GameObject("Trail");
             tr.transform.SetParent(transform, false);
             trail = tr.AddComponent<LineRenderer>();
-            trail.sharedMaterial = Mats.Fade("#bff3ff", 0.55f, true);
-            trail.widthMultiplier = 0.07f;
+            trail.sharedMaterial = new Material(Mats.Fade("#bff3ff", 0.55f, true));
+            trail.widthCurve = new AnimationCurve(new Keyframe(0, 0.01f), new Keyframe(1, 0.12f));
             trail.positionCount = 0;
             trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        }
+
+        /// Персонажи для главного меню: стоят у центрального круга и пританцовывают.
+        void BuildShowcase()
+        {
+            var specs = new (int team, int skin, int hair, int num, bool goalie, Vector3 pos, float yaw)[]
+            {
+                (0, 0, 2, 17, false, new Vector3(-1.3f, 0, 0.4f), 200),
+                (1, 3, 1, 9, false, new Vector3(1.4f, 0, 0.2f), 160),
+                (0, 4, 3, 1, true, new Vector3(0.05f, 0, 1.6f), 180),
+            };
+            foreach (var s in specs)
+            {
+                var c = CharacterRig.Build(s.team, s.skin, s.hair, s.num, s.goalie, transform);
+                c.Root.localPosition = s.pos;
+                c.Root.localRotation = Quaternion.Euler(0, s.yaw, 0);
+                showcase.Add(c);
+            }
         }
 
         void OnDestroy() { CloseNet(); finder?.Dispose(); }
@@ -143,6 +186,7 @@ namespace Hockey
             PlayerPrefs.SetInt("hockey.skaters", cfg.Skaters);
             PlayerPrefs.SetInt("hockey.duration", cfg.Duration);
             PlayerPrefs.SetInt("hockey.diff", cfg.Difficulty);
+            PlayerPrefs.SetInt("hockey.arcade", cfg.Arcade ? 1 : 0);
             PlayerPrefs.Save();
         }
 
@@ -157,12 +201,10 @@ namespace Hockey
             sources.Clear(); myKeys.Clear();
             lobby = new List<LobbyEntry> { new LobbyEntry { Key = "local0", Name = MyName, Team = 0 } };
             if (!split)
-            {
                 sources.Add(new InputSource { Key = "local0", Scheme = Scheme.Solo, Pad = 0, Mouse = true });
-            }
             else
             {
-                lobby.Add(new LobbyEntry { Key = "local1", Name = "Игрок 2", Team = splitMode == 1 ? 0 : 1 });
+                lobby.Add(new LobbyEntry { Key = "local1", Name = "Игрок 2", Team = splitCoop ? 0 : 1 });
                 sources.Add(new InputSource { Key = "local0", Scheme = Scheme.P1, Pad = 0 });
                 sources.Add(new InputSource { Key = "local1", Scheme = Scheme.P2, Pad = 1 });
             }
@@ -174,7 +216,7 @@ namespace Hockey
         {
             var humans = new List<HumanSlot>();
             foreach (var l in lobby) humans.Add(new HumanSlot(l.Key, l.Name, l.Team));
-            sim = new Sim(new MatchConfig { Skaters = cfg.Skaters, Duration = cfg.Duration, Difficulty = cfg.Difficulty }, humans);
+            sim = new Sim(new MatchConfig { Skaters = cfg.Skaters, Duration = cfg.Duration, Difficulty = cfg.Difficulty, Arcade = cfg.Arcade }, humans);
             acc = 0; steps = 0;
             matchId++;
             netEvents.Clear();
@@ -189,11 +231,12 @@ namespace Hockey
 
         void SetupMatch(List<RosterEntry> r)
         {
-            demo = null;
             ApplyRoster(r, true);
             screen = UiScreen.Match;
             paused = false; endShown = false; endTimer = -1;
             message = "";
+            foreach (var c in showcase) c.Root.gameObject.SetActive(false);
+            audioFx.SetMusic(false);
         }
 
         void ApplyRoster(List<RosterEntry> r, bool resetCams)
@@ -210,7 +253,7 @@ namespace Hockey
                 views.Clear();
                 for (int i = 0; i < follow.Count; i++)
                 {
-                    var v = new View { Cam = MakeCamera("ViewCam" + i), Follow = follow[i] };
+                    var v = new View { Cam = MakeCamera("ViewCam" + i), Follow = follow[i], Src = i < sources.Count ? sources[i] : null };
                     v.Rect = follow.Count == 1 ? new Rect(0, 0, 1, 1) : new Rect(i * 0.5f, 0, 0.5f, 1);
                     v.Cam.rect = v.Rect;
                     views.Add(v);
@@ -235,7 +278,7 @@ namespace Hockey
                     string col = SlotColor(e.Human);
                     var ring = new GameObject("Ring");
                     ring.transform.SetParent(transform, false);
-                    ring.AddComponent<MeshFilter>().sharedMesh = MeshKit.FlatRing(0.52f, 0.66f);
+                    ring.AddComponent<MeshFilter>().sharedMesh = MeshKit.FlatRing(0.55f, 0.7f);
                     var mr = ring.AddComponent<MeshRenderer>();
                     mr.sharedMaterial = Mats.Fade(col, 0.85f, true);
                     mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
@@ -243,30 +286,37 @@ namespace Hockey
                     extras.Add(ring);
                     var arrow = new GameObject("Arrow");
                     arrow.transform.SetParent(c.Root, false);
-                    arrow.transform.localPosition = new Vector3(0, 2.75f, 0);
-                    arrow.AddComponent<MeshFilter>().sharedMesh = MeshKit.Cone(0.16f, 0.3f);
+                    arrow.transform.localPosition = new Vector3(0, 2.85f, 0);
+                    arrow.AddComponent<MeshFilter>().sharedMesh = MeshKit.Cone(0.17f, 0.3f);
                     var amr = arrow.AddComponent<MeshRenderer>();
-                    amr.sharedMaterial = Mats.Emissive(col, 1f);
+                    amr.sharedMaterial = Mats.Emissive(col, 0.8f);
                     amr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 }
             }
         }
 
-        string SlotColor(string human) => SlotColors[(slots.TryGetValue(human, out int s) ? s : 0) % SlotColors.Length];
+        string SlotColor(string human) => SlotColors[(human != null && slots.TryGetValue(human, out int s) ? s : 0) % SlotColors.Length];
 
         void ToMenu(string msg = "")
         {
             CloseNet();
             mode = Mode.None;
             screen = UiScreen.Menu;
+            uiPage = UiPage.Main;
             sim = null; view = null;
             snaps.Clear();
             foreach (var v in views) Destroy(v.Cam.gameObject);
             views.Clear();
+            BuildCharacters(new List<RosterEntry>());
             menuCam.gameObject.SetActive(true);
-            paused = false;
+            foreach (var c in showcase) c.Root.gameObject.SetActive(true);
+            paused = false; endShown = false;
             message = msg;
             finder ??= new LanFinder();
+            audioFx.SetMusic(true);
+            fx.UpdateItems(new List<ItemView>(), time);
+            puckRing.gameObject.SetActive(false);
+            trail.positionCount = 0;
         }
 
         void CloseNet()
@@ -302,7 +352,7 @@ namespace Hockey
                 int t0 = lobby.FindAll(l => l.Team == 0).Count, t1 = lobby.Count - t0;
                 var entry = new LobbyEntry { Key = key, Name = name, Team = t0 <= t1 ? 0 : 1 };
                 lobby.Add(entry);
-                if (sim != null && screen == UiScreen.Match)
+                if (sim != null && inMatch)
                 {
                     var p = sim.ReplaceBotWithHuman(key, name, entry.Team);
                     if (p != null) entry.Team = p.Team;
@@ -314,13 +364,13 @@ namespace Hockey
             host.OnLeave += key =>
             {
                 lobby.RemoveAll(l => l.Key == key);
-                if (sim != null && screen == UiScreen.Match) { sim.HumanLeft(key); RefreshHostRoster(); }
+                if (sim != null && inMatch) { sim.HumanLeft(key); RefreshHostRoster(); }
                 session.Seq++;
                 host.BroadcastSession();
             };
             host.OnSetTeam += (key, team) =>
             {
-                if (screen == UiScreen.Match) return;
+                if (inMatch) return;
                 var e = lobby.Find(l => l.Key == key);
                 if (e != null && e.Team != team) { e.Team = team; session.Seq++; host.BroadcastSession(); }
             };
@@ -350,7 +400,7 @@ namespace Hockey
             client.OnSession += s =>
             {
                 lobby = s.Lobby; cfg = s.Cfg;
-                if (client.MyKey != null && (myKeys.Count == 0 || myKeys[0] != client.MyKey)) { myKeys.Clear(); myKeys.Add(client.MyKey); }
+                if (client.MyKey != null && (myKeys.Count == 0 || myKeys[0] != client.MyKey)) { myKeys.Clear(); myKeys.Add(client.MyKey); sources[0].Key = client.MyKey; }
                 if (s.InMatch && s.MatchId != clientMatchId)
                 {
                     clientMatchId = s.MatchId;
@@ -369,7 +419,7 @@ namespace Hockey
                 else offset += (off - offset) * 0.02;
                 snaps.Add(v);
                 if (snaps.Count > 30) snaps.RemoveAt(0);
-                foreach (var e in evs) HandleEvent(e);
+                foreach (var e in evs) HandleEvent(e, v);
             };
         }
 
@@ -398,19 +448,46 @@ namespace Hockey
                 var pa = i < a.Players.Length ? a.Players[i] : pb;
                 bool tele = Mathf.Abs(pa.X - pb.X) + Mathf.Abs(pa.Z - pb.Z) > 4;
                 float kk = tele ? 1 : k;
-                po.X = Mathf.Lerp(pa.X, pb.X, kk); po.Z = Mathf.Lerp(pa.Z, pb.Z, kk);
+                po.X = Mathf.Lerp(pa.X, pb.X, kk); po.Z = Mathf.Lerp(pa.Z, pb.Z, kk); po.Y = Mathf.Lerp(pa.Y, pb.Y, kk);
                 po.H = pa.H + Sim.Wrap(pb.H - pa.H) * kk;
                 po.Spd = Mathf.Lerp(pa.Spd, pb.Spd, kk); po.Charge = Mathf.Lerp(pa.Charge, pb.Charge, kk);
-                po.Stun = pb.Stun; po.Back = pb.Back; po.Swing = pb.Swing; po.Save = pb.Save; po.Stamina = pb.Stamina;
-                po.Goals = pb.Goals; po.Assists = pb.Assists;
+                po.Stun = pb.Stun; po.Back = pb.Back; po.Dive = pb.Dive; po.Swing = pb.Swing; po.Save = pb.Save; po.Stamina = pb.Stamina;
+                po.Buffs = pb.Buffs; po.Goals = pb.Goals; po.Assists = pb.Assists;
             }
             bool ptele = Mathf.Abs(a.PuckX - b.PuckX) + Mathf.Abs(a.PuckZ - b.PuckZ) > 4;
             float pk = ptele ? 1 : k;
             o.PuckX = Mathf.Lerp(a.PuckX, b.PuckX, pk); o.PuckY = Mathf.Lerp(a.PuckY, b.PuckY, pk); o.PuckZ = Mathf.Lerp(a.PuckZ, b.PuckZ, pk);
-            o.PuckOwner = b.PuckOwner;
+            o.PuckOwner = b.PuckOwner; o.PuckMega = b.PuckMega; o.Items = b.Items;
             o.Score0 = b.Score0; o.Score1 = b.Score1; o.Time = b.Time; o.Phase = b.Phase; o.PhaseT = b.PhaseT;
             o.Overtime = b.Overtime; o.LastGoal = b.LastGoal; o.SimTime = b.SimTime;
             return o;
+        }
+
+        // ================================================================ ввод
+        /// Читает устройство, поворачивает камеру и переводит стик в мировое направление относительно камеры.
+        PlayerInput ReadPlayer(View v, float dt)
+        {
+            if (v == null || v.Src == null) return new PlayerInput();
+            var raw = GameInput.Read(v.Src, Settings.MouseSens);
+            bool lockedMouse = v.Src.Mouse && Cursor.lockState == CursorLockMode.Locked;
+            float lx = lockedMouse ? raw.LookX : 0, ly = lockedMouse ? raw.LookY : 0;
+            lx += raw.LookRateX * 160 * dt; ly += raw.LookRateY * 110 * dt;
+            if (Mathf.Abs(lx) + Mathf.Abs(ly) > 0.01f) v.LastManual = time;
+            v.Yaw += lx * Mathf.Deg2Rad;
+            v.Pitch = Mathf.Clamp(v.Pitch + (Settings.InvertY ? ly : -ly) * Mathf.Deg2Rad, 0.08f, 0.85f);
+            float fx = Mathf.Sin(v.Yaw), fz = Mathf.Cos(v.Yaw);
+            return new PlayerInput
+            {
+                MoveX = fx * raw.MoveY + fz * raw.MoveX,
+                MoveZ = fz * raw.MoveY - fx * raw.MoveX,
+                Shoot = raw.Shoot, Pass = raw.Pass, Check = raw.Check, Sprint = raw.Sprint, Jump = raw.Jump,
+            };
+        }
+
+        View ViewFor(string key)
+        {
+            foreach (var v in views) if (v.Src != null && v.Src.Key == key) return v;
+            return null;
         }
 
         // ================================================================ цикл
@@ -420,22 +497,28 @@ namespace Hockey
             time += dt;
             double now = Time.realtimeSinceStartupAsDouble;
 
-            if (screen == UiScreen.Match && GameInput.KeyDown(KeyCode.Escape) && !endShown) paused = !paused;
-            if (screen == UiScreen.Match && GameInput.KeyDown(KeyCode.H)) showHelp = !showHelp;
-            if (screen == UiScreen.Match && GameInput.KeyDown(KeyCode.M)) audioFx.Muted = !audioFx.Muted;
+            if (inMatch && GameInput.PausePressed() && !endShown) { paused = !paused; uiPage = UiPage.Main; }
+            if (inMatch && GameInput.KeyDown(KeyCode.H)) Settings.Hints = !Settings.Hints;
+            if (inMatch && GameInput.KeyDown(KeyCode.M)) audioFx.Muted = !audioFx.Muted;
+            UpdateCursor();
 
             finder?.Update(now);
             host?.Update(now);
             if (client != null)
             {
-                var inp = paused || screen != UiScreen.Match ? new PlayerInput() : GameInput.Read(sources.Count > 0 ? sources[0] : null);
-                client.Update(now, inp);
-                if (client != null && client.Error != null) { ToMenu(client.Error); }
+                var v0 = views.Count > 0 ? views[0] : null;
+                clientInput = paused || !inMatch || v0 == null ? new PlayerInput() : (autotest ? autoInput : ReadPlayer(v0, dt));
+                client.Update(now, clientInput);
+                if (client != null && client.Error != null) ToMenu(client.Error);
             }
 
             view = null;
-            if ((mode == Mode.Local || mode == Mode.Host) && sim != null && screen == UiScreen.Match)
+            if ((mode == Mode.Local || mode == Mode.Host) && sim != null && inMatch)
             {
+                // ввод (и поворот камеры) читаем раз за кадр, применяем на каждом шаге физики
+                var frameInputs = new Dictionary<string, PlayerInput>();
+                foreach (var s in sources)
+                    frameInputs[s.Key] = paused ? new PlayerInput() : autotest ? autoInput : ReadPlayer(ViewFor(s.Key), dt);
                 if (!(paused && mode == Mode.Local) && !autoFreeze)
                 {
                     acc += Mathf.Min(0.25f, Time.unscaledDeltaTime);
@@ -444,11 +527,11 @@ namespace Hockey
                     {
                         inputs.Clear();
                         if (host != null) foreach (var k in host.ClientKeys) if (host.TryGetInput(k, out var ri)) inputs[k] = ri;
-                        foreach (var s in sources) inputs[s.Key] = paused ? new PlayerInput() : ReadSource(s);
+                        foreach (var kv in frameInputs) inputs[kv.Key] = kv.Value;
                         sim.Step(Step, inputs);
                         acc -= Step;
                         steps++;
-                        foreach (var e in sim.Events) HandleEvent(e);
+                        if (sim.Events.Count > 0) { sim.FillView(simView); foreach (var e in sim.Events) HandleEvent(e, simView); }
                         if (mode == Mode.Host)
                         {
                             netEvents.AddRange(sim.Events);
@@ -465,496 +548,157 @@ namespace Hockey
                 sim.FillView(simView);
                 view = simView;
             }
-            else if (mode == Mode.Client && screen == UiScreen.Match)
+            else if (mode == Mode.Client && inMatch)
             {
                 view = ClientState();
             }
 
-            if (view != null && screen == UiScreen.Match && chars.Count == view.Players.Length)
+            if (view != null && inMatch && chars.Count == view.Players.Length)
             {
                 UpdateScene(view, dt);
                 if (view.Phase == Phase.End && !endShown)
                 {
-                    if (endTimer < 0) endTimer = 1.2f;
+                    if (endTimer < 0) { endTimer = 1.2f; fx.ConfettiRain(Vector3.zero, 400); }
                     endTimer -= dt;
                     if (endTimer <= 0) { endShown = true; paused = false; }
                 }
             }
-            else if (screen != UiScreen.Match)
-            {
-                MenuDemo(dt);
-            }
+            else if (!inMatch) MenuScene(dt);
             arena.Update(dt, time);
             audioFx.Update(dt);
         }
 
-        void HandleEvent(GameEvent e)
+        void UpdateCursor()
         {
-            audioFx.Event(e);
-            if (e.Type == EvType.Hit) shake = Mathf.Max(shake, 0.25f);
-            if (e.Type == EvType.Goal) { shake = 0.4f; arena.Excite = 1; }
+            bool wantLock = inMatch && !paused && !endShown && views.Count == 1 && views[0].Src != null && views[0].Src.Mouse && !autotest && Application.isFocused;
+            var want = wantLock ? CursorLockMode.Locked : CursorLockMode.None;
+            if (Cursor.lockState != want) { Cursor.lockState = want; Cursor.visible = !wantLock; }
         }
 
-        void MenuDemo(float dt)
+        static Vector3 PlayerPos(ViewState st, int i, float y = 0) =>
+            st != null && i >= 0 && i < st.Players.Length ? new Vector3(st.Players[i].X, st.Players[i].Y + y, st.Players[i].Z) : new Vector3(st?.PuckX ?? 0, y, st?.PuckZ ?? 0);
+
+        void HandleEvent(GameEvent e, ViewState st)
         {
-            if (demo == null || demo.Phase == Phase.End)
+            audioFx.Event(e);
+            if (st == null) return;
+            var who = PlayerPos(st, e.Who);
+            switch (e.Type)
             {
-                demo = new Sim(new MatchConfig { Skaters = 3, Duration = 180, Difficulty = 2 }, null);
-                foreach (var v in views) Destroy(v.Cam.gameObject);
-                views.Clear();
-                myKeys.Clear();
-                ApplyRoster(demo.Roster(), true);
+                case EvType.Hit:
+                    if (Settings.ScreenShake) shake = Mathf.Max(shake, 0.25f);
+                    fx.Sparks(who + Vector3.up * 1.6f, Mats.Hex("#ffd23f"), 18);
+                    fx.Chips(who, Vector3.up, 14, 5);
+                    break;
+                case EvType.Goal:
+                    {
+                        if (Settings.ScreenShake) shake = 0.4f;
+                        arena.Excite = 1;
+                        int team = Mathf.Clamp((int)e.Value, 0, 1);
+                        float gx = team == 0 ? Rink.GoalX : -Rink.GoalX;
+                        fx.Confetti(new Vector3(gx, 1.2f, 0), 260, Mats.Hex(TeamColors.All[team].Main));
+                        fx.ConfettiRain(new Vector3(gx * 0.6f, 0, 0), 300);
+                        break;
+                    }
+                case EvType.Stop: fx.Chips(who + Vector3.up * 0.05f, Vector3.up, 16, 5); break;
+                case EvType.Land: fx.Chips(who, Vector3.up, 10, 3); break;
+                case EvType.Dive: fx.Chips(who, Vector3.up, 8, 3); break;
+                case EvType.PowerUp:
+                    {
+                        int t = Mathf.Clamp((int)e.Value, 0, 4);
+                        fx.Sparks(who + Vector3.up, Mats.Hex(Fx.ItemColors[t]), 40, 5);
+                        foreach (var v in views)
+                            if (v.Follow == e.Who) { v.Toast = Fx.ItemNames[t].ToUpper() + "!\n" + Fx.ItemHints[t]; v.ToastColor = Mats.Hex(Fx.ItemColors[t]); v.ToastT = 2.4f; }
+                        break;
+                    }
+                case EvType.Freeze:
+                    for (int i = 0; i < st.Players.Length && i < roster.Count; i++)
+                        if (roster[i].Team != (int)e.Value) fx.Sparks(PlayerPos(st, i, 1), Mats.Hex("#bff3ff"), 20, 3);
+                    break;
+                case EvType.MegaShot: fx.Sparks(new Vector3(st.PuckX, 0.3f, st.PuckZ), Mats.Hex("#ff6a2e"), 30, 6); break;
+                case EvType.Save: fx.Sparks(who + Vector3.up * 0.8f, Color.white, 12, 3); break;
+                case EvType.Post: fx.Sparks(new Vector3(st.PuckX, 0.6f, st.PuckZ), Color.white, 14, 4); break;
             }
-            demo.Step(dt, null);
-            foreach (var e in demo.Events) if (e.Type == EvType.Goal) arena.Excite = 1;
-            demo.Events.Clear();
-            demo.FillView(simView);
-            UpdateScene(simView, dt);
-            float a = time * 0.08f;
-            menuCam.transform.position = new Vector3(Mathf.Sin(a) * 34, 15, Mathf.Cos(a) * 26);
-            menuCam.transform.LookAt(new Vector3(simView.PuckX * 0.4f, 0, simView.PuckZ * 0.4f));
+        }
+
+        void MenuScene(float dt)
+        {
+            for (int i = 0; i < showcase.Count; i++)
+            {
+                var c = showcase[i];
+                var pv = new PlayerView { H = c.Root.localEulerAngles.y * Mathf.Deg2Rad, Save = c.Goalie ? Mathf.Max(0, Mathf.Sin(time * 1.3f)) * 0.3f : 0 };
+                bool dance = i != 2 && Mathf.Repeat(time + i * 3, 9) > 4.5f;
+                c.Animate(pv, new CharacterRig.AnimCtx { Dt = dt, Time = time + i * 1.7f, Dance = dance, Celebrate = !dance && i == 0 && Mathf.Repeat(time, 9) > 3, LookAt = menuCam.transform.position });
+            }
+            if (Mathf.Repeat(time, 6) < dt) fx.Confetti(new Vector3(0, 0.5f, 0.5f), 80);
+            float sway = Mathf.Sin(time * 0.25f) * 0.6f;
+            menuCam.transform.position = new Vector3(-2.6f + sway, 1.7f, -6.4f);
+            menuCam.transform.LookAt(new Vector3(-1.5f + sway * 0.5f, 1.0f, 0.6f));
+            menuCam.fieldOfView = 40;
+            arena.DrawScore(0, 0, 0);
         }
 
         void UpdateScene(ViewState st, float dt)
         {
-            int celebrateTeam = st.Phase == Phase.Goal ? st.LastGoal.Team : -1;
+            int celebrateTeam = st.Phase == Phase.Goal ? st.LastGoal.Team : st.Phase == Phase.End && st.Score0 != st.Score1 ? (st.Score0 > st.Score1 ? 0 : 1) : -1;
+            var puckPos = new Vector3(st.PuckX, st.PuckY, st.PuckZ);
             for (int i = 0; i < chars.Count && i < st.Players.Length; i++)
             {
                 var c = chars[i]; var s = st.Players[i];
-                c.Root.localPosition = new Vector3(s.X, 0, s.Z);
+                c.Root.localPosition = new Vector3(s.X, s.Y, s.Z);
                 c.Root.localRotation = Quaternion.Euler(0, s.H * Mathf.Rad2Deg, 0);
-                c.Animate(s, st.PuckOwner == i, c.Team == celebrateTeam && !c.Goalie, dt, time);
+                c.Animate(s, new CharacterRig.AnimCtx { HasPuck = st.PuckOwner == i, Celebrate = c.Team == celebrateTeam && !c.Goalie, Dt = dt, Time = time + i, LookAt = puckPos });
                 if (rings.TryGetValue(i, out var ring)) ring.localPosition = new Vector3(s.X, 0.015f, s.Z);
+                // ледяная крошка из-под коньков на скорости и в нырке
+                if (!s.Stun && s.Y < 0.05f && (s.Spd > 8.5f || s.Dive) && Random.value < dt * (s.Dive ? 30 : 6))
+                    fx.Chips(new Vector3(s.X, 0.05f, s.Z), -new Vector3(Mathf.Sin(s.H), 0, Mathf.Cos(s.H)), 3, 3);
+                if (s.Has(Buff.Turbo) && Random.value < dt * 20) fx.Sparks(new Vector3(s.X, 0.3f, s.Z), Mats.Hex(Fx.ItemColors[0]), 1, 1);
             }
-            puck.localPosition = new Vector3(st.PuckX, st.PuckY, st.PuckZ);
+            puck.localPosition = puckPos;
+            puckFire.gameObject.SetActive(st.PuckMega);
+            if (st.PuckMega) puckFire.localScale = Vector3.one * (1 + Mathf.Sin(time * 30) * 0.15f);
             puckRing.localPosition = new Vector3(st.PuckX, 0.012f, st.PuckZ);
             puckRing.gameObject.SetActive(st.PuckOwner < 0);
+            fx.UpdateItems(st.Items, time);
 
-            trailPts.Add(new Vector3(st.PuckX, st.PuckY + 0.04f, st.PuckZ));
+            trailPts.Add(puckPos + Vector3.up * 0.05f);
             if (trailPts.Count > 12) trailPts.RemoveAt(0);
             bool fast = trailPts.Count > 4 && (trailPts[trailPts.Count - 1] - trailPts[trailPts.Count - 4]).magnitude > 1.2f && st.PuckOwner < 0;
             if (fast) { trail.positionCount = trailPts.Count; trail.SetPositions(trailPts.ToArray()); }
             else trail.positionCount = 0;
+            var tc = st.PuckMega ? Mats.Hex("#ff8a3d") : Mats.Hex("#bff3ff"); tc.a = 0.6f;
+            trail.sharedMaterial.color = tc;
 
             if (st.Phase == Phase.Goal) arena.Excite = Mathf.Max(arena.Excite, 0.9f);
             arena.DrawScore(st.Score0, st.Score1, st.Time);
 
             foreach (var v in views)
             {
+                v.ToastT = Mathf.Max(0, v.ToastT - dt);
                 if (v.Follow < 0 || v.Follow >= st.Players.Length) continue;
                 var s = st.Players[v.Follow];
                 if (!v.Init) v.Yaw = s.H;
-                v.Yaw += Sim.Wrap(s.H - v.Yaw) * (1 - Mathf.Exp(-dt * 3.2f));
-                float dist = 6.4f + Mathf.Min(s.Spd, 10) * 0.12f;
-                float fx = Mathf.Sin(v.Yaw), fz = Mathf.Cos(v.Yaw);
-                float cx = Mathf.Clamp(s.X - fx * dist, -Rink.L / 2 - 3.2f, Rink.L / 2 + 3.2f);
-                float cz = Mathf.Clamp(s.Z - fz * dist, -Rink.W / 2 - 3.2f, Rink.W / 2 + 3.2f);
-                var target = new Vector3(cx, 3.4f, cz);
-                var look = new Vector3(s.X + fx * 3.5f, 0.9f, s.Z + fz * 3.5f);
+                // авто-камера: если игрок не крутит камеру сам, она плавно заходит за спину
+                bool mouseDriven = v.Src != null && v.Src.Mouse && !autotest;
+                bool auto = Settings.AutoCamera && time - v.LastManual > (mouseDriven ? 2.5f : 0.6f) && s.Spd > 2.5f && !s.Stun;
+                if (auto || autotest) v.Yaw += Sim.Wrap(s.H - v.Yaw) * (1 - Mathf.Exp(-dt * (mouseDriven ? 1.2f : 2.4f)));
+                float dist = (5.8f + Mathf.Min(s.Spd, 10) * 0.12f) * Settings.CamDistance * (s.Has(Buff.Giant) ? 1.3f : 1);
+                float fx2 = Mathf.Sin(v.Yaw), fz = Mathf.Cos(v.Yaw);
+                float horiz = dist * Mathf.Cos(v.Pitch);
+                float cx = Mathf.Clamp(s.X - fx2 * horiz, -Rink.L / 2 - 3.2f, Rink.L / 2 + 3.2f);
+                float cz = Mathf.Clamp(s.Z - fz * horiz, -Rink.W / 2 - 3.2f, Rink.W / 2 + 3.2f);
+                var target = new Vector3(cx, 1.3f + dist * Mathf.Sin(v.Pitch) + s.Y * 0.5f, cz);
+                var look = new Vector3(s.X + fx2 * 2.2f, 1.1f + s.Y * 0.5f, s.Z + fz * 2.2f);
                 if (!v.Init) { v.Pos = target; v.Look = look; v.Init = true; }
-                v.Pos = Vector3.Lerp(v.Pos, target, 1 - Mathf.Exp(-dt * 8));
-                v.Look = Vector3.Lerp(v.Look, look, 1 - Mathf.Exp(-dt * 10));
+                v.Pos = Vector3.Lerp(v.Pos, target, 1 - Mathf.Exp(-dt * 10));
+                v.Look = Vector3.Lerp(v.Look, look, 1 - Mathf.Exp(-dt * 12));
                 var pos = v.Pos;
                 if (shake > 0) pos += new Vector3(Random.Range(-0.5f, 0.5f), Random.Range(-0.5f, 0.5f), 0) * shake;
                 v.Cam.transform.position = pos;
                 v.Cam.transform.LookAt(v.Look);
+                v.Cam.fieldOfView = Mathf.Lerp(v.Cam.fieldOfView, Settings.Fov + (s.Has(Buff.Turbo) ? 8 : 0) + Mathf.Max(0, s.Spd - 8) * 1.2f, 1 - Mathf.Exp(-dt * 4));
             }
             shake = Mathf.Max(0, shake - dt * 1.5f);
-        }
-
-        // ================================================================ интерфейс (IMGUI)
-        float uiScale, VW, VH;
-        GUIStyle sPanel, sTitle, sH2, sLabel, sSmall, sField, sBanner, sBannerSmall, sCenter, sTag, sBig, sScore, sCode;
-        readonly Dictionary<string, GUIStyle> btnStyles = new Dictionary<string, GUIStyle>();
-        readonly Dictionary<string, Texture2D> texCache = new Dictionary<string, Texture2D>();
-        Texture2D white;
-        bool stylesReady;
-
-        Texture2D T(string hex, float alpha = 1)
-        {
-            string key = hex + alpha;
-            if (texCache.TryGetValue(key, out var t)) return t;
-            var c = Mats.Hex(hex); c.a = alpha;
-            t = Tex.Solid(c);
-            texCache[key] = t;
-            return t;
-        }
-
-        void InitStyles()
-        {
-            if (stylesReady) return;
-            stylesReady = true;
-            white = Tex.Solid(Color.white);
-            sPanel = new GUIStyle { padding = new RectOffset(28, 28, 22, 22) };
-            sPanel.normal.background = T("#24325a", 0.96f);
-            sTitle = new GUIStyle(GUI.skin.label) { fontSize = 52, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter, richText = true };
-            sTitle.normal.textColor = Color.white;
-            sH2 = new GUIStyle(sTitle) { fontSize = 34 };
-            sLabel = new GUIStyle(GUI.skin.label) { fontSize = 19, richText = true, wordWrap = true };
-            sLabel.normal.textColor = Mats.Hex("#dbe5ff");
-            sSmall = new GUIStyle(sLabel) { fontSize = 15 };
-            sSmall.normal.textColor = Mats.Hex("#a9b8de");
-            sCenter = new GUIStyle(sLabel) { alignment = TextAnchor.MiddleCenter };
-            sField = new GUIStyle(GUI.skin.textField) { fontSize = 21, padding = new RectOffset(12, 12, 8, 8), fixedHeight = 42 };
-            sField.normal.background = T("#131a30"); sField.focused.background = T("#0d1326"); sField.hover.background = T("#131a30");
-            sField.normal.textColor = sField.focused.textColor = sField.hover.textColor = Color.white;
-            sBanner = new GUIStyle(sTitle) { fontSize = 96 };
-            sBannerSmall = new GUIStyle(sTitle) { fontSize = 28 };
-            sTag = new GUIStyle(sLabel) { fontSize = 16, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter, wordWrap = false, padding = new RectOffset(10, 10, 3, 3) };
-            sTag.normal.background = T("#141824", 0.75f);
-            sTag.normal.textColor = Color.white;
-            sBig = new GUIStyle(sLabel) { fontSize = 26, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-            sScore = new GUIStyle(sBig) { fontSize = 34 };
-            sScore.normal.textColor = Color.white;
-            sCode = new GUIStyle(sBig) { fontSize = 30 };
-            sCode.normal.textColor = Mats.Hex("#ffd23f");
-        }
-
-        GUIStyle Btn(string hex, int size = 20)
-        {
-            string key = hex + size;
-            if (btnStyles.TryGetValue(key, out var s)) return s;
-            var c = Mats.Hex(hex);
-            s = new GUIStyle(GUI.skin.button) { fontSize = size, fontStyle = FontStyle.Bold, padding = new RectOffset(14, 14, 10, 10), margin = new RectOffset(4, 4, 5, 5), wordWrap = true };
-            s.normal.background = T(hex); s.hover.background = Tex.Solid(Color.Lerp(c, Color.white, 0.15f)); s.active.background = Tex.Solid(Color.Lerp(c, Color.black, 0.2f));
-            s.onNormal.background = Tex.Solid(Color.Lerp(c, Color.white, 0.3f));
-            s.focused.background = T(hex);
-            s.normal.textColor = s.hover.textColor = s.active.textColor = s.focused.textColor = s.onNormal.textColor = Color.white;
-            btnStyles[key] = s;
-            return s;
-        }
-
-        void OnGUI()
-        {
-            InitStyles();
-            uiScale = Screen.height / 900f;
-            VW = Screen.width / uiScale; VH = 900;
-            GUI.matrix = Matrix4x4.Scale(new Vector3(uiScale, uiScale, 1));
-
-            switch (screen)
-            {
-                case UiScreen.Menu: DrawMenu(); break;
-                case UiScreen.Lobby: DrawLobby(); break;
-                case UiScreen.Match:
-                    if (view != null) DrawHud(view);
-                    if (endShown) DrawEnd();
-                    else if (paused) DrawPause();
-                    break;
-            }
-        }
-
-        void Dim() { GUI.color = new Color(0.03f, 0.05f, 0.1f, 0.55f); GUI.DrawTexture(new Rect(0, 0, VW, VH), white); GUI.color = Color.white; }
-
-        Vector2 menuScroll;
-        bool menuHelp;
-
-        void DrawMenu()
-        {
-            Dim();
-            float w = 640;
-            GUILayout.BeginArea(new Rect((VW - w) / 2, 30, w, VH - 60), sPanel);
-            menuScroll = GUILayout.BeginScrollView(menuScroll);
-            GUILayout.Label("ДВОРОВЫЙ\n<color=#7fd2ff>ХОККЕЙ 3D</color>", sTitle);
-            GUILayout.Space(8);
-            GUILayout.Label("Твоё имя", sSmall);
-            playerName = GUILayout.TextField(playerName ?? "", 14, sField);
-            GUILayout.Space(6);
-
-            GUILayout.Label("Игроков в команде", sSmall);
-            cfg.Skaters = 1 + GUILayout.SelectionGrid(cfg.Skaters - 1, new[] { "1", "2", "3", "4", "5" }, 5, Btn("#34406a", 18));
-            int[] durs = { 120, 180, 300, 480 };
-            int di = System.Array.IndexOf(durs, cfg.Duration); if (di < 0) di = 1;
-            GUILayout.Label("Время матча", sSmall);
-            cfg.Duration = durs[GUILayout.SelectionGrid(di, new[] { "2 мин", "3 мин", "5 мин", "8 мин" }, 4, Btn("#34406a", 18))];
-            GUILayout.Label("Боты", sSmall);
-            cfg.Difficulty = GUILayout.SelectionGrid(cfg.Difficulty, new[] { "Легко", "Нормально", "Сложно" }, 3, Btn("#34406a", 18));
-            GUILayout.Space(12);
-
-            if (GUILayout.Button("Играть против ботов", Btn("#e2483d", 24))) StartLocal(false);
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Вдвоём на одном экране", Btn("#4766b8"), GUILayout.Width(330))) StartLocal(true);
-            splitMode = GUILayout.SelectionGrid(splitMode, new[] { "друг против друга", "в одной команде" }, 1, Btn("#34406a", 15));
-            GUILayout.EndHorizontal();
-            GUILayout.Space(8);
-            if (GUILayout.Button("Создать сетевой матч", Btn("#2fae6a", 22))) StartHost();
-            GUILayout.BeginHorizontal();
-            address = GUILayout.TextField(address ?? "", 60, sField, GUILayout.Width(330));
-            if (GUILayout.Button("Подключиться по IP", Btn("#2fae6a", 18))) StartClient(address);
-            GUILayout.EndHorizontal();
-
-            if (finder != null && finder.Games.Count > 0)
-            {
-                GUILayout.Label("Матчи в локальной сети:", sSmall);
-                foreach (var g in finder.Games)
-                {
-                    GUILayout.BeginHorizontal();
-                    GUILayout.Label($"<b>{g.Name}</b>  · игроков: {g.Players}{(g.InMatch ? " · идёт матч" : "")}", sLabel);
-                    if (GUILayout.Button("Войти", Btn("#2fae6a", 17), GUILayout.Width(120))) { address = g.Address; StartClient(g.Address); }
-                    GUILayout.EndHorizontal();
-                }
-            }
-            else GUILayout.Label("Матчи в локальной сети появятся здесь автоматически.", sSmall);
-
-            if (!string.IsNullOrEmpty(message)) GUILayout.Label($"<color=#ffd23f><b>{message}</b></color>", sCenter);
-            GUILayout.Space(6);
-            menuHelp = GUILayout.Toggle(menuHelp, menuHelp ? "▼ Управление" : "► Управление", Btn("#34406a", 17));
-            if (menuHelp) GUILayout.Label(ControlsText, sSmall);
-            GUILayout.EndScrollView();
-            GUILayout.EndArea();
-        }
-
-        const string ControlsText =
-            "<b>Один игрок / по сети</b>\n" +
-            "W/S или ↑/↓ — разгон / торможение, задний ход\n" +
-            "A/D или ←/→ — поворот\n" +
-            "Пробел или ЛКМ — бросок (держи — сильнее)\n" +
-            "Q или ПКМ — пас партнёру,  E — силовой приём,  Shift — ускорение\n" +
-            "<b>Игрок 2 на одном экране</b>\n" +
-            "Стрелки — движение, Enter / Num0 — бросок, правый Shift / Num1 — пас,\n" +
-            "правый Ctrl / Num2 — силовой, / или Num3 — ускорение\n" +
-            "<b>Геймпад</b>: стик и курки — движение, A — бросок, B/Y — пас, X — силовой, LB/RB — ускорение\n" +
-            "Esc — пауза,  H — подсказка,  M — звук";
-
-        Vector2 lobbyScroll;
-        List<string> myIps;
-
-        void DrawLobby()
-        {
-            Dim();
-            float w = 680;
-            GUILayout.BeginArea(new Rect((VW - w) / 2, 40, w, VH - 80), sPanel);
-            lobbyScroll = GUILayout.BeginScrollView(lobbyScroll);
-            GUILayout.Label("Сетевой матч", sH2);
-            if (mode == Mode.Host)
-            {
-                myIps ??= NetUtil.LocalAddresses();
-                GUILayout.Label("Друзья подключаются по адресу:", sCenter);
-                foreach (var ip in myIps) GUILayout.Label(ip + ":" + NetConst.GamePort, sCode);
-                GUILayout.Label("В одной Wi-Fi сети матч найдётся сам. Через интернет: Radmin VPN / ZeroTier / Tailscale или проброс порта 7777 (UDP) на роутере.", sSmall);
-            }
-            else
-            {
-                string st = client == null ? "" : client.Connected ? "Подключено. Ждём, пока хост начнёт матч…" : "Подключаемся к " + address + "…";
-                GUILayout.Label(st, sCenter);
-            }
-            GUILayout.Space(10);
-            GUILayout.BeginHorizontal();
-            for (int t = 0; t < 2; t++)
-            {
-                GUILayout.BeginVertical(GUILayout.Width((w - 70) / 2));
-                GUILayout.Label($"<color={(t == 0 ? "#ff7a6f" : "#7fb5ff")}><b>{Rink.TeamNames[t]}</b></color>", sBig);
-                int count = 0;
-                foreach (var l in lobby.ToArray())
-                {
-                    if (l.Team != t) continue;
-                    count++;
-                    bool me = mode == Mode.Host ? l.Key == "local0" : client != null && l.Key == client.MyKey;
-                    string label = l.Name + (l.Key == "local0" ? " ★" : "") + (me ? "  (ты)" : "");
-                    if (GUILayout.Button(label, Btn(t == 0 ? "#a8352d" : "#2d5fa8", 18)))
-                    {
-                        if (mode == Mode.Host) { l.Team = 1 - l.Team; session.Seq++; host.BroadcastSession(); }
-                        else if (me) client.SetTeam(1 - l.Team);
-                    }
-                }
-                for (int i = count; i < cfg.Skaters; i++) GUILayout.Label("<i>бот</i>", sCenter);
-                GUILayout.EndVertical();
-            }
-            GUILayout.EndHorizontal();
-            GUILayout.Label("Свободные места займут боты. Нажми на игрока, чтобы перевести его в другую команду.", sSmall);
-            GUILayout.Space(8);
-            if (mode == Mode.Host)
-            {
-                if (GUILayout.Button("Начать матч", Btn("#e2483d", 24))) NewMatch();
-            }
-            else if (client != null && client.Connected)
-            {
-                var me = lobby.Find(l => l.Key == client.MyKey);
-                if (me != null && GUILayout.Button("Сменить команду", Btn("#4766b8"))) client.SetTeam(1 - me.Team);
-            }
-            if (GUILayout.Button("Выйти", Btn("#34406a"))) { myIps = null; ToMenu(); }
-            GUILayout.EndScrollView();
-            GUILayout.EndArea();
-        }
-
-        void DrawPause()
-        {
-            Dim();
-            float w = 380;
-            GUILayout.BeginArea(new Rect((VW - w) / 2, VH / 2 - 140, w, 280), sPanel);
-            GUILayout.Label("Пауза", sH2);
-            if (mode != Mode.Local) GUILayout.Label("В сетевом матче игра не останавливается", sSmall);
-            if (GUILayout.Button("Продолжить", Btn("#e2483d", 22))) paused = false;
-            if (GUILayout.Button("Выйти в меню", Btn("#34406a"))) ToMenu();
-            GUILayout.EndArea();
-        }
-
-        void DrawEnd()
-        {
-            Dim();
-            var v = view;
-            if (v == null) return;
-            float w = 600;
-            GUILayout.BeginArea(new Rect((VW - w) / 2, 60, w, VH - 120), sPanel);
-            string title = "Ничья";
-            if (v.Score0 != v.Score1)
-            {
-                int win = v.Score0 > v.Score1 ? 0 : 1;
-                title = "Победа: " + Rink.TeamNames[win] + "!";
-                var myTeams = new HashSet<int>();
-                foreach (var k in myKeys) { var e = roster.Find(r => r.Human == k); if (e != null) myTeams.Add(e.Team); }
-                if (myTeams.Count == 1) title = myTeams.Contains(win) ? "ПОБЕДА!" : "Поражение…";
-            }
-            GUILayout.Label(title, sH2);
-            GUILayout.Label($"<color=#ff7a6f>{v.Score0}</color> : <color=#7fb5ff>{v.Score1}</color>", new GUIStyle(sTitle) { fontSize = 56 });
-            var rows = new List<int>();
-            for (int i = 0; i < roster.Count && i < v.Players.Length; i++) if (!roster[i].Goalie) rows.Add(i);
-            rows.Sort((a, b) => (v.Players[b].Goals * 2 + v.Players[b].Assists).CompareTo(v.Players[a].Goals * 2 + v.Players[a].Assists));
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Игрок", sSmall, GUILayout.Width(300)); GUILayout.Label("Голы", sSmall, GUILayout.Width(100)); GUILayout.Label("Пасы", sSmall);
-            GUILayout.EndHorizontal();
-            foreach (int i in rows)
-            {
-                var r = roster[i];
-                string col = r.Team == 0 ? "#ff7a6f" : "#7fb5ff";
-                string nm = r.Human != null ? $"<b>{r.Name}</b>" : r.Name;
-                GUILayout.BeginHorizontal();
-                GUILayout.Label($"<color={col}>■</color> {nm}", sLabel, GUILayout.Width(300));
-                GUILayout.Label(v.Players[i].Goals.ToString(), sLabel, GUILayout.Width(100));
-                GUILayout.Label(v.Players[i].Assists.ToString(), sLabel);
-                GUILayout.EndHorizontal();
-            }
-            GUILayout.FlexibleSpace();
-            if (mode != Mode.Client)
-            {
-                if (GUILayout.Button("Ещё матч", Btn("#e2483d", 22))) NewMatch();
-            }
-            else GUILayout.Label("Хост может начать новый матч", sCenter);
-            if (GUILayout.Button("В меню", Btn("#34406a"))) ToMenu();
-            GUILayout.EndArea();
-        }
-
-        void Box(Rect r, string hex, float a = 1) { GUI.color = WithA(Mats.Hex(hex), a); GUI.DrawTexture(r, white); GUI.color = Color.white; }
-        static Color WithA(Color c, float a) { c.a = a; return c; }
-
-        void DrawHud(ViewState st)
-        {
-            // табло
-            float sbW = 460, sbX = (VW - sbW) / 2, sbY = 12;
-            Box(new Rect(sbX, sbY, 175, 56), "#e2483d");
-            Box(new Rect(sbX + 175, sbY, 110, 56), "#151b2e");
-            Box(new Rect(sbX + 285, sbY, 175, 56), "#3f86e8");
-            GUI.Label(new Rect(sbX + 10, sbY, 110, 56), "КРАСНЫЕ", new GUIStyle(sBig) { fontSize = 17 });
-            GUI.Label(new Rect(sbX + 120, sbY, 50, 56), st.Score0.ToString(), sScore);
-            GUI.Label(new Rect(sbX + 290, sbY, 50, 56), st.Score1.ToString(), sScore);
-            GUI.Label(new Rect(sbX + 340, sbY, 115, 56), "СИНИЕ", new GUIStyle(sBig) { fontSize = 17 });
-            int tt = Mathf.Max(0, Mathf.CeilToInt(st.Time));
-            GUI.Label(new Rect(sbX + 175, sbY - 6, 110, 56), st.Overtime ? "∞" : $"{tt / 60}:{tt % 60:00}", sScore);
-            if (st.Overtime) GUI.Label(new Rect(sbX + 175, sbY + 30, 110, 26), "<color=#ffd23f>ОВЕРТАЙМ</color>", new GUIStyle(sSmall) { alignment = TextAnchor.MiddleCenter, fontSize = 12 });
-
-            // баннер
-            string big = "", small = "";
-            if (st.Phase == Phase.Faceoff)
-            {
-                big = st.PhaseT > 0.6f ? Mathf.CeilToInt(st.PhaseT - 0.4f).ToString() : "ШАЙБА!";
-                small = st.Overtime ? "Овертайм — до первой шайбы" : "Вбрасывание";
-            }
-            else if (st.Phase == Phase.Goal && st.LastGoal.Team >= 0)
-            {
-                big = "ГОЛ!";
-                var sc = st.LastGoal.Scorer >= 0 && st.LastGoal.Scorer < roster.Count ? roster[st.LastGoal.Scorer] : null;
-                var asr = st.LastGoal.Assist >= 0 && st.LastGoal.Assist < roster.Count ? roster[st.LastGoal.Assist] : null;
-                small = Rink.TeamNames[st.LastGoal.Team] + " · " + (sc != null ? "забил " + sc.Name + (asr != null ? ", пас " + asr.Name : "") : "автогол");
-            }
-            if (big != "")
-            {
-                string col = st.Phase == Phase.Goal ? (st.LastGoal.Team == 0 ? "#e2483d" : "#3f86e8") : "#e2483d";
-                float pulse = st.Phase == Phase.Goal ? 1 + Mathf.Max(0, 0.25f - (3.6f - st.PhaseT)) * 2 : 1;
-                var bs = new GUIStyle(sBanner) { fontSize = (int)(96 * pulse) };
-                GUI.Label(new Rect(0, VH * 0.24f + 6, VW, 120), $"<color={col}>{big}</color>", bs);
-                GUI.Label(new Rect(0, VH * 0.24f, VW, 120), big, bs);
-                GUI.Label(new Rect(0, VH * 0.24f + 110, VW, 40), small, sBannerSmall);
-            }
-
-            // имена над людьми
-            foreach (var v in views)
-            {
-                for (int i = 0; i < roster.Count && i < chars.Count; i++)
-                {
-                    if (roster[i].Human == null) continue;
-                    var wp = chars[i].Root.position + Vector3.up * 2.35f;
-                    var sp = v.Cam.WorldToScreenPoint(wp);
-                    if (sp.z < 0.5f) continue;
-                    var pr = v.Cam.pixelRect;
-                    if (sp.x < pr.xMin || sp.x > pr.xMax) continue;
-                    float gx = sp.x / uiScale, gy = (Screen.height - sp.y) / uiScale;
-                    var content = new GUIContent(roster[i].Name);
-                    var size = sTag.CalcSize(content);
-                    GUI.color = Mats.Hex(SlotColor(roster[i].Human));
-                    GUI.DrawTexture(new Rect(gx - size.x / 2 - 2, gy - size.y / 2 - 2, size.x + 4, size.y + 4), white);
-                    GUI.color = Color.white;
-                    GUI.Label(new Rect(gx - size.x / 2, gy - size.y / 2, size.x, size.y), content, sTag);
-                }
-            }
-
-            // полоски силы броска и выносливости
-            foreach (var v in views)
-            {
-                if (v.Follow < 0 || v.Follow >= st.Players.Length) continue;
-                var p = st.Players[v.Follow];
-                float vx = v.Rect.x * VW, vw = v.Rect.width * VW;
-                float bw = Mathf.Min(280, vw * 0.6f), bx = vx + (vw - bw) / 2, by = VH - 46;
-                Box(new Rect(bx, by, bw, 14), "#000000", 0.45f);
-                Box(new Rect(bx, by, bw * p.Charge, 14), p.Charge > 0.7f ? "#ff6a3d" : "#ffd23f", p.Charge > 0 ? 1 : 0.3f);
-                Box(new Rect(bx, by + 20, bw, 9), "#000000", 0.45f);
-                Box(new Rect(bx, by + 20, bw * p.Stamina, 9), "#5cf28a");
-                if (views.Count > 1 && v.Follow < roster.Count)
-                    GUI.Label(new Rect(vx + 14, 80, 300, 30), $"<color={SlotColor(roster[v.Follow].Human ?? "")}><b>{roster[v.Follow].Name}</b></color>", sLabel);
-            }
-            if (views.Count > 1) Box(new Rect(VW / 2 - 2, 0, 4, VH), "#10151f");
-
-            DrawMinimap(st);
-
-            if (mode == Mode.Host) GUI.Label(new Rect(VW - 330, 14, 316, 30), $"Хост · игроков по сети: {lobby.Count - 1}", new GUIStyle(sSmall) { alignment = TextAnchor.UpperRight });
-            else if (mode == Mode.Client && client != null) GUI.Label(new Rect(VW - 330, 14, 316, 30), $"Пинг: {(client.PingMs >= 0 ? client.PingMs + " мс" : "…")}", new GUIStyle(sSmall) { alignment = TextAnchor.UpperRight });
-            GUI.Label(new Rect(VW - 520, VH - 28, 506, 24), "Esc — пауза · H — управление · M — звук", new GUIStyle(sSmall) { alignment = TextAnchor.LowerRight, fontSize = 13 });
-            if (showHelp)
-            {
-                Box(new Rect(VW - 640, VH - 330, 626, 296), "#0f1423", 0.88f);
-                GUI.Label(new Rect(VW - 628, VH - 322, 606, 284), ControlsText, sSmall);
-            }
-        }
-
-        void DrawMinimap(ViewState st)
-        {
-            bool split = views.Count > 1;
-            float mw = split ? 190 : 250, mh = mw * Rink.W / Rink.L + 16;
-            float mx = split ? (VW - mw) / 2 : 16, my = split ? 78 : VH - mh - 16;
-            Box(new Rect(mx - 8, my - 8, mw + 16, mh + 16), "#0f1423", 0.6f);
-            Box(new Rect(mx, my, mw, mh), "#ebf5ff", 0.92f);
-            float sx = mw / Rink.L, sz = mh / Rink.W;
-            float X(float x) => mx + (x + Rink.L / 2) * sx;
-            float Z(float z) => my + (Rink.W / 2 - z) * sz; // сверху вниз: +Z вверху, как на виде сверху
-            Box(new Rect(X(0) - 1, my, 2, mh), "#d9363e");
-            Box(new Rect(X(Rink.BlueX) - 1, my, 2, mh), "#2f6fd6");
-            Box(new Rect(X(-Rink.BlueX) - 1, my, 2, mh), "#2f6fd6");
-            Box(new Rect(X(Rink.GoalX), Z(Rink.GoalW / 2), 3, Rink.GoalW * sz), "#d9363e");
-            Box(new Rect(X(-Rink.GoalX) - 3, Z(Rink.GoalW / 2), 3, Rink.GoalW * sz), "#d9363e");
-            var mine = new HashSet<int>();
-            foreach (var v in views) mine.Add(v.Follow);
-            for (int i = 0; i < st.Players.Length && i < roster.Count; i++)
-            {
-                var p = st.Players[i]; var r = roster[i];
-                float s = mine.Contains(i) ? 12 : r.Human != null ? 9 : 7;
-                if (r.Human != null) Box(new Rect(X(p.X) - s / 2 - 2, Z(p.Z) - s / 2 - 2, s + 4, s + 4), SlotColor(r.Human));
-                Box(new Rect(X(p.X) - s / 2, Z(p.Z) - s / 2, s, s), r.Team == 0 ? "#e2483d" : "#3f86e8");
-                if (mine.Contains(i))
-                {
-                    float hx = X(p.X) + Mathf.Sin(p.H) * 9, hz = Z(p.Z) - Mathf.Cos(p.H) * 9;
-                    Box(new Rect(hx - 2.5f, hz - 2.5f, 5, 5), "#ffffff");
-                }
-            }
-            Box(new Rect(X(st.PuckX) - 4, Z(st.PuckZ) - 4, 8, 8), "#ffffff");
-            Box(new Rect(X(st.PuckX) - 3, Z(st.PuckZ) - 3, 6, 6), "#111111");
         }
     }
 }

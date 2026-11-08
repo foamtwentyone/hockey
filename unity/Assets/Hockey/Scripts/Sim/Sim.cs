@@ -46,27 +46,46 @@ namespace Hockey
         }
     }
 
+    /// Ввод игрока. MoveX/MoveZ — желаемое направление движения в мировых координатах (длина 0..1),
+    /// его считает клиент из стика/клавиш с учётом поворота камеры.
     public struct PlayerInput
     {
-        public float Throttle, Turn;
-        public bool Shoot, Pass, Check, Sprint;
+        public float MoveX, MoveZ;
+        public bool Shoot, Pass, Check, Sprint, Jump;
         public static readonly PlayerInput None = default;
 
-        public byte Bits => (byte)((Shoot ? 1 : 0) | (Pass ? 2 : 0) | (Check ? 4 : 0) | (Sprint ? 8 : 0));
-        public static PlayerInput FromBits(float throttle, float turn, byte bits) => new PlayerInput
+        public byte Bits => (byte)((Shoot ? 1 : 0) | (Pass ? 2 : 0) | (Check ? 4 : 0) | (Sprint ? 8 : 0) | (Jump ? 16 : 0));
+        public static PlayerInput FromBits(float mx, float mz, byte bits)
         {
-            Throttle = Math.Clamp(throttle, -1, 1), Turn = Math.Clamp(turn, -1, 1),
-            Shoot = (bits & 1) != 0, Pass = (bits & 2) != 0, Check = (bits & 4) != 0, Sprint = (bits & 8) != 0,
-        };
+            float l = MathF.Sqrt(mx * mx + mz * mz);
+            if (float.IsNaN(l)) { mx = mz = 0; l = 0; }
+            if (l > 1) { mx /= l; mz /= l; }
+            return new PlayerInput
+            {
+                MoveX = mx, MoveZ = mz,
+                Shoot = (bits & 1) != 0, Pass = (bits & 2) != 0, Check = (bits & 4) != 0, Sprint = (bits & 8) != 0, Jump = (bits & 16) != 0,
+            };
+        }
+        public PlayerInput Scaled(float k) { var c = this; c.MoveX *= k; c.MoveZ *= k; return c; }
     }
 
-    public enum EvType : byte { Shot, Pass, Receive, Swish, Whoosh, Board, BoardPuck, Post, Hit, Body, Save, Deflect, Steal, Whistle, Goal, Horn, Overtime, End }
+    public enum Buff { Turbo = 0, Mega = 1, Giant = 2, Magnet = 3, Frozen = 4 }
+
+    public class Item
+    {
+        public float X, Z, Life;
+        public int Type;
+    }
+
+    public enum EvType : byte { Shot, Pass, Receive, Swish, Whoosh, Board, BoardPuck, Post, Hit, Body, Save, Deflect, Steal, Whistle, Goal, Horn, Overtime, End,
+        Jump, Dive, Land, Stop, PowerUp, Freeze, MegaShot, ItemSpawn }
 
     public struct GameEvent
     {
         public EvType Type;
         public float Value;
-        public GameEvent(EvType t, float v = 0) { Type = t; Value = v; }
+        public int Who;   // индекс игрока, к которому относится событие (-1 — нет)
+        public GameEvent(EvType t, float v = 0, int who = -1) { Type = t; Value = v; Who = who; }
     }
 
     public enum Phase : byte { Faceoff, Play, Goal, End }
@@ -89,6 +108,7 @@ namespace Hockey
     public class MatchConfig
     {
         public int Skaters = 3, Duration = 180, Difficulty = 1;
+        public bool Arcade;   // бонусы на льду
     }
 
     public class GoalInfo
@@ -100,10 +120,14 @@ namespace Hockey
     /// Всё, что нужно для отрисовки кадра. Одинаково у хоста и у гостей.
     public class PlayerView
     {
-        public float X, Z, H, Spd, Charge, Swing, Save, Stamina;
-        public bool Stun, Back;
+        public float X, Z, H, Spd, Charge, Swing, Save, Stamina, Y;
+        public bool Stun, Back, Dive;
+        public byte Buffs;          // биты Buff
         public int Goals, Assists;
+        public bool Has(Buff b) => (Buffs & (1 << (int)b)) != 0;
     }
+
+    public struct ItemView { public float X, Z; public int Type; }
 
     public class ViewState
     {
@@ -115,6 +139,8 @@ namespace Hockey
         public Phase Phase;
         public bool Overtime;
         public GoalInfo LastGoal = new GoalInfo();
+        public bool PuckMega;
+        public List<ItemView> Items = new List<ItemView>();
 
         public void Resize(int n)
         {
@@ -133,6 +159,10 @@ namespace Hockey
         public bool Goalie;
         public float X, Z, Vx, Vz, H;
         public float Charge, Stun, Checking, CheckCd, NoPick, Swing, Save, Stamina = 1;
+        public float Y, Vy, Dive, Recover, StopFx;
+        public readonly float[] Buffs = new float[5];
+        public bool Has(Buff b) => Buffs[(int)b] > 0;
+        public float Radius => Has(Buff.Giant) ? 0.62f : 0.45f;
         public PlayerInput Prev;
         internal BotState Bot = new BotState();
     }
@@ -143,7 +173,7 @@ namespace Hockey
         public int Owner = -1, PassTarget = -1;
         public int[] LastTouch = { -1, -1 };
         public Dictionary<int, bool> SaveCheck = new Dictionary<int, bool>();
-        public bool InNet;
+        public bool InNet, Mega;
     }
 
     public class Sim
@@ -158,7 +188,7 @@ namespace Hockey
         static readonly string[] BotNames = { "Медведь", "Шайба", "Молния", "Танк", "Ёжик", "Кузя", "Буран", "Вихрь",
             "Сокол", "Барс", "Пельмень", "Ракета", "Гром", "Лось", "Бублик", "Тайфун", "Филин", "Колобок" };
 
-        const float PlayerR = 0.45f, PuckR = 0.12f, G = 9.8f;
+        const float PuckR = 0.12f, G = 9.8f;
 
         public readonly MatchConfig Cfg;
         public readonly List<Player> Players = new List<Player>();
@@ -169,6 +199,8 @@ namespace Hockey
         public Phase Phase = Phase.Faceoff;
         public GoalInfo LastGoal = new GoalInfo();
         public readonly List<GameEvent> Events = new List<GameEvent>();
+        public readonly List<Item> Items = new List<Item>();
+        float itemTimer = 6;
 
         readonly Diff diff;
         readonly Random rng;
@@ -252,7 +284,7 @@ namespace Hockey
             foreach (var p in Players) if (p.Human == key) { p.Human = null; p.Name = NextBotName(); }
         }
 
-        void Ev(EvType t, float v = 0) => Events.Add(new GameEvent(t, v));
+        void Ev(EvType t, float v = 0, int who = -1) => Events.Add(new GameEvent(t, v, who));
 
         static readonly float[,] Spots = { { -1.6f, 0 }, { -6, 7 }, { -6, -7 }, { -12, 0 }, { -11, 10 }, { -11, -10 }, { -16, 4 }, { -16, -4 } };
 
@@ -265,6 +297,7 @@ namespace Hockey
                 {
                     if (p.Team != t) continue;
                     p.Vx = p.Vz = 0; p.Charge = p.Stun = p.Checking = p.Swing = p.Save = 0;
+                    p.Y = p.Vy = p.Dive = p.Recover = 0; p.Buffs[(int)Buff.Frozen] = 0;
                     p.H = Rink.TeamDir[t] > 0 ? MathF.PI / 2 : -MathF.PI / 2;
                     if (p.Goalie) { p.X = -Rink.TeamDir[t] * (Rink.GoalX - 0.9f); p.Z = 0; continue; }
                     int s = i % Spots.GetLength(0);
@@ -276,7 +309,8 @@ namespace Hockey
             }
             var pk = Puck;
             pk.X = pk.Y = pk.Z = pk.Vx = pk.Vy = pk.Vz = pk.HoldT = 0;
-            pk.Owner = -1; pk.PassTarget = -1; pk.SaveCheck.Clear(); pk.InNet = false;
+            pk.Owner = -1; pk.PassTarget = -1; pk.SaveCheck.Clear(); pk.InNet = false; pk.Mega = false;
+            Items.Clear();
             Phase = Phase.Faceoff;
             PhaseT = 2.2f;
         }
@@ -335,6 +369,55 @@ namespace Hockey
             }
             CollidePlayers();
             UpdatePuck(dt);
+            UpdateItems(dt);
+        }
+
+        // ---------------- бонусы (режим «Аркада») ----------------
+        void UpdateItems(float dt)
+        {
+            if (!Cfg.Arcade || Phase != Phase.Play) return;
+            itemTimer -= dt;
+            if (itemTimer <= 0)
+            {
+                itemTimer = Rnd(6, 11);
+                if (Items.Count < 3)
+                {
+                    float r = Rand();
+                    int type = r < 0.26f ? 0 : r < 0.48f ? 1 : r < 0.68f ? 2 : r < 0.86f ? 3 : 4;
+                    Items.Add(new Item { X = Rnd(-20, 20), Z = Rnd(-11, 11), Type = type, Life = 16 });
+                    Ev(EvType.ItemSpawn);
+                }
+            }
+            for (int i = Items.Count - 1; i >= 0; i--)
+            {
+                var it = Items[i];
+                it.Life -= dt;
+                if (it.Life <= 0) { Items.RemoveAt(i); continue; }
+                foreach (var p in Players)
+                {
+                    if (p.Goalie || p.Y > 1 || p.Stun > 0) continue;
+                    if (Hyp(p.X - it.X, p.Z - it.Z) > 1.15f) continue;
+                    ApplyItem(p, it.Type);
+                    Items.RemoveAt(i);
+                    break;
+                }
+            }
+        }
+
+        void ApplyItem(Player p, int type)
+        {
+            switch ((Buff)type)
+            {
+                case Buff.Turbo: p.Buffs[0] = 6; p.Stamina = 1; break;
+                case Buff.Mega: p.Buffs[1] = 15; break;
+                case Buff.Giant: p.Buffs[2] = 8; break;
+                case Buff.Magnet: p.Buffs[3] = 8; break;
+                case Buff.Frozen:
+                    foreach (var q in Players) if (q.Team != p.Team) { q.Buffs[4] = 2.6f; q.Charge = 0; }
+                    Ev(EvType.Freeze, p.Team);
+                    break;
+            }
+            Ev(EvType.PowerUp, type, p.Idx);
         }
 
         // ---------------- полевые игроки ----------------
@@ -352,63 +435,125 @@ namespace Hockey
             p.NoPick = MathF.Max(0, p.NoPick - dt);
             p.Swing = MathF.Max(0, p.Swing - dt);
             p.Checking = MathF.Max(0, p.Checking - dt);
-            if (p.Stun > 0) { p.Stun -= dt; inp = PlayerInput.None; p.Charge = 0; }
+            p.Recover = MathF.Max(0, p.Recover - dt);
+            p.StopFx = MathF.Max(0, p.StopFx - dt);
+            for (int b = 0; b < p.Buffs.Length; b++) p.Buffs[b] = MathF.Max(0, p.Buffs[b] - dt);
+            bool frozen = p.Has(Buff.Frozen), turbo = p.Has(Buff.Turbo);
+            if (p.Stun > 0)
+            {
+                p.Stun -= dt; inp = PlayerInput.None; p.Charge = 0;
+                if (p.Stun <= 0) p.Recover = 0.25f;
+            }
+            bool diving = p.Dive > 0;
+            if (diving)
+            {
+                p.Dive -= dt;
+                if (p.Dive <= 0) p.Recover = 0.3f;
+                inp = PlayerInput.None;
+            }
+            if (p.Recover > 0) { inp.MoveX = inp.MoveZ = 0; inp.Jump = false; inp.Check = false; }
+            bool air = p.Y > 0.02f || p.Vy > 0;
             float spd = Hyp(p.Vx, p.Vz);
 
-            float turnRate = Clamp(3.7f - spd * 0.17f, 2.1f, 3.7f);
-            p.H = Wrap(p.H + Clamp(inp.Turn, -1, 1) * turnRate * dt);
+            bool hasPuck = Puck.Owner == p.Idx;
+            float botMul = p.Human != null ? 1 : diff.Speed;
+            float mx = inp.MoveX, mz = inp.MoveZ;
+            float mag = MathF.Min(1, Hyp(mx, mz));
+            float control = (air ? 0.35f : 1) * (frozen ? 0.45f : 1);
+            bool sprinting = inp.Sprint && (p.Stamina > 0.05f || turbo) && mag > 0.2f;
+            if (sprinting && !turbo) p.Stamina = MathF.Max(0, p.Stamina - dt * 0.33f);
+            else if (!sprinting) p.Stamina = MathF.Min(1, p.Stamina + dt * 0.18f);
+            float maxS = (sprinting ? 10.8f : 8.2f) * botMul * (hasPuck ? 0.93f : 1) * (turbo ? 1.3f : 1) * (frozen ? 0.4f : 1);
+            float accel = (sprinting ? 13.5f : 11f) * (turbo ? 1.3f : 1);
+
+            // поворот к направлению стика: чем медленнее едешь, тем быстрее разворот
+            float diffAng = 0;
+            if (mag > 0.08f && !diving)
+            {
+                float desired = MathF.Atan2(mx, mz);
+                diffAng = Wrap(desired - p.H);
+                float turnRate = Clamp(9f - spd * 0.55f, 3.2f, 9f) * control;
+                p.H = Wrap(p.H + Clamp(diffAng, -turnRate * dt, turnRate * dt));
+            }
 
             // сцепление коньков: боковая скорость частично переходит в продольную
             float nfx = MathF.Sin(p.H), nfz = MathF.Cos(p.H);
             float fwd = p.Vx * nfx + p.Vz * nfz;
             float lx = p.Vx - fwd * nfx, lz = p.Vz - fwd * nfz;
             float lat = Hyp(lx, lz);
-            float grip = 1 - MathF.Exp(-(p.Stun > 0 ? 0.5f : 5.5f) * dt);
+            float gripK = diving ? 0.6f : p.Stun > 0 ? 0.5f : air ? 0.3f : 5.5f;
+            float grip = 1 - MathF.Exp(-gripK * dt);
             fwd += (fwd >= 0 ? 1 : -1) * lat * grip * 0.75f;
             lx *= 1 - grip; lz *= 1 - grip;
 
-            bool hasPuck = Puck.Owner == p.Idx;
-            float botMul = p.Human != null ? 1 : diff.Speed;
-            bool sprinting = inp.Sprint && p.Stamina > 0.05f && inp.Throttle > 0;
-            if (sprinting) p.Stamina = MathF.Max(0, p.Stamina - dt * 0.33f);
-            else p.Stamina = MathF.Min(1, p.Stamina + dt * 0.18f);
-            float maxS = (sprinting ? 10.8f : 8.2f) * botMul * (hasPuck ? 0.93f : 1);
-            float accel = sprinting ? 13 : 10.5f;
-
-            if (inp.Throttle > 0)
+            if (mag > 0.08f && !diving)
             {
-                if (fwd < maxS) fwd = MathF.Min(maxS, fwd + accel * inp.Throttle * dt);
-            }
-            else if (inp.Throttle < 0)
-            {
-                if (fwd > 0.4f) fwd -= MathF.Min(fwd, 16 * dt);
-                else if (fwd > -3.6f) fwd -= 7 * dt;
+                float align = MathF.Max(0, MathF.Cos(diffAng));
+                float target = maxS * mag;
+                if (fwd < target) fwd = MathF.Min(target, fwd + accel * align * mag * control * dt);
+                // хоккейная остановка: стик против движения
+                float vdot = (p.Vx * mx + p.Vz * mz) / MathF.Max(1e-3f, mag);
+                if (spd > 3 && vdot < -0.35f * spd && !air)
+                {
+                    float k = MathF.Min(1, 3.2f * dt);
+                    fwd *= 1 - k; lx *= 1 - k; lz *= 1 - k;
+                    if (p.StopFx <= 0) { p.StopFx = 0.25f; Ev(EvType.Stop, spd, p.Idx); }
+                }
             }
             p.Vx = fwd * nfx + lx;
             p.Vz = fwd * nfz + lz;
-            float fr = inp.Throttle == 0 ? 0.45f : 0.2f;
+            float fr = diving ? 0.9f : mag > 0.08f ? 0.2f : 0.55f;
             p.Vx *= 1 - fr * dt; p.Vz *= 1 - fr * dt;
             spd = Hyp(p.Vx, p.Vz);
-            float cap = maxS * 1.35f;
+            float cap = maxS * 1.4f + (diving ? 3 : 0);
             if (spd > cap) { p.Vx *= cap / spd; p.Vz *= cap / spd; }
 
             if (live)
             {
-                if (inp.Check && !p.Prev.Check && p.CheckCd <= 0 && p.Stun <= 0)
+                // пробел: прыжок на месте или нырок в движении (за шайбой)
+                if (inp.Jump && !p.Prev.Jump && !air && !diving && p.Stun <= 0 && p.Recover <= 0 && !frozen)
+                {
+                    if (spd > 4.5f && !hasPuck)
+                    {
+                        p.Dive = 0.8f; p.Vy = 2.6f; p.Charge = 0;
+                        p.Vx += nfx * 4.5f; p.Vz += nfz * 4.5f;
+                        Ev(EvType.Dive, 0, p.Idx);
+                    }
+                    else { p.Vy = 5.6f; Ev(EvType.Jump, 0, p.Idx); }
+                    air = true;
+                }
+                if (inp.Check && !p.Prev.Check && p.CheckCd <= 0 && p.Stun <= 0 && !air && !frozen)
                 {
                     p.Checking = 0.35f; p.CheckCd = 1.3f;
                     p.Vx += nfx * 5; p.Vz += nfz * 5;
                     Ev(EvType.Whoosh);
                 }
-                if (inp.Shoot) p.Charge = MathF.Min(1, p.Charge + dt / 0.9f);
-                else if (p.Prev.Shoot && p.Stun <= 0) { Shoot(p, p.Charge); p.Charge = 0; }
+                if (!diving && !frozen)
+                {
+                    if (inp.Shoot) p.Charge = MathF.Min(1, p.Charge + dt / 0.9f);
+                    else if (p.Prev.Shoot && p.Stun <= 0) { Shoot(p, p.Charge); p.Charge = 0; }
+                    else p.Charge = 0;
+                    if (inp.Pass && !p.Prev.Pass && p.Stun <= 0) DoPass(p);
+                }
                 else p.Charge = 0;
-                if (inp.Pass && !p.Prev.Pass && p.Stun <= 0) DoPass(p);
             }
             else p.Charge = 0;
 
+            // вертикаль: прыжок и нырок
+            if (air)
+            {
+                p.Vy -= 20 * dt;
+                p.Y += p.Vy * dt;
+                if (p.Y <= 0)
+                {
+                    if (p.Vy < -3) Ev(EvType.Land, -p.Vy, p.Idx);
+                    p.Y = 0; p.Vy = 0;
+                }
+            }
+
             p.X += p.Vx * dt; p.Z += p.Vz * dt;
-            if (Rink.Clamp(p.X, p.Z, PlayerR, out var c))
+            float pr = p.Radius;
+            if (Rink.Clamp(p.X, p.Z, pr, out var c))
             {
                 p.X = c.X; p.Z = c.Z;
                 float vn = p.Vx * c.Nx + p.Vz * c.Nz;
@@ -423,7 +568,7 @@ namespace Hockey
 
         void CollideGoalFrames(Player o)
         {
-            float r = PlayerR;
+            float r = o.Radius;
             foreach (int s in new[] { 1, -1 })
             {
                 float x0 = Rink.GoalX - 0.08f, x1 = Rink.GoalX + Rink.GoalD + 0.1f, hz = Rink.GoalW / 2 + 0.12f;
@@ -454,10 +599,10 @@ namespace Hockey
                     var a = ps[i]; var b = ps[j];
                     float dx = b.X - a.X, dz = b.Z - a.Z;
                     float d = Hyp(dx, dz);
-                    float min = PlayerR * 2;
+                    float min = a.Radius + b.Radius;
                     if (d >= min || d < 1e-5f) continue;
                     float nx = dx / d, nz = dz / d;
-                    float ma = a.Goalie ? 6 : 1, mb = b.Goalie ? 6 : 1;
+                    float ma = a.Goalie ? 6 : a.Has(Buff.Giant) ? 4 : 1, mb = b.Goalie ? 6 : b.Has(Buff.Giant) ? 4 : 1;
                     float pen = min - d;
                     a.X -= nx * pen * mb / (ma + mb); a.Z -= nz * pen * mb / (ma + mb);
                     b.X += nx * pen * ma / (ma + mb); b.Z += nz * pen * ma / (ma + mb);
@@ -479,12 +624,16 @@ namespace Hockey
         void Knock(Player hitter, Player victim, float nx, float nz, float closing)
         {
             if (closing < 1.5f) return;
-            victim.Stun = 1.4f;
+            if (victim.Y > 0.15f) return;                                       // перепрыгнул
+            if (victim.Has(Buff.Giant) && !hitter.Has(Buff.Giant)) { hitter.Checking = 0; Ev(EvType.Body); return; }
+            victim.Stun = hitter.Has(Buff.Giant) ? 2.0f : 1.4f;
+            victim.Dive = 0;
+            if (hitter.Has(Buff.Giant)) closing *= 1.6f;
             victim.Vx = nx * (4 + closing * 0.5f) + hitter.Vx * 0.3f;
             victim.Vz = nz * (4 + closing * 0.5f) + hitter.Vz * 0.3f;
             victim.Charge = 0;
             hitter.Checking = 0;
-            Ev(EvType.Hit, closing);
+            Ev(EvType.Hit, closing, victim.Idx);
             if (Puck.Owner == victim.Idx)
             {
                 Puck.Owner = -1;
@@ -538,7 +687,14 @@ namespace Hockey
             pk.PassTarget = -1;
             Touch(p);
             p.NoPick = 0.35f;
-            Ev(EvType.Shot, power);
+            if (p.Has(Buff.Mega))
+            {
+                p.Buffs[(int)Buff.Mega] = 0;
+                pk.Mega = true;
+                pk.Vx *= 1.45f; pk.Vz *= 1.45f;
+                Ev(EvType.MegaShot, 0, p.Idx);
+            }
+            Ev(EvType.Shot, power, p.Idx);
         }
 
         void DoPass(Player p)
@@ -602,6 +758,7 @@ namespace Hockey
         {
             g.Swing = MathF.Max(0, g.Swing - dt);
             g.Save = MathF.Max(0, g.Save - dt);
+            for (int b = 0; b < g.Buffs.Length; b++) g.Buffs[b] = MathF.Max(0, g.Buffs[b] - dt);
             g.NoPick = MathF.Max(0, g.NoPick - dt);
             int s = -Rink.TeamDir[g.Team];
             int outDir = -s;
@@ -624,7 +781,7 @@ namespace Hockey
             }
             float mx = tx - g.X, mz = tz - g.Z;
             float md = Hyp(mx, mz);
-            float want = MathF.Min(4.6f, md * 7);
+            float want = MathF.Min(g.Has(Buff.Frozen) ? 1.4f : 4.6f, md * 7);
             float vx = md > 1e-3f ? mx / md * want : 0, vz = md > 1e-3f ? mz / md * want : 0;
             float k = MathF.Min(1, dt * 12);
             g.Vx += (vx - g.Vx) * k; g.Vz += (vz - g.Vz) * k;
@@ -705,15 +862,17 @@ namespace Hockey
                 {
                     foreach (var q in Players)
                     {
-                        if (q.Team == o.Team || q.Goalie || q.Stun > 0 || q.NoPick > 0) continue;
+                        if (q.Team == o.Team || q.Goalie || q.Stun > 0 || q.NoPick > 0 || q.Has(Buff.Frozen) || q.Y > 0.6f) continue;
                         Blade(q, out float qx, out float qz);
-                        if (Hyp(qx - pk.X, qz - pk.Z) < 0.75f || Hyp(q.X - pk.X, q.Z - pk.Z) < 0.55f)
+                        bool diveReach = q.Dive > 0 && Hyp(q.X + MathF.Sin(q.H) * 1.3f - pk.X, q.Z + MathF.Cos(q.H) * 1.3f - pk.Z) < 1.1f;
+                        float reach = q.Has(Buff.Magnet) ? 1.3f : q.Has(Buff.Giant) ? 1.0f : 0.75f;
+                        if (diveReach || Hyp(qx - pk.X, qz - pk.Z) < reach || Hyp(q.X - pk.X, q.Z - pk.Z) < 0.55f)
                         {
-                            float rate = q.Human != null ? 2.6f : diff.Steal;
-                            float resist = o.Human != null ? 1 : 1.15f;
-                            if (Rand() < rate / resist * dt)
+                            float rate = (q.Human != null ? 2.6f : diff.Steal) * (q.Has(Buff.Magnet) ? 2.2f : 1);
+                            float resist = (o.Human != null ? 1 : 1.15f) * (o.Has(Buff.Giant) ? 1.8f : 1);
+                            if (diveReach || Rand() < rate / resist * dt)
                             {
-                                pk.Owner = q.Idx; o.NoPick = 0.7f; Touch(q); Ev(EvType.Steal);
+                                pk.Owner = q.Idx; o.NoPick = 0.7f; Touch(q); Ev(EvType.Steal, 0, q.Idx);
                                 break;
                             }
                         }
@@ -768,7 +927,7 @@ namespace Hockey
                     {
                         int team = s > 0 ? 0 : 1;
                         Score[team]++;
-                        pk.InNet = true;
+                        pk.InNet = true; pk.Mega = false;
                         pk.Vx *= 0.35f; pk.Vz *= 0.35f;
                         var lt = pk.LastTouch;
                         Player scorer = lt[0] >= 0 ? Players[lt[0]] : null;
@@ -840,6 +999,8 @@ namespace Hockey
                 if (pk.SaveCheck.ContainsKey(g.Idx)) continue;
                 float lateral = MathF.Abs(dz);
                 float prob = diff.SaveP + 0.1f - (spd - 14) / 70 - lateral * 0.22f - MathF.Max(0, pk.Y - 0.9f) * 0.3f;
+                if (pk.Mega) prob -= 0.35f;
+                if (g.Has(Buff.Frozen)) prob -= 0.25f;
                 int lt = pk.LastTouch[0];
                 if (lt >= 0 && Players[lt].Team == g.Team) prob = 1;
                 prob = Clamp(prob, 0.18f, 0.95f);
@@ -847,7 +1008,7 @@ namespace Hockey
                 pk.SaveCheck[g.Idx] = ok;
                 if (!ok) continue;
                 g.Save = 0.6f;
-                Ev(EvType.Save);
+                Ev(EvType.Save, 0, g.Idx);
                 if (spd < 24 && Rand() < 0.55f) GoalieHold(g, 1.3f);
                 else
                 {
@@ -866,7 +1027,7 @@ namespace Hockey
         void GoalieHold(Player g, float t)
         {
             var pk = Puck;
-            pk.Owner = g.Idx; pk.HoldT = t;
+            pk.Owner = g.Idx; pk.HoldT = t; pk.Mega = false;
             pk.Vx = pk.Vz = pk.Vy = 0;
             Touch(g);
             g.Save = MathF.Max(g.Save, 0.4f);
@@ -880,10 +1041,13 @@ namespace Hockey
             Player best = null; float bd = float.MaxValue;
             foreach (var p in Players)
             {
-                if (p.Goalie || p.Stun > 0 || p.NoPick > 0) continue;
+                if (p.Goalie || p.Stun > 0 || p.NoPick > 0 || p.Y > 0.7f) continue;
                 Blade(p, out float bx, out float bz);
                 float d = MathF.Min(Hyp(bx - pk.X, bz - pk.Z), Hyp(p.X - pk.X, p.Z - pk.Z) + 0.25f);
+                if (p.Dive > 0) d = MathF.Min(d, Hyp(p.X + MathF.Sin(p.H) * 1.3f - pk.X, p.Z + MathF.Cos(p.H) * 1.3f - pk.Z));
                 float r = pk.PassTarget == p.Idx ? 1.25f : 0.8f;
+                if (p.Has(Buff.Magnet)) r += 0.8f;
+                else if (p.Has(Buff.Giant)) r += 0.3f;
                 if (d < r && d < bd) { bd = d; best = p; }
             }
             if (best == null) return false;
@@ -899,6 +1063,8 @@ namespace Hockey
             }
             pk.Owner = best.Idx;
             pk.PassTarget = -1;
+            pk.Mega = false;
+            if (best.Dive > 0) best.Dive = MathF.Min(best.Dive, 0.15f);
             Touch(best);
             if (spd > 6) Ev(EvType.Receive);
             return true;
@@ -947,7 +1113,12 @@ namespace Hockey
 
         PlayerInput IdleBotInput(Player p)
         {
-            if (Phase == Phase.Goal && LastGoal.Team == p.Team) return new PlayerInput { Throttle = 0.5f, Turn = 0.6f };
+            if (Phase == Phase.Goal && LastGoal.Team == p.Team)
+            {
+                // празднование: кружатся и подпрыгивают
+                float a = SimTime * 2.2f + p.Idx;
+                return new PlayerInput { MoveX = MathF.Sin(a) * 0.5f, MoveZ = MathF.Cos(a) * 0.5f, Jump = Rand() < 0.03f };
+            }
             return PlayerInput.None;
         }
 
@@ -957,19 +1128,41 @@ namespace Hockey
             d = Hyp(dx, dz);
             float desired = MathF.Atan2(dx, dz);
             diffAng = Wrap(desired - p.H);
-            var inp = new PlayerInput { Turn = Clamp(diffAng * 3.2f, -1, 1) };
+            var inp = new PlayerInput();
             float spd = Hyp(p.Vx, p.Vz);
-            if (d < arrive) inp.Throttle = spd > 1.5f ? -1 : 0;
-            else
+            if (d < arrive)
             {
-                inp.Throttle = MathF.Abs(diffAng) < 1.3f ? speedMul : 0.15f;
-                if (MathF.Abs(diffAng) > 2.2f && spd > 5) inp.Throttle = -1;
+                // приехали — тормозим против скорости
+                if (spd > 1.5f) { inp.MoveX = -p.Vx / spd; inp.MoveZ = -p.Vz / spd; }
+            }
+            else if (d > 1e-3f)
+            {
+                inp.MoveX = dx / d * speedMul; inp.MoveZ = dz / d * speedMul;
             }
             return inp;
         }
         PlayerInput Steer(Player p, float tx, float tz, float arrive = 1.5f, float speedMul = 1) => Steer(p, tx, tz, arrive, speedMul, out _, out _);
 
         PlayerInput BotInput(Player p, float dt)
+        {
+            var inp = BotInputCore(p, dt);
+            if (p.Y <= 0.02f && Rand() < 3 * dt * diff.React)
+            {
+                // перепрыгнуть летящий силовой приём
+                foreach (var o in Players)
+                    if (o.Team != p.Team && o.Checking > 0 && Hyp(o.X - p.X, o.Z - p.Z) < 2.2f) { inp.Jump = true; break; }
+            }
+            return inp;
+        }
+
+        Item NearestItem(Player p, float maxD)
+        {
+            Item best = null; float bd = maxD;
+            foreach (var it in Items) { float d = Hyp(it.X - p.X, it.Z - p.Z); if (d < bd) { bd = d; best = it; } }
+            return best;
+        }
+
+        PlayerInput BotInputCore(Player p, float dt)
         {
             var pk = Puck;
             int dir = Rink.TeamDir[p.Team];
@@ -983,8 +1176,7 @@ namespace Hockey
                 if (pk.Owner != p.Idx && b.ShootT > 0.1f) { b.ShootT = -1; si.Shoot = false; return si; }
                 si.Shoot = b.ShootT < b.ChargeFor;
                 if (!si.Shoot) b.ShootT = -1;
-                si.Throttle = 0.3f;
-                return si;
+                return si.Scaled(0.3f);
             }
 
             if (pk.Owner == p.Idx)
@@ -1019,6 +1211,12 @@ namespace Hockey
                 return r;
             }
 
+            if (Cfg.Arcade && pk.Owner != p.Idx && chaser[p.Team] != p.Idx)
+            {
+                var it = NearestItem(p, 7);
+                if (it != null) { var ri = Steer(p, it.X, it.Z, 0); ri.Sprint = true; return ri; }
+            }
+
             if (carrier != null && carrier.Team == p.Team)
             {
                 float[] lanes = { -7, 7, 0, -11, 11, -3, 3 };
@@ -1038,6 +1236,7 @@ namespace Hockey
                 float tx = pk.X + pk.Vx * lead, tz = pk.Z + pk.Vz * lead;
                 var r = Steer(p, tx, tz, 0, 1, out float d, out float da);
                 if (carrier != null && d < 2.6f && MathF.Abs(da) < 0.4f && p.CheckCd <= 0 && Rand() < diff.CheckP * dt * 2) r.Check = true;
+                else if (carrier != null && d > 1.8f && d < 3.4f && MathF.Abs(da) < 0.3f && Hyp(p.Vx, p.Vz) > 5 && Rand() < 0.7f * dt * diff.React) r.Jump = true;
                 r.Sprint = d > 5 && p.Stamina > 0.3f;
                 if (carrier == null && pk.Owner < 0 && d < 1.6f && Rand() < 0.05f && dir * (oppGoalX - pk.X) > 0
                     && MathF.Abs(Wrap(MathF.Atan2(oppGoalX - p.X, -p.Z) - p.H)) < 0.4f && Hyp(oppGoalX - p.X, p.Z) < 14)
@@ -1074,9 +1273,16 @@ namespace Hockey
                 var p = Players[i]; var o = v.Players[i];
                 o.X = p.X; o.Z = p.Z; o.H = p.H; o.Spd = Hyp(p.Vx, p.Vz); o.Charge = p.Charge;
                 o.Stun = p.Stun > 0; o.Swing = p.Swing; o.Save = p.Save; o.Stamina = p.Stamina;
-                o.Back = p.Vx * MathF.Sin(p.H) + p.Vz * MathF.Cos(p.H) < -0.5f;
+                o.Back = false;
                 o.Goals = p.Goals; o.Assists = p.Assists;
+                o.Y = p.Y; o.Dive = p.Dive > 0;
+                byte bits = 0;
+                for (int b = 0; b < p.Buffs.Length; b++) if (p.Buffs[b] > 0) bits |= (byte)(1 << b);
+                o.Buffs = bits;
             }
+            v.Items.Clear();
+            foreach (var it in Items) v.Items.Add(new ItemView { X = it.X, Z = it.Z, Type = it.Type });
+            v.PuckMega = Puck.Mega;
             v.PuckX = Puck.X; v.PuckY = Puck.Y; v.PuckZ = Puck.Z; v.PuckOwner = Puck.Owner;
             v.Score0 = Score[0]; v.Score1 = Score[1];
             v.Time = Time; v.Phase = Phase; v.PhaseT = PhaseT; v.Overtime = Overtime; v.SimTime = SimTime;

@@ -22,7 +22,6 @@ namespace Hockey
         int autoErrors, autoFrames;
         float autoFpsTime;
 
-        PlayerInput ReadSource(InputSource s) => autotest ? autoInput : GameInput.Read(s);
 
         void StartAutotestIfRequested()
         {
@@ -100,103 +99,145 @@ namespace Hockey
             while (Time.realtimeSinceStartup < end) { autoFrames++; yield return null; }
         }
 
+        PlayerInput Toward(float dirX, float dirZ, bool sprint = false) => new PlayerInput { MoveX = dirX, MoveZ = dirZ, Sprint = sprint };
+
         IEnumerator AutotestRun()
         {
             autoFpsTime = Time.realtimeSinceStartup;
-            yield return Wait(2.5f);
+            yield return Wait(3f);
             yield return Shot("01_menu");
+            uiPage = UiPage.Play; yield return Wait(0.5f); yield return Shot("02_menu_play");
+            uiPage = UiPage.Settings; yield return Wait(0.5f); yield return Shot("03_settings");
+            uiPage = UiPage.Controls; yield return Wait(0.5f); yield return Shot("04_controls");
+            uiPage = UiPage.Main;
 
-            // одиночный матч
-            cfg.Skaters = 3; cfg.Duration = 180; cfg.Difficulty = 1;
+            // одиночный матч в режиме «Аркада»
+            cfg.Skaters = 3; cfg.Duration = 180; cfg.Difficulty = 1; cfg.Arcade = true;
             StartLocal(false);
             yield return Wait(1.0f);
-            yield return Shot("02_faceoff");
-
-            // едем вперёд с поворотами
-            autoInput = new PlayerInput { Throttle = 1 };
-            yield return Wait(2.5f);
-            yield return Shot("03_skating");
-            autoInput = new PlayerInput { Throttle = 1, Turn = 0.6f, Sprint = true };
-            yield return Wait(1.2f);
-            autoInput = new PlayerInput { Throttle = 1, Turn = -0.6f };
-            yield return Wait(1.2f);
-            yield return Shot("04_turning");
-
-            // выводим игрока с шайбой к чужим воротам и бросаем
+            yield return Shot("05_faceoff");
             var me = sim.Players.Find(p => p.Human == "local0");
+            int dir = me != null ? Rink.TeamDir[me.Team] : 1;
+
+            autoInput = Toward(dir, 0, true);
+            yield return Wait(2.5f);
+            yield return Shot("06_skating");
+            autoInput = Toward(dir * 0.3f, 1);
+            yield return Wait(1.2f);
+            yield return Shot("07_turning");
+
+            // прыжок
+            autoInput = new PlayerInput { Jump = true };
+            yield return Wait(0.25f);
+            yield return Shot("08_jump");
+            autoInput = default;
+            yield return Wait(0.6f);
+
+            // бросок по воротам
             if (me != null)
             {
-                int dir = Rink.TeamDir[me.Team];
-                me.X = dir * 14; me.Z = 1.5f; me.H = dir > 0 ? Mathf.PI / 2 : -Mathf.PI / 2; me.Vx = dir * 5; me.Vz = 0;
+                me.X = dir * 13; me.Z = 1.5f; me.H = dir > 0 ? Mathf.PI / 2 : -Mathf.PI / 2; me.Vx = dir * 4; me.Vz = 0; me.Y = 0; me.Vy = 0; me.Stun = 0;
                 sim.Puck.Owner = me.Idx; sim.Puck.InNet = false;
-                if (sim.Phase != Phase.Play) { sim.Phase = Phase.Play; }
-                autoInput = new PlayerInput { Throttle = 1 };
-                yield return Wait(0.6f);
-                autoInput = new PlayerInput { Throttle = 1, Shoot = true };
-                yield return Wait(0.5f);
-                yield return Shot("05_windup");
-                autoInput = new PlayerInput { Throttle = 0.5f };
-                yield return Wait(0.35f);
-                yield return Shot("06_shot");
-                yield return Wait(1.0f);
-                yield return Shot("07_after_shot");
+                if (sim.Phase != Phase.Play) sim.Phase = Phase.Play;
+                autoInput = new PlayerInput { MoveX = dir * 0.5f, Shoot = true };
+                yield return Wait(0.45f);
+                yield return Shot("09_windup");
+                autoInput = default;
+                yield return Wait(0.3f);
+                yield return Shot("10_shot");
+                yield return Wait(1.2f);
+                yield return Shot("11_after_shot");
                 Log($"После броска: фаза={sim.Phase}, счёт {sim.Score[0]}:{sim.Score[1]}");
-            }
-            autoInput = default;
+                while (sim.Phase != Phase.Play && sim.Phase != Phase.End) yield return Wait(0.2f);
 
-            // крупный план персонажей
+                // бонусы: великан и заморозка
+                me.X = 0; me.Z = 5; me.H = dir > 0 ? Mathf.PI / 2 : -Mathf.PI / 2; me.Vx = 0; me.Vz = 0;
+                sim.Items.Clear();
+                sim.Items.Add(new Item { X = dir * 3, Z = 5, Type = (int)Buff.Giant, Life = 12 });
+                sim.Items.Add(new Item { X = dir * 7, Z = 5, Type = (int)Buff.Frozen, Life = 12 });
+                sim.Items.Add(new Item { X = dir * 4, Z = 9, Type = (int)Buff.Turbo, Life = 12 });
+                sim.Items.Add(new Item { X = -dir * 4, Z = 9, Type = (int)Buff.Mega, Life = 12 });
+                autoInput = Toward(dir, 0);
+                yield return Wait(0.2f);
+                yield return Shot("12_items");
+                yield return Wait(0.6f);
+                yield return Shot("13_giant");
+                yield return Wait(0.8f);
+                yield return Shot("14_freeze");
+                Log($"Бонусы: великан={me.Has(Buff.Giant)}, у соперников заморозка={sim.Players.Exists(q => q.Team != me.Team && q.Has(Buff.Frozen))}");
+
+                // нырок
+                autoInput = Toward(-dir, 0, true);
+                yield return Wait(1.2f);
+                autoInput = new PlayerInput { MoveX = -dir, Jump = true };
+                yield return Wait(0.2f);
+                yield return Shot("15_dive");
+                autoInput = default;
+                yield return Wait(1f);
+            }
+
+            // крупные планы
             if (views.Count > 0 && me != null && sim != null)
             {
                 autoFreeze = true; // останавливаем физику без меню паузы
                 var cam = views[0].Cam;
                 var keep = views.ToArray();
-                views.Clear(); // временно отключаем управление камерой
+                views.Clear();
                 var p = new Vector3(me.X, 0, me.Z);
                 var fwd = new Vector3(Mathf.Sin(me.H), 0, Mathf.Cos(me.H));
-                cam.transform.position = p + fwd * 3.2f + Vector3.up * 1.6f + Vector3.Cross(Vector3.up, fwd) * 1.0f;
-                cam.transform.LookAt(p + Vector3.up * 1.0f);
-                yield return Wait(0.3f);
-                yield return Shot("08_closeup");
-                // вратарь крупно
+                cam.transform.position = p + fwd * 3.6f + Vector3.up * 1.7f + Vector3.Cross(Vector3.up, fwd) * 1.2f;
+                cam.transform.LookAt(p + Vector3.up * 1.1f);
+                yield return Wait(0.4f);
+                yield return Shot("16_closeup");
                 var g = sim.Players.Find(q => q.Goalie);
                 if (g != null)
                 {
                     var gp = new Vector3(g.X, 0, g.Z);
                     var gf = new Vector3(Mathf.Sin(g.H), 0, Mathf.Cos(g.H));
-                    cam.transform.position = gp + gf * 3f + Vector3.up * 1.5f;
-                    cam.transform.LookAt(gp + Vector3.up * 0.8f);
-                    yield return Wait(0.3f);
-                    yield return Shot("09_goalie");
+                    cam.transform.position = gp + gf * 3.2f + Vector3.up * 1.6f;
+                    cam.transform.LookAt(gp + Vector3.up * 0.9f);
+                    yield return Wait(0.4f);
+                    yield return Shot("17_goalie");
                 }
-                // вид сверху на всю площадку
-                cam.transform.position = new Vector3(0, 45, -0.01f);
+                cam.transform.position = new Vector3(0, 46, -0.01f);
                 cam.transform.rotation = Quaternion.Euler(90, 0, 0);
-                yield return Wait(0.3f);
-                yield return Shot("10_topdown");
+                yield return Wait(0.4f);
+                yield return Shot("18_topdown");
+                cam.transform.position = new Vector3(-24, 9, -22);
+                cam.transform.LookAt(new Vector3(0, 0, 0));
+                yield return Wait(0.4f);
+                yield return Shot("19_arena");
                 views.AddRange(keep);
                 autoFreeze = false;
             }
 
-            // пусть боты поиграют, проверим, что всё стабильно
-            autoInput = new PlayerInput { Throttle = 0.6f, Turn = 0.2f };
+            // пусть боты поиграют
+            autoInput = Toward(0.4f, 0.6f);
             yield return Wait(8f);
-            yield return Shot("11_gameplay");
+            yield return Shot("20_gameplay");
             Log($"Матч идёт: {StateLine()}");
 
-            // сплит-скрин
-            StartLocal(true);
-            autoInput = new PlayerInput { Throttle = 1 };
-            yield return Wait(4f);
-            yield return Shot("12_split");
+            // конец матча
+            sim.Time = 0.4f;
+            if (sim.Score[0] == sim.Score[1]) sim.Score[0]++;
+            yield return Wait(3f);
+            yield return Shot("21_end");
 
-            // меню снова
+            // сплит-скрин
+            ToMenu();
+            cfg.Arcade = false;
+            StartLocal(true);
+            autoInput = Toward(1, 0);
+            yield return Wait(4f);
+            yield return Shot("22_split");
+
             autoInput = default;
             ToMenu();
-            yield return Wait(1f);
-            yield return Shot("13_menu_again");
+            yield return Wait(1.5f);
+            yield return Shot("23_menu_again");
 
             float elapsed = Time.realtimeSinceStartup - autoFpsTime;
-            Log($"Готово. Кадров: {autoFrames}, средний FPS: {autoFrames / Mathf.Max(0.01f, elapsed):F1}, ошибок в логе: {autoErrors}");
+            Log($"Готово. Кадров: {autoFrames}, средний FPS: {autoFrames / Mathf.Max(0.01f, elapsed):F1}, ошибок в логе: {autoErrors}, мультяшный шейдер: {Mats.ToonAvailable}");
             File.WriteAllText(Path.Combine(autotestDir, "autotest.log"), autoLog.ToString(), Encoding.UTF8);
             Application.logMessageReceived -= OnLog;
 #if UNITY_EDITOR

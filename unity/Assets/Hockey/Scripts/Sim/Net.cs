@@ -13,7 +13,7 @@ namespace Hockey
     {
         public const int GamePort = 7777;
         public const int DiscoveryPort = 7778;
-        public const int Protocol = 1;
+        public const int Protocol = 2;
         public static readonly byte[] Magic = { (byte)'D', (byte)'V', (byte)'H', (byte)'K' };
     }
 
@@ -58,7 +58,7 @@ namespace Hockey
         public static void WriteSession(BinaryWriter w, SessionInfo s)
         {
             w.Write(s.Seq); w.Write(s.MatchId); w.Write(s.InMatch);
-            w.Write((byte)s.Cfg.Skaters); w.Write((short)s.Cfg.Duration); w.Write((byte)s.Cfg.Difficulty);
+            w.Write((byte)s.Cfg.Skaters); w.Write((short)s.Cfg.Duration); w.Write((byte)s.Cfg.Difficulty); w.Write(s.Cfg.Arcade);
             w.Write((byte)s.Lobby.Count);
             foreach (var l in s.Lobby) { Str(w, l.Key); Str(w, l.Name); w.Write((byte)l.Team); }
             w.Write((byte)(s.InMatch ? s.Roster.Count : 0));
@@ -73,7 +73,7 @@ namespace Hockey
         public static SessionInfo ReadSession(BinaryReader r)
         {
             var s = new SessionInfo { Seq = r.ReadInt32(), MatchId = r.ReadInt32(), InMatch = r.ReadBoolean() };
-            s.Cfg.Skaters = r.ReadByte(); s.Cfg.Duration = r.ReadInt16(); s.Cfg.Difficulty = r.ReadByte();
+            s.Cfg.Skaters = r.ReadByte(); s.Cfg.Duration = r.ReadInt16(); s.Cfg.Difficulty = r.ReadByte(); s.Cfg.Arcade = r.ReadBoolean();
             int n = r.ReadByte();
             for (int i = 0; i < n; i++) s.Lobby.Add(new LobbyEntry { Key = r.ReadString(), Name = r.ReadString(), Team = r.ReadByte() });
             int m = r.ReadByte();
@@ -103,12 +103,16 @@ namespace Hockey
                 w.Write(Q(p.X, 100)); w.Write(Q(p.Z, 100)); w.Write(Q(p.H, 1000)); w.Write(Q(p.Spd, 100));
                 w.Write((byte)(p.Charge * 255)); w.Write((byte)(Math.Min(1, p.Swing) * 255)); w.Write((byte)(Math.Min(1, p.Save) * 255));
                 w.Write((byte)(p.Stamina * 255));
-                w.Write((byte)((p.Stun ? 1 : 0) | (p.Back ? 2 : 0)));
+                w.Write((byte)((p.Stun ? 1 : 0) | (p.Back ? 2 : 0) | (p.Dive ? 4 : 0)));
                 w.Write((byte)p.Goals); w.Write((byte)p.Assists);
+                w.Write(Q(p.Y, 100)); w.Write(p.Buffs);
             }
+            w.Write(v.PuckMega);
+            w.Write((byte)Math.Min(v.Items.Count, 8));
+            for (int i = 0; i < v.Items.Count && i < 8; i++) { w.Write(Q(v.Items[i].X, 100)); w.Write(Q(v.Items[i].Z, 100)); w.Write((byte)v.Items[i].Type); }
             int ne = Math.Min(evs.Count, 40);
             w.Write((byte)ne);
-            for (int i = 0; i < ne; i++) { w.Write((byte)evs[i].Type); w.Write(Q(evs[i].Value, 100)); }
+            for (int i = 0; i < ne; i++) { w.Write((byte)evs[i].Type); w.Write(Q(evs[i].Value, 100)); w.Write((sbyte)evs[i].Who); }
         }
 
         public static int ReadSnapshot(BinaryReader r, ViewState v, List<GameEvent> evs)
@@ -126,11 +130,16 @@ namespace Hockey
                 var p = v.Players[i];
                 p.X = r.ReadInt16() / 100f; p.Z = r.ReadInt16() / 100f; p.H = r.ReadInt16() / 1000f; p.Spd = r.ReadInt16() / 100f;
                 p.Charge = r.ReadByte() / 255f; p.Swing = r.ReadByte() / 255f; p.Save = r.ReadByte() / 255f; p.Stamina = r.ReadByte() / 255f;
-                int f = r.ReadByte(); p.Stun = (f & 1) != 0; p.Back = (f & 2) != 0;
+                int f = r.ReadByte(); p.Stun = (f & 1) != 0; p.Back = (f & 2) != 0; p.Dive = (f & 4) != 0;
                 p.Goals = r.ReadByte(); p.Assists = r.ReadByte();
+                p.Y = r.ReadInt16() / 100f; p.Buffs = r.ReadByte();
             }
+            v.PuckMega = r.ReadBoolean();
+            int ni = r.ReadByte();
+            v.Items.Clear();
+            for (int i = 0; i < ni; i++) v.Items.Add(new ItemView { X = r.ReadInt16() / 100f, Z = r.ReadInt16() / 100f, Type = r.ReadByte() });
             int ne = r.ReadByte();
-            for (int i = 0; i < ne; i++) evs.Add(new GameEvent((EvType)r.ReadByte(), r.ReadInt16() / 100f));
+            for (int i = 0; i < ne; i++) evs.Add(new GameEvent((EvType)r.ReadByte(), r.ReadInt16() / 100f, r.ReadSByte()));
             return matchId;
         }
     }
@@ -386,7 +395,7 @@ namespace Hockey
             if (Connected && now - lastInput > 1.0 / 30)
             {
                 lastInput = now;
-                var w = peer.Begin(Msg.Input); w.Write(inp.Throttle); w.Write(inp.Turn); w.Write(inp.Bits); peer.SendTo(host);
+                var w = peer.Begin(Msg.Input); w.Write(inp.MoveX); w.Write(inp.MoveZ); w.Write(inp.Bits); peer.SendTo(host);
             }
             if (Connected && now - lastPing > 1.5)
             {

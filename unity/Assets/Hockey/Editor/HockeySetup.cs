@@ -27,13 +27,15 @@ namespace Hockey.EditorTools
             EnsureMaterials();
             EnsureScene();
             PlayerSettings.runInBackground = true;
-            if (PlayerSettings.productName == "unity" || string.IsNullOrEmpty(PlayerSettings.productName))
-                PlayerSettings.productName = "Дворовый хоккей 3D";
+            if (PlayerSettings.productName == "unity" || PlayerSettings.productName == "Дворовый хоккей 3D" || string.IsNullOrEmpty(PlayerSettings.productName))
+                PlayerSettings.productName = "Шайбятки";
         }
 
         static void EnsureMaterials()
         {
             if (!Directory.Exists(ResDir)) Directory.CreateDirectory(ResDir);
+            var toon = Shader.Find("Hockey/Toon");
+            if (toon != null) Create("HockeyToon", toon, m => { });
             var std = Shader.Find("Standard");
             if (std == null) return;
             Create("HockeyOpaque", std, m => { });
