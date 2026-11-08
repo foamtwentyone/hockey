@@ -434,6 +434,14 @@ namespace Hockey
             return m;
         }
 
+        /// Материал для текстурированных моделей без цвета вершин (KayKit).
+        public static Material ToonModel(Texture tex, float gloss = 0.12f)
+        {
+            var m = NewToon(Color.white, gloss, tex);
+            if (ToonAvailable) { m.SetFloat("_UseVColor", 0); m.SetFloat("_ShadeSoft", 0.45f); }
+            return m;
+        }
+
         public static Material Emissive(string hex, float intensity = 1)
         {
             string key = $"e{hex}|{intensity}";

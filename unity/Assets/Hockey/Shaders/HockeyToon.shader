@@ -14,6 +14,7 @@ Shader "Hockey/Toon"
         _RimPower ("Rim Power", Range(0.5,8)) = 3.2
         _Gloss ("Gloss", Range(0,1)) = 0.18
         _Unlit ("Unlit", Range(0,1)) = 0
+        _UseVColor ("Use Vertex Color", Range(0,1)) = 1
     }
     SubShader
     {
@@ -33,6 +34,7 @@ Shader "Hockey/Toon"
         half _RimPower;
         half _Gloss;
         half _Unlit;
+        half _UseVColor;
 
         struct Input
         {
@@ -58,7 +60,7 @@ Shader "Hockey/Toon"
 
         void surf (Input IN, inout SurfaceOutput o)
         {
-            fixed4 tex = tex2D(_MainTex, IN.uv_MainTex) * _Color * IN.color;
+            fixed4 tex = tex2D(_MainTex, IN.uv_MainTex) * _Color * lerp(fixed4(1, 1, 1, 1), IN.color, _UseVColor);
             half rim = 1 - saturate(dot(normalize(IN.viewDir), o.Normal));
             o.Albedo = tex.rgb * (1 - _Unlit);
             o.Emission = _EmissionColor.rgb + tex.rgb * _Unlit + _RimColor.rgb * pow(rim, _RimPower) * _RimColor.a * (1 - _Unlit);

@@ -41,6 +41,7 @@ namespace Hockey
         public Transform Root, Scale, Tilt, Hips, Torso, Head, StickPivot, Ice;
         public Transform[] Legs = new Transform[2], Arms = new Transform[2];
         public Transform MegaGlow;
+        public KayKitCharacter KK;   // настоящая модель KayKit (если есть), иначе — процедурная
         public bool Goalie;
         public int Team;
 
@@ -97,6 +98,24 @@ namespace Hockey
             c.Root = Group("Player", parent, Vector3.zero);
             c.Scale = Group("scale", c.Root, Vector3.zero);
             c.Tilt = Group("tilt", c.Scale, Vector3.zero);
+
+            // основной путь: модели KayKit «Adventurers» в цветах команды
+            var kk = KayKitCharacter.Create(team, number + skin, goalie, c.Tilt, woodM, tape);
+            if (kk != null)
+            {
+                c.KK = kk;
+                var ice0 = Part(RB(1.0f, 1.9f, 1.0f, 0.2f, 0), Mats.Fade("#bfefff", 0.42f, true), new Vector3(0, 0.95f, 0), c.Root, false);
+                ice0.gameObject.SetActive(false);
+                c.Ice = ice0;
+                var glowParent = kk.StickBlade != null ? kk.StickBlade : c.Tilt;
+                var glow0 = Part(MeshKit.Sphere(0.16f, 12, 0), Mats.Fade("#ff6a2e", 0.55f, true), Vector3.zero, glowParent, false, new Vector3(1.2f, 0.9f, 2.6f));
+                glow0.gameObject.SetActive(false);
+                c.MegaGlow = glow0;
+                c.phase = Random.value * 6;
+                c.squash.X = 1; c.giant.X = 1;
+                return c;
+            }
+
             c.Hips = Group("hips", c.Tilt, new Vector3(0, goalie ? 0.5f : 0.54f, 0));
             c.baseHipY = c.Hips.localPosition.y; c.hipsY = c.baseHipY;
 
@@ -303,6 +322,15 @@ namespace Hockey
             float g = giant.X;
             float inv = 1 / Mathf.Sqrt(sq);
             Scale.localScale = new Vector3(g * inv, g * sq * breathe, g * inv);
+
+            if (KK != null)
+            {
+                // у модели KayKit падение и нырок — свои анимации; пружины добавляют наклоны по инерции
+                Tilt.localRotation = Quaternion.Euler(leanF.X * 0.45f * Mathf.Rad2Deg, 0, -leanS.X * 0.7f * Mathf.Rad2Deg);
+                Tilt.localPosition = Vector3.zero;
+                KK.Update(s, ctx.Celebrate, ctx.Dance, ctx.HasPuck, Vector3.Dot(vel, right), dt);
+                return;
+            }
 
             // наклон всего тела: инерция, кувырок, нырок
             float pitch = leanF.X * 0.6f + diveS.X * 1.35f - tumble.X * 1.5f;
