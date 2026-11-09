@@ -14,6 +14,8 @@ namespace Hockey
         UiPage uiPage = UiPage.Main;
         float uiScale, VW, VH;
         bool stylesReady;
+        Font uiFont, logoFont;
+        GUIStyle sLogo, sRibbon, sRibbonText;
         Texture2D white, circleTex;
         GUIStyle sPanel, sCard, sCardOn, sTitle, sH1, sH2, sLabel, sSmall, sCenter, sField, sTag, sKey, sBig, sScore, sCode, sSliderBg, sThumb, sPill;
         readonly Dictionary<string, GUIStyle> btn = new Dictionary<string, GUIStyle>();
@@ -46,7 +48,7 @@ namespace Hockey
 
         static GUIStyle Panel(Color top, Color bottom, Color border, int radius = 22, int shadow = 6)
         {
-            var s = new GUIStyle { padding = new RectOffset(26, 26, 22, 24 + shadow), border = new RectOffset(radius + 2, radius + 2, radius + 2, radius + 2 + shadow) };
+            var s = new GUIStyle { padding = new RectOffset(26, 26, 22, 24 + shadow), border = new RectOffset(radius + 2, radius + 2, radius + 2, radius + 2 + shadow), font = Resources.Load<Font>("Fonts/RussoOne") };
             s.normal.background = TexArt.RoundRect(radius * 2 + 12, radius, top, bottom, border, 3, shadow);
             return s;
         }
@@ -58,7 +60,7 @@ namespace Hockey
             Color t = Mats.Hex(top), b = Mats.Hex(bottom), br = Color.Lerp(b, Color.black, 0.35f);
             s = new GUIStyle(GUI.skin.button)
             {
-                fontSize = size, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter, wordWrap = true, richText = true,
+                fontSize = size, fontStyle = uiFont != null ? FontStyle.Normal : FontStyle.Bold, alignment = TextAnchor.MiddleCenter, wordWrap = true, richText = true, font = uiFont,
                 padding = new RectOffset(18, 18, 12, 16), margin = new RectOffset(4, 4, 6, 6), border = new RectOffset(18, 18, 18, 22),
             };
             s.normal.background = TexArt.RoundRect(48, 14, t, b, br, 3, 5);
@@ -84,6 +86,10 @@ namespace Hockey
             stylesReady = true;
             white = Tex.Solid(Color.white);
             circleTex = TexArt.Circle(64, Color.white);
+            // шрифты (SIL OFL): Russo One — интерфейс с кириллицей, Lilita One — логотип
+            uiFont = Resources.Load<Font>("Fonts/RussoOne");
+            logoFont = Resources.Load<Font>("Fonts/LilitaOne") ?? uiFont;
+            btn.Clear();
             sPanel = Panel(new Color(0.16f, 0.19f, 0.42f, 0.94f), new Color(0.1f, 0.12f, 0.3f, 0.94f), new Color(0.45f, 0.55f, 1f, 0.9f));
             sCard = Panel(new Color(0.22f, 0.26f, 0.55f, 0.95f), new Color(0.16f, 0.19f, 0.44f, 0.95f), new Color(0.4f, 0.48f, 0.9f, 0.8f), 16, 4);
             sCardOn = Panel(new Color(1f, 0.6f, 0.3f, 0.97f), new Color(0.95f, 0.3f, 0.4f, 0.97f), Color.white, 16, 4);
@@ -121,6 +127,14 @@ namespace Hockey
             sSliderBg.normal.background = TexArt.RoundRect(24, 7, Mats.Hex("#0e1238"), Mats.Hex("#1b2155"), Mats.Hex("#5a68c8"), 2);
             sThumb = new GUIStyle(GUI.skin.horizontalSliderThumb) { fixedWidth = 28, fixedHeight = 28, margin = new RectOffset(0, 0, -7, 0) };
             sThumb.normal.background = sThumb.hover.background = sThumb.active.background = TexArt.Circle(56, Mats.Hex("#ffd23f"));
+            if (uiFont != null)
+                foreach (var st in new[] { sCard, sCardOn, sTitle, sH1, sH2, sLabel, sSmall, sCenter, sField, sTag, sPill, sKey, sBig, sScore, sCode })
+                { st.font = uiFont; if (st.fontStyle == FontStyle.Bold) st.fontStyle = FontStyle.Normal; }
+            sLogo = new GUIStyle(GUI.skin.label) { font = logoFont, fontSize = 128, alignment = TextAnchor.UpperLeft, wordWrap = false, clipping = TextClipping.Overflow };
+            sRibbon = new GUIStyle { border = new RectOffset(18, 18, 18, 22) };
+            sRibbon.normal.background = TexArt.RoundRect(48, 16, Mats.Hex("#ff6a4e"), Mats.Hex("#e0344a"), Mats.Hex("#7a1531"), 3, 5);
+            sRibbonText = new GUIStyle(sLabel) { font = uiFont, fontSize = 22, alignment = TextAnchor.MiddleCenter, wordWrap = false };
+            sRibbonText.normal.textColor = Color.white;
         }
 
         bool Button(string text, GUIStyle style, params GUILayoutOption[] opts)
@@ -211,12 +225,76 @@ namespace Hockey
         }
 
         // ---------------------------------------------------------------- главное меню
-        void DrawTitle(float x, float y)
+        /// Логотип: объёмные буквы с толстой обводкой, двухцветной заливкой и бликом, шайба с «хвостом», лента-подзаголовок.
+        void DrawTitle(float x, float y, float scale = 1)
         {
-            float bounce = Mathf.Sin(time * 2.2f) * 4;
-            Shadowed(new Rect(x, y + bounce, 900, 110), GameTitle, sTitle, Mats.Hex("#ffd23f"), Mats.Hex("#ff4f5e"), 7);
-            var sub = new GUIStyle(sH2) { fontSize = 24 };
-            Shadowed(new Rect(x + 8, y + 104, 700, 40), "хоккей с характером", sub, Mats.Hex("#bfe9ff"), Mats.Hex("#3a63d8"), 3);
+            var baseM = GUI.matrix;
+            float bounce = Mathf.Sin(time * 2.2f) * 3 * scale;
+            var st = sLogo;
+            st.fontSize = (int)(128 * scale);
+            var size = st.CalcSize(new GUIContent(GameTitle));
+            var r = new Rect(x, y + bounce, size.x + 40, size.y + 10);
+            var pivot = new Vector2(x + size.x / 2, y + size.y / 2);
+            GUIUtility.RotateAroundPivot(-3.5f + Mathf.Sin(time * 1.3f) * 0.8f, pivot * uiScale);
+            void T(float dx, float dy, Color c) { st.normal.textColor = c; GUI.Label(new Rect(r.x + dx, r.y + dy, r.width, r.height), GameTitle, st); }
+            float o = 7 * scale;
+            // толстая тёмная обводка (с выдавливанием вниз)
+            var outline = Mats.Hex("#1a1442");
+            for (int i = 0; i < 16; i++)
+            {
+                float a = i * Mathf.PI / 8;
+                T(Mathf.Cos(a) * o, Mathf.Sin(a) * o + 12 * scale, outline);
+                T(Mathf.Cos(a) * o, Mathf.Sin(a) * o, outline);
+            }
+            // объём: слои от оранжевого к тёмно-красному
+            for (int i = 10; i >= 1; i--) T(0, i * 1.1f * scale, Color.Lerp(Mats.Hex("#e8542a"), Mats.Hex("#8a1f2a"), i / 10f));
+            // заливка: оранжевый низ и жёлтый верх
+            T(0, 0, Mats.Hex("#ff9a1f"));
+            GUI.BeginClip(new Rect(r.x, r.y, r.width, size.y * 0.56f));
+            st.normal.textColor = Mats.Hex("#ffd84a");
+            GUI.Label(new Rect(0, 0, r.width, r.height), GameTitle, st);
+            GUI.EndClip();
+            // узкий блик сверху букв
+            GUI.BeginClip(new Rect(r.x, r.y + size.y * 0.22f, r.width, size.y * 0.06f));
+            st.normal.textColor = new Color(1, 1, 0.92f, 0.85f);
+            GUI.Label(new Rect(0, -size.y * 0.22f, r.width, r.height), GameTitle, st);
+            GUI.EndClip();
+            GUI.matrix = baseM;
+
+            // шайба, летящая за логотипом
+            float px = x + size.x + 18 * scale, py = y + size.y * 0.42f + bounce * 1.5f;
+            for (int i = 0; i < 3; i++)
+            {
+                GUI.color = new Color(1, 1, 1, 0.75f - i * 0.2f);
+                GUI.DrawTexture(new Rect(px - (30 + i * 26) * scale, py + (8 + i * 9) * scale, (22 - i * 4) * scale, 6 * scale), circleTex);
+            }
+            GUI.color = outline; GUI.DrawTexture(new Rect(px - 5 * scale, py - 3 * scale, 78 * scale, 46 * scale), circleTex);
+            GUI.color = Mats.Hex("#26232f"); GUI.DrawTexture(new Rect(px, py + 10 * scale, 68 * scale, 30 * scale), circleTex);
+            GUI.color = Mats.Hex("#3a3646"); GUI.DrawTexture(new Rect(px, py, 68 * scale, 30 * scale), circleTex);
+            GUI.color = new Color(1, 1, 1, 0.35f); GUI.DrawTexture(new Rect(px + 12 * scale, py + 5 * scale, 30 * scale, 8 * scale), circleTex);
+            GUI.color = Color.white;
+
+            // лента с подзаголовком
+            var rib = new Rect(x + 24 * scale, y + size.y * 0.9f, 380 * scale, 46 * scale);
+            GUIUtility.RotateAroundPivot(-3.5f, rib.center * uiScale);
+            GUI.Label(rib, "", sRibbon);
+            sRibbonText.fontSize = (int)(22 * scale);
+            GUI.Label(new Rect(rib.x, rib.y - 2 * scale, rib.width, rib.height), "хоккей с характером", sRibbonText);
+            GUI.matrix = baseM;
+        }
+
+        /// Карточка игрока внизу слева: номер, имя, переход в раздевалку.
+        void DrawPlayerCard(Rect r)
+        {
+            GUI.Label(r, "", sCard);
+            var av = new Rect(r.x + 16, r.y + 14, r.height - 28, r.height - 28);
+            GUI.color = Color.white; GUI.DrawTexture(new Rect(av.x - 3, av.y - 3, av.width + 6, av.height + 6), circleTex);
+            GUI.color = Mats.Hex(TeamColors.All[0].Main); GUI.DrawTexture(av, circleTex);
+            GUI.color = Color.white;
+            GUI.Label(av, profNum.ToString(), new GUIStyle(sBig) { fontSize = 30 });
+            GUI.Label(new Rect(av.xMax + 16, r.y + 12, r.width - av.width - 50, 34), MyName, new GUIStyle(sBig) { alignment = TextAnchor.MiddleLeft, fontSize = 26 });
+            GUI.Label(new Rect(av.xMax + 16, r.y + 46, r.width - av.width - 50, 26), "нажми, чтобы переодеться", sSmall);
+            if (GUI.Button(r, "", GUIStyle.none)) { audioFx.Ui(true); uiPage = UiPage.Locker; }
         }
 
         void DrawMenu()
@@ -254,29 +332,47 @@ namespace Hockey
             float ta = Mathf.Clamp01(Mathf.Min(Mathf.Repeat(time, 6), 6 - Mathf.Repeat(time, 6)) * 2);
             var tipStyle = new GUIStyle(sSmall) { alignment = TextAnchor.MiddleCenter, fontSize = 17 };
             GUI.color = new Color(1, 1, 1, ta);
-            GUI.Label(new Rect(VW * 0.35f, VH - 54, VW * 0.62f, 30), "Совет: " + Tips[tip], sTag);
+            if (uiPage == UiPage.Main) GUI.Label(new Rect(VW * 0.42f, VH - 54, VW * 0.56f, 30), "Совет: " + Tips[tip], sTag);
             GUI.color = Color.white;
-            GUI.Label(new Rect(VW - 420, VH - 24, 400, 22), "v3.0 · Unity · модели KayKit (CC0)", new GUIStyle(sSmall) { alignment = TextAnchor.LowerRight, fontSize = 13 });
+            GUI.Label(new Rect(VW - 420, VH - 24, 400, 22), "v3.1 · Unity · модели KayKit (CC0) · шрифты OFL", new GUIStyle(sSmall) { alignment = TextAnchor.LowerRight, fontSize = 13 });
         }
 
         void DrawMainButtons()
         {
-            GUILayout.BeginArea(new Rect(60, 210, 470, VH - 240));
-            if (Button("ИГРАТЬ", BtnMain, GUILayout.Height(84))) uiPage = UiPage.Play;
-            GUILayout.Space(6);
-            if (Button("Вдвоём на одном экране", BtnBlue, GUILayout.Height(62))) uiPage = UiPage.Split;
-            if (Button("Игра по сети", BtnGreen, GUILayout.Height(62))) uiPage = UiPage.Online;
-            if (Button("Раздевалка", Btn("#ffd23f", "#f29a1f", 22), GUILayout.Height(56))) uiPage = UiPage.Locker;
+            var baseM = GUI.matrix;
+            int idx = 0;
+            // кнопки выезжают слева по очереди
+            void Enter()
+            {
+                float k = Mathf.Clamp01((time - pageT) * 5f - idx * 0.35f);
+                float e = 1 - Mathf.Pow(1 - k, 3);
+                GUI.matrix = baseM * Matrix4x4.Translate(new Vector3((1 - e) * -220, 0, 0));
+                idx++;
+            }
+            GUILayout.BeginArea(new Rect(60, 214, 470, VH - 360));
+            Enter();
+            float pulse = 1 + Mathf.Sin(time * 3.2f) * 0.015f;
+            var playStyle = Btn("#ffb347", "#ff4f5e", (int)(36 * pulse));
+            if (Button("ИГРАТЬ", playStyle, GUILayout.Height(92))) uiPage = UiPage.Play;
+            GUILayout.Space(4);
+            Enter(); if (Button("Вдвоём на одном экране", BtnBlue, GUILayout.Height(62))) uiPage = UiPage.Split;
+            Enter(); if (Button("Игра по сети", BtnGreen, GUILayout.Height(62))) uiPage = UiPage.Online;
+            Enter(); if (Button("Раздевалка", Btn("#ffd23f", "#f29a1f", 22), GUILayout.Height(56))) uiPage = UiPage.Locker;
+            Enter();
             GUILayout.BeginHorizontal();
             if (Button("Настройки", BtnGhost, GUILayout.Height(52))) { settingsReturn = UiPage.Main; uiPage = UiPage.Settings; }
             if (Button("Управление", BtnGhost, GUILayout.Height(52))) { settingsReturn = UiPage.Main; uiPage = UiPage.Controls; }
             GUILayout.EndHorizontal();
+            Enter();
             GUILayout.BeginHorizontal();
             if (Button("Авторы", BtnGhost, GUILayout.Height(48))) uiPage = UiPage.Credits;
             if (Button("Выход", BtnGhost, GUILayout.Height(48))) uiPage = UiPage.Quit;
             GUILayout.EndHorizontal();
-            if (!string.IsNullOrEmpty(message)) GUILayout.Label($"<color=#ffd23f><b>{message}</b></color>", sLabel);
+            if (!string.IsNullOrEmpty(message)) GUILayout.Label($"<color=#ffd23f>{message}</color>", sLabel);
             GUILayout.EndArea();
+            Enter();
+            DrawPlayerCard(new Rect(60, VH - 140, 470, 104));
+            GUI.matrix = baseM;
         }
 
         void DrawLocker()
@@ -333,11 +429,13 @@ namespace Hockey
             GUILayout.BeginArea(new Rect(60, 200, 760, VH - 280), sPanel);
             scroll = GUILayout.BeginScrollView(scroll);
             GUILayout.Label("Авторы", sH1);
-            GUILayout.Label("<b>ШАЙБЯТКИ</b> — аркадный хоккей для весёлой компании.", sCenter);
+            GUILayout.Label("<b>PUCKLINGS</b> («Шайбятки») — аркадный хоккей для весёлой компании.", sCenter);
             GUILayout.Space(10);
             GUILayout.Label("<color=#ffd23f><b>Игра, код, физика, эффекты и звуки</b></color>\nсделано вместе с Claude (Anthropic)", sLabel);
             GUILayout.Space(6);
             GUILayout.Label("<color=#ffd23f><b>Модели персонажей и анимации</b></color>\nKayKit — Adventurers Character Pack, Kay Lousberg (kaylousberg.com), лицензия CC0", sLabel);
+            GUILayout.Space(6);
+            GUILayout.Label("<color=#ffd23f><b>Шрифты</b></color>\nRusso One (Jovanny Lemonad) и Lilita One (Juan Montoreano), SIL Open Font License", sLabel);
             GUILayout.Space(6);
             GUILayout.Label("<color=#ffd23f><b>Экипировка, арена, текстуры, музыка</b></color>\nсоздаются кодом прямо в игре", sLabel);
             GUILayout.Space(6);
@@ -352,7 +450,7 @@ namespace Hockey
         {
             GUILayout.BeginArea(new Rect(60, 220, 470, 260), sPanel);
             GUILayout.Label("Уже уходишь?", sH1);
-            GUILayout.Label("Шайбятки будут скучать!", sCenter);
+            GUILayout.Label("Пуклинги будут скучать!", sCenter);
             GUILayout.BeginHorizontal();
             if (Button("Остаться", BtnMain, GUILayout.Height(60))) uiPage = UiPage.Main;
             if (Button("Выйти", BtnGhost, GUILayout.Height(60), GUILayout.Width(150)))

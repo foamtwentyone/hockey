@@ -1,4 +1,4 @@
-// «ШАЙБЯТКИ» — главный скрипт: режимы игры, игровой цикл, камеры «из-за спины», эффекты.
+// PUCKLINGS («Шайбятки») — главный скрипт: режимы игры, игровой цикл, камеры «из-за спины», эффекты.
 // Интерфейс — в HockeyGame.UI.cs, автотест — в HockeyGame.Autotest.cs.
 // Создаётся автоматически в любой сцене — достаточно нажать Play.
 using System.Collections.Generic;
@@ -8,7 +8,7 @@ namespace Hockey
 {
     public partial class HockeyGame : MonoBehaviour
     {
-        public const string GameTitle = "ШАЙБЯТКИ";
+        public const string GameTitle = "PUCKLINGS";
         const float Step = 1f / 60;
         static readonly string[] SlotColors = { "#ffd23f", "#5cf28a", "#ff7ad9", "#4fe3ff", "#ffa94d", "#b48cff" };
 
