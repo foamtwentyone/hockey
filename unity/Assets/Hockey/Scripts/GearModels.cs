@@ -188,7 +188,7 @@ namespace Hockey
                     float g = Mathf.Lerp(0.82f, 1f, Mathf.Clamp01((q.y + 0.3f) / 0.7f));
                     return main * g;
                 },
-                new Bounds(HelmC + new Vector3(0, 0.05f, 0), new Vector3(1.45f, 1.35f, 1.5f)), 64);
+                new Bounds(HelmC + new Vector3(0, 0.05f, 0), new Vector3(1.45f, 1.35f, 1.5f)), 84);
         }
 
         /// Прозрачный визор, повторяющий форму шлема спереди.
@@ -197,12 +197,12 @@ namespace Hockey
             return Build("visor", p =>
             {
                 var q = p - HelmC;
-                float d = Mathf.Max(Ellipsoid(q, new Vector3(0.62f, 0.59f, 0.66f)), -Ellipsoid(q, new Vector3(0.6f, 0.57f, 0.645f)));
+                float d = Mathf.Max(Ellipsoid(q, new Vector3(0.635f, 0.6f, 0.675f)), -Ellipsoid(q, new Vector3(0.595f, 0.565f, 0.635f)));
                 d = SMax(d, 0.18f - q.z, 0.03f);              // только спереди
                 d = SMax(d, q.y - 0.04f, 0.02f);              // сверху — под краем шлема
                 d = SMax(d, -0.24f - q.y, 0.03f);             // снизу — до носа
                 return d;
-            }, p => Color.white, new Bounds(HelmC + new Vector3(0, -0.1f, 0.4f), new Vector3(1.4f, 0.5f, 0.6f)), 56);
+            }, p => Color.white, new Bounds(HelmC + new Vector3(0, -0.1f, 0.4f), new Vector3(1.4f, 0.5f, 0.6f)), 96);
         }
 
         // ---------------- крага (пальцы вдоль +Y, тыльная сторона +Z, большой палец +X) ----------------
@@ -235,9 +235,6 @@ namespace Hockey
             d = SMin(d, pad, 0.04f);
             d = SMin(d, finger, 0.035f);
             d = SMin(d, thumb, 0.05f);
-            // полость раструба (видна изнутри, если заглянуть в рукав)
-            float cavity = Mathf.Max(radial + 0.05f, p.y + 0.5f);
-            d = SMax(d, -cavity, 0.02f);
             return d;
         }
 
@@ -250,13 +247,16 @@ namespace Hockey
                 {
                     GloveSdf(p, out float cuff, out float finger, out float pad);
                     if (cuff < 0.02f && p.y < -0.18f)
-                        return p.y > -0.36f && p.y < -0.28f ? Color.white : dark;  // раструб с белой полосой
+                    {
+                        if (p.y < -0.64f) return Color.Lerp(dark, Color.black, 0.5f);       // торец раструба
+                        return p.y > -0.36f && p.y < -0.28f ? Color.white : dark;           // раструб с белой полосой
+                    }
                     if (p.z < -0.08f && p.y > -0.18f && finger > 0.01f) return palm; // кожаная ладонь
                     if (pad < 0.015f && p.z > 0.12f) return Color.Lerp(main, Color.white, 0.18f);
                     if (finger < 0.012f) return Color.Lerp(main, dark, 0.15f);
                     return main;
                 },
-                new Bounds(new Vector3(0.05f, -0.06f, 0), new Vector3(1.0f, 1.45f, 0.75f)), 56);
+                new Bounds(new Vector3(0.05f, -0.06f, 0), new Vector3(1.0f, 1.45f, 0.75f)), 64);
         }
     }
 }
