@@ -109,9 +109,11 @@ namespace Hockey
                 {
                     // вылепленная крага: раструб с полосой, валики, пальцы, большой палец, кожаная ладонь
                     // крупная крага целиком закрывает кулак модели
-                    float gs = u * 0.42f;
+                    // ладонная часть краги (y≈0.05 в её единицах) ложится на центр кулака модели
+                    float gs = u * 0.6f;
+                    var fingerDir = -toElbow;
                     var glove = GearModels.Glove(Mats.Hex(tc.Main), Mats.Hex(tc.Dark), Mats.Hex("#c9a27a"));
-                    Piece(glove, Mats.Get("#ffffff", 0.55f), hp - toElbow * gs * 0.16f, rot, hand, true, new Vector3(i == 0 ? -gs : gs, gs, gs));
+                    Piece(glove, Mats.Get("#ffffff", 0.55f), hp + fingerDir * (u * 0.14f - gs * 0.05f), rot, hand, true, new Vector3(i == 0 ? -gs : gs, gs, gs));
                 }
             }
 
