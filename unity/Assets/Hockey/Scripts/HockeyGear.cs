@@ -147,7 +147,7 @@ namespace Hockey
                 if (headGear)
                 {
                     // по ширине головы с запасом, макушка к макушке
-                    kk = wantS.x * 1.12f / bb.size.x;
+                    kk = wantS.x * (name == "helmet" ? 0.98f : 1.06f) / bb.size.x;
                     anchorSculpt = new Vector3(sb.center.x, sb.max.y, sb.center.z);
                     anchorModel = new Vector3(bb.center.x, bb.max.y, bb.center.z);
                 }
@@ -220,7 +220,7 @@ namespace Hockey
             bool headGear = name == "helmet" || name == "goalie_mask";
             bool legGear = name == "pad";
             float kk; Vector3 anchorSculpt, anchorModel;
-            if (headGear) { kk = wantS.x * 1.12f / bb.size.x; anchorSculpt = new Vector3(sb.center.x, sb.max.y, sb.center.z); anchorModel = new Vector3(bb.center.x, bb.max.y, bb.center.z); }
+            if (headGear) { kk = wantS.x * (name == "helmet" ? 0.98f : 1.06f) / bb.size.x; anchorSculpt = new Vector3(sb.center.x, sb.max.y, sb.center.z); anchorModel = new Vector3(bb.center.x, bb.max.y, bb.center.z); }
             else if (legGear) { kk = wantS.y / bb.size.y; anchorSculpt = new Vector3(sb.center.x, sb.min.y, sb.center.z); anchorModel = new Vector3(bb.center.x, bb.min.y, bb.center.z); }
             else { kk = Mathf.Min(wantS.x / bb.size.x, Mathf.Min(wantS.y / bb.size.y, wantS.z / bb.size.z)); anchorSculpt = sb.center; anchorModel = bb.center; }
             var hold = new GameObject("gear_" + name + "_fit").transform;
@@ -246,7 +246,7 @@ namespace Hockey
                     Color.RGBToHSV(px[i], out float h, out float s, out float v);
                     if ((h < 0.05f || h > 0.93f) && s > 0.35f && v > 0.25f) px[i] = Color.HSVToRGB(blueH, s, v);
                 }
-                use = new Texture2D(tex.width, tex.height, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Clamp };
+                use = new Texture2D(tex.width, tex.height, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Trilinear, anisoLevel = 8 };
                 use.SetPixels(px); use.Apply(true);
             }
             em = Mats.ToonModel(use, 0.15f);
@@ -263,7 +263,10 @@ namespace Hockey
             go.AddComponent<MeshFilter>().sharedMesh = GearModels.Sculpted.Contains(mesh) ? mesh : MeshKit.Faceted(mesh);
             var mr = go.AddComponent<MeshRenderer>();
             mr.sharedMaterial = shadow ? Mats.Outlined(mat, 0.8f) : mat;
-            mr.shadowCastingMode = shadow ? UnityEngine.Rendering.ShadowCastingMode.On : UnityEngine.Rendering.ShadowCastingMode.Off;
+            // мелкие детали (лезвия, ремешки, полоски) тень не отбрасывают — меньше работы для видеокарты
+            var sz = Vector3.Scale(mesh.bounds.size, scale ?? Vector3.one);
+            bool tiny = Mathf.Max(Mathf.Abs(sz.x), Mathf.Max(Mathf.Abs(sz.y), Mathf.Abs(sz.z))) < 0.08f;
+            mr.shadowCastingMode = shadow && !tiny ? UnityEngine.Rendering.ShadowCastingMode.On : UnityEngine.Rendering.ShadowCastingMode.Off;
             go.transform.SetParent(bone, true);
             return go.transform;
         }
@@ -292,7 +295,7 @@ namespace Hockey
                 bool extHelmet = HasExt("helmet");
                 helmet.Add(Gear("helmet", GearModels.Helmet(Mats.Hex(tc.Main), Mats.Hex(tc.Dark), Mats.Hex("#2b2b33")), vcol, hc, helmRot, head, helmScale, Mats.Hex(tc.Main)));
                 // прозрачный визор: генераторы не умеют стекло, поэтому он всегда наш
-                helmet.Add(Piece(GearModels.Visor(), visorM, hc + (extHelmet ? fr.Fwd * hs.z * 0.03f : Vector3.zero), helmRot, head, false, extHelmet ? helmScale * 1.08f : helmScale));
+                helmet.Add(Piece(GearModels.Visor(), visorM, hc + (extHelmet ? fr.Fwd * hs.z * 0.02f - fr.Up * hs.y * 0.13f : Vector3.zero), helmRot, head, false, extHelmet ? helmScale * 0.98f : helmScale));
                 // ремешок под подбородком
                 helmet.Add(Piece(MeshKit.Superellipsoid(hs.x * 0.47f, hs.y * 0.03f, hs.z * 0.5f, 0.9f, 0.8f, 24, -0.6f, 0.6f), black, hc - fr.Up * hs.y * 0.36f, fr.Rot * Quaternion.Euler(-20, 0, 0), head));
             }

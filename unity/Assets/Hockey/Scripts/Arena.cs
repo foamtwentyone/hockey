@@ -16,6 +16,7 @@ namespace Hockey
         /// Запустить «волну» на трибунах.
         public void Wave(float time) { waveT = time; }
         public float Excite;
+        public const int CrowdLayer = 9;
         Texture2D scoreTex;
         Color32[] scorePx;
         string scoreKey;
@@ -61,7 +62,7 @@ namespace Hockey
             RenderSettings.fogColor = Mats.Hex("#2a2f6b");
             RenderSettings.fogStartDistance = 60; RenderSettings.fogEndDistance = 140;
             RenderSettings.skybox = null;
-            QualitySettings.shadowDistance = 45;
+            QualitySettings.shadowDistance = 38;
             QualitySettings.shadows = ShadowQuality.All;
             QualitySettings.shadowResolution = ShadowResolution.VeryHigh;
             QualitySettings.shadowCascades = 4;
@@ -153,7 +154,7 @@ namespace Hockey
             for (int i = 0; i < 7; i++)
             {
                 float off = 2.8f + i * 1.1f, hgt = 0.6f + i * 0.75f;
-                Obj("Stand", MeshKit.RingWall(off, off + 1.1f, 0, hgt, true, false, true), Mats.Get(seat[i], 0.1f), Root, Vector3.zero);
+                Obj("Stand", MeshKit.RingWall(off, off + 1.1f, 0, hgt, true, false, true), Mats.Get(seat[i], 0.1f), Root, Vector3.zero, false, false).layer = CrowdLayer;
                 rows.Add((off + 0.55f, hgt));
             }
             Obj("Wall", MeshKit.RingWall(10.5f, 11.2f, 0, 9, true, false, true), Mats.Get("#2c2f5e"), Root, Vector3.zero);
@@ -244,7 +245,8 @@ namespace Hockey
             var mat = Mats.Toon(crowdTex, "#ffffff", 0.05f);
             foreach (var kv in crowdBuilders)
             {
-                var go = Obj("Crowd", kv.Value.ToMesh("crowd"), mat, Root, Vector3.zero, false, true);
+                var go = Obj("Crowd", kv.Value.ToMesh("crowd"), mat, Root, Vector3.zero, false, false);
+                go.layer = CrowdLayer;
                 crowdGroups.Add(go.transform);
                 int sector = kv.Key / 2;
                 crowdPhase.Add(sector * (Mathf.PI * 2 / sectors) + (kv.Key % 2) * 2.1f);
@@ -295,7 +297,7 @@ namespace Hockey
             probe.refreshMode = ReflectionProbeRefreshMode.ViaScripting;
             probe.timeSlicingMode = ReflectionProbeTimeSlicingMode.NoTimeSlicing;
             probe.size = new Vector3(80, 40, 60);
-            probe.resolution = 256;
+            probe.resolution = 128;
             probe.boxProjection = false;
             probe.clearFlags = ReflectionProbeClearFlags.SolidColor;
             probe.backgroundColor = Mats.Hex("#2a2f6b");
@@ -334,8 +336,10 @@ namespace Hockey
         {
             QualitySettings.shadows = level == 0 ? ShadowQuality.Disable : ShadowQuality.All;
             QualitySettings.shadowResolution = level >= 2 ? ShadowResolution.VeryHigh : ShadowResolution.Medium;
-            QualitySettings.shadowCascades = level >= 2 ? 4 : level == 1 ? 2 : 1;
-            QualitySettings.shadowDistance = level >= 2 ? 45 : 35;
+            QualitySettings.shadowCascades = level >= 2 ? 2 : 1;
+            QualitySettings.anisotropicFiltering = level == 0 ? AnisotropicFiltering.Disable : AnisotropicFiltering.ForceEnable;
+            QualitySettings.lodBias = level == 0 ? 0.6f : 1f;
+            QualitySettings.shadowDistance = level >= 2 ? 38 : 26;
             Sun.shadowResolution = level >= 2 ? LightShadowResolution.VeryHigh : LightShadowResolution.Medium;
             QualitySettings.antiAliasing = level == 0 ? 0 : level == 1 ? 2 : 4;
             Sun.shadows = level == 0 ? LightShadows.None : LightShadows.Soft;

@@ -22,8 +22,10 @@ namespace Hockey
             var cam = Camera.current;
             if (cam == null || rendering || cam == reflCam || mat == null || !mat.HasProperty("_ReflTex")) return;
             if (Settings.Quality < 2) { mat.SetFloat("_Refl", 0.12f); mat.SetTexture("_ReflTex", Texture2D.blackTexture); return; }
+            // отражение обновляем через кадр — на льду разница незаметна
+            if (Time.frameCount % 2 == 1 && rt != null && rt.width == Mathf.Max(64, (int)cam.pixelWidth / 3)) { mat.SetTexture("_ReflTex", rt); return; }
             rendering = true;
-            int w = Mathf.Max(64, (int)cam.pixelWidth / 2), h = Mathf.Max(64, (int)cam.pixelHeight / 2);
+            int w = Mathf.Max(64, (int)cam.pixelWidth / 3), h = Mathf.Max(64, (int)cam.pixelHeight / 3);
             if (rt == null || rt.width != w || rt.height != h)
             {
                 if (rt != null) { rt.Release(); Destroy(rt); }
@@ -37,7 +39,9 @@ namespace Hockey
             }
             reflCam.CopyFrom(cam);
             reflCam.rect = new Rect(0, 0, 1, 1);
-            reflCam.cullingMask = cam.cullingMask & ~(1 << Layer);
+            reflCam.cullingMask = cam.cullingMask & ~(1 << Layer) & ~(1 << Arena.CrowdLayer);
+            reflCam.renderingPath = RenderingPath.Forward;
+            reflCam.allowMSAA = false; reflCam.allowHDR = false;
             reflCam.targetTexture = rt;
             reflCam.clearFlags = CameraClearFlags.SolidColor;
             reflCam.backgroundColor = Mats.Hex("#2a2f6b");

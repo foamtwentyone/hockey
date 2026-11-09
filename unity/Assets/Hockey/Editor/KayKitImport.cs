@@ -28,9 +28,11 @@ namespace Hockey.EditorTools
             if (!IsKayKit) return;
             var ti = (TextureImporter)assetImporter;
             ti.isReadable = true;
-            ti.mipmapEnabled = false;
+            bool gear = assetPath.Replace('\\', '/').Contains("/Resources/Gear/");
+            ti.mipmapEnabled = gear;
+            if (gear) { ti.anisoLevel = 8; ti.mipmapFilter = TextureImporterMipFilter.KaiserFilter; }
             ti.textureCompression = TextureImporterCompression.Uncompressed;
-            ti.filterMode = FilterMode.Bilinear;
+            ti.filterMode = gear ? FilterMode.Trilinear : FilterMode.Bilinear;
             ti.wrapMode = TextureWrapMode.Clamp;
             ti.sRGBTexture = true;
         }
