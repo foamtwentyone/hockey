@@ -569,6 +569,16 @@ namespace Hockey
             }
             ToonAvailable = baseToon != null;
             if (baseToon == null) baseToon = baseStandard;
+            else
+            {
+                // мягкое естественное затенение: широкий плавный переход, нейтрально-сиреневая тень
+                // (без резкого синего), неяркий тёплый ободок — как свет арены, отражённый ото льда
+                baseToon = new Material(baseToon);
+                baseToon.SetColor("_ShadeColor", new Color(0.7f, 0.71f, 0.82f, 1));
+                baseToon.SetFloat("_ShadeSoft", 0.62f);
+                baseToon.SetColor("_RimColor", new Color(1f, 0.97f, 0.92f, 0.16f));
+                baseToon.SetFloat("_RimPower", 3.6f);
+            }
         }
 
         public static void SetupCutout(Material m)
@@ -638,7 +648,7 @@ namespace Hockey
         public static Material ToonModel(Texture tex, float gloss = 0.12f)
         {
             var m = NewToon(Color.white, gloss, tex);
-            if (ToonAvailable) { m.SetFloat("_UseVColor", 0); m.SetFloat("_ShadeSoft", 0.45f); }
+            if (ToonAvailable) { m.SetFloat("_UseVColor", 0); m.SetFloat("_ShadeSoft", 0.62f); }
             return m;
         }
 

@@ -32,15 +32,17 @@ namespace Hockey
             var m = Mat();
             if (m == null || Settings.Quality == 0 || !Settings.Post) { Graphics.Blit(src, dst); return; }
             bool high = Settings.Quality >= 2;
-            m.SetFloat("_Threshold", 1.6f);
-            m.SetFloat("_Knee", 0.2f);
-            m.SetFloat("_Bloom", 0.22f + ExtraBloom);
-            m.SetFloat("_Exposure", 0.97f);
-            m.SetFloat("_Saturation", 1.1f);
-            m.SetFloat("_Contrast", 1.06f);
-            m.SetFloat("_Vignette", 0.32f);
+            // естественная картинка: мягкое свечение только у самых ярких бликов, умеренная насыщенность
+            // и контраст, лёгкая тёплая гамма и едва заметная виньетка
+            m.SetFloat("_Threshold", 1.4f);
+            m.SetFloat("_Knee", 0.35f);
+            m.SetFloat("_Bloom", 0.16f + ExtraBloom);
+            m.SetFloat("_Exposure", 1.0f);
+            m.SetFloat("_Saturation", 1.03f);
+            m.SetFloat("_Contrast", 1.03f);
+            m.SetFloat("_Vignette", 0.2f);
             m.SetFloat("_Speed", high ? Speed : 0);
-            m.SetColor("_Tint", new Color(1.03f, 1.0f, 0.96f));
+            m.SetColor("_Tint", new Color(1.02f, 1.0f, 0.97f));
 
             // пирамида размытия для свечения
             int w = src.width / 2, h = src.height / 2;

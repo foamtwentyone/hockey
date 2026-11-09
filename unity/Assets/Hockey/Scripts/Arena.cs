@@ -24,7 +24,7 @@ namespace Hockey
         bool probeRendered;
         readonly List<Transform> beams = new List<Transform>();
         readonly List<Quaternion> beamBase = new List<Quaternion>();
-        public Light Sun;
+        public Light Sun, Fill;
 
         static GameObject Obj(string name, Mesh mesh, Material mat, Transform parent, Vector3 pos, bool cast = false, bool receive = true)
         {
@@ -59,8 +59,9 @@ namespace Hockey
             SetBrightness(Settings.Brightness);
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
-            RenderSettings.fogColor = Mats.Hex("#2a2f6b");
-            RenderSettings.fogStartDistance = 60; RenderSettings.fogEndDistance = 140;
+            // лёгкая воздушная дымка арены: дальние трибуны мягче, без тёмной синевы
+            RenderSettings.fogColor = Mats.Hex("#5a5f9a");
+            RenderSettings.fogStartDistance = 40; RenderSettings.fogEndDistance = 170;
             RenderSettings.skybox = null;
             QualitySettings.shadowDistance = 38;
             QualitySettings.shadows = ShadowQuality.All;
@@ -69,16 +70,27 @@ namespace Hockey
             QualitySettings.shadowCascade4Split = new Vector3(0.07f, 0.2f, 0.47f);
             QualitySettings.shadowProjection = ShadowProjection.StableFit;
 
+            // основной свет — прожекторы над льдом: высоко (тени короткие, под игроком), тёплый белый,
+            // тени мягкие и не чёрные
             Sun = new GameObject("Sun").AddComponent<Light>();
             Sun.transform.SetParent(Root, false);
             Sun.type = LightType.Directional;
-            Sun.color = Mats.Hex("#fff3e2");
+            Sun.color = Mats.Hex("#fff0dc");
             Sun.intensity = 0.95f * Settings.Brightness;
             Sun.shadows = LightShadows.Soft;
-            Sun.shadowStrength = 0.72f;
+            Sun.shadowStrength = 0.58f;
             Sun.shadowBias = 0.02f; Sun.shadowNormalBias = 0.15f;
             Sun.shadowResolution = LightShadowResolution.VeryHigh;
-            Sun.transform.rotation = Quaternion.LookRotation(new Vector3(10, -30, -14));
+            Sun.transform.rotation = Quaternion.LookRotation(new Vector3(7, -30, -10));
+            // заполняющий свет с другой стороны: холодный, слабый, без теней — объём вместо плоской тени
+            Fill = new GameObject("Fill").AddComponent<Light>();
+            Fill.transform.SetParent(Root, false);
+            Fill.type = LightType.Directional;
+            Fill.color = Mats.Hex("#c9d8ff");
+            Fill.intensity = 0.22f * Settings.Brightness;
+            Fill.shadows = LightShadows.None;
+            Fill.renderMode = LightRenderMode.ForceVertex;   // считается в основном проходе (SH) — без лишнего прохода отрисовки
+            Fill.transform.rotation = Quaternion.LookRotation(new Vector3(-9, -14, 12));
         }
 
         void BuildSky()
@@ -321,10 +333,13 @@ namespace Hockey
 
         public void SetBrightness(float b)
         {
-            RenderSettings.ambientSkyColor = Mats.Hex("#cfdcff") * 0.8f * b;
-            RenderSettings.ambientEquatorColor = Mats.Hex("#b7b2d6") * 0.68f * b;
-            RenderSettings.ambientGroundColor = Mats.Hex("#8a86b0") * 0.55f * b;
+            // окружение: сверху — нейтральный свет зала, по бокам — мягкий сиреневый от трибун,
+            // снизу — светлый холодный отсвет льда (у катка низ фигур всегда подсвечен)
+            RenderSettings.ambientSkyColor = Mats.Hex("#e4e8ff") * 0.72f * b;
+            RenderSettings.ambientEquatorColor = Mats.Hex("#c6c0de") * 0.6f * b;
+            RenderSettings.ambientGroundColor = Mats.Hex("#d4e2f2") * 0.5f * b;
             if (Sun != null) Sun.intensity = 0.95f * b;
+            if (Fill != null) Fill.intensity = 0.22f * b;
         }
 
         public void SetQuality(int level)
