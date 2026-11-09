@@ -237,20 +237,23 @@ namespace Hockey
             if (extMats.TryGetValue(key, out var em)) return em;
             var tex = Resources.Load<Texture2D>("Gear/" + name);
             Texture2D use = tex;
-            if (tex != null && tex.isReadable && team == 1)
+            bool tinted = tint.r < 0.99f || tint.g < 0.99f || tint.b < 0.99f;
+            if (tex != null && tex.isReadable && (team == 1 || tinted))
             {
                 Color.RGBToHSV(Mats.Hex(TeamColors.All[1].Main), out float blueH, out _, out _);
                 var px = tex.GetPixels();
                 for (int i = 0; i < px.Length; i++)
                 {
                     Color.RGBToHSV(px[i], out float h, out float s, out float v);
-                    if ((h < 0.05f || h > 0.93f) && s > 0.35f && v > 0.25f) px[i] = Color.HSVToRGB(blueH, s, v);
+                    if (team == 1 && (h < 0.05f || h > 0.93f) && s > 0.35f && v > 0.25f) px[i] = Color.HSVToRGB(blueH, s, v);
+                    else if (tinted && s < 0.12f && v > 0.7f) px[i] *= tint;   // в цвет команды — только белые части
                 }
                 use = new Texture2D(tex.width, tex.height, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Trilinear, anisoLevel = 8 };
                 use.SetPixels(px); use.Apply(true);
             }
             em = Mats.ToonModel(use, 0.15f);
-            em.color = tint;
+            em.color = use != tex || tex == null || !tex.isReadable ? Color.white : tint;
+            if (tex != null && !tex.isReadable) em.color = tint;
             extMats[key] = em;
             return em;
         }

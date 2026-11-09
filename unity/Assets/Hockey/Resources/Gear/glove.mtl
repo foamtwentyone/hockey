@@ -1,0 +1,3 @@
+newmtl glove
+Kd 1 1 1
+map_Kd glove.png

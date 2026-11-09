@@ -20,6 +20,8 @@ if cutY > -1e8:
 # --- чистка текстуры
 a = np.asarray(img.filter(ImageFilter.MedianFilter(7))).astype(float)
 pal = np.array([[238, 238, 234], [40, 40, 46], [214, 52, 56], [214, 176, 128], [120, 80, 52], [150, 150, 158]], float)
+if os.environ.get('PALETTE'):   # своя палитра: PALETTE="eeeeea,4a5266,d6b080"
+    pal = np.array([[int(h[i:i + 2], 16) for i in (0, 2, 4)] for h in os.environ['PALETTE'].split(',')], float)
 d = ((a[:, :, None, :] - pal[None, None]) ** 2).sum(-1)
 q = pal[d.argmin(-1)].astype(np.uint8)
 # чистые цвета + мягкие (сглаженные) границы между ними, 2048 px — без «лесенок»
