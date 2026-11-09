@@ -278,6 +278,77 @@ namespace Hockey
             });
         }
 
+        // ---------- пузыри (табло в стиле bubble) ----------
+        static Color Hsv(float h) => Color.HSVToRGB(Mathf.Repeat(h, 1), 0.55f, 1);
+
+        /// Глянцевый шар: цветной «леденец» или прозрачный мыльный пузырь с радужной каймой.
+        public static Texture2D BubbleBall(Color c, bool soap)
+        {
+            const int N = 256; const float R = 112;
+            var c0 = new Vector2(N / 2f, N / 2f + 6);
+            return Make(N, N, p =>
+            {
+                var col = new Color(0, 0, 0, 0);
+                // мягкая тень под шаром
+                float sh = (p - (c0 + new Vector2(4, -10))).magnitude - R;
+                col = Over(col, new Color(0.02f, 0.03f, 0.12f, 0.35f), Mathf.Clamp01(-sh / 14 + 0.3f));
+                var d = (p - c0) / R;
+                float q = d.magnitude;
+                float edge = (q - 1) * R;
+                if (soap)
+                {
+                    // мыльный пузырь: почти прозрачный центр, радужная плёнка по краю
+                    float ang = Mathf.Atan2(d.y, d.x) / (2 * Mathf.PI);
+                    float rim = Mathf.Pow(Mathf.Clamp01(q), 3.2f);
+                    var film = Hsv(ang * 1.3f + q * 0.6f + 0.55f);
+                    var body = Color.Lerp(new Color(0.75f, 0.88f, 1f, 0.32f), new Color(film.r, film.g, film.b, 0.92f), rim);
+                    body = Color.Lerp(body, new Color(0.08f, 0.12f, 0.35f, 0.55f), Mathf.Clamp01(1 - q * 1.6f) * 0.6f); // тёмная середина — под цифры
+                    col = Over(col, new Color(1, 1, 1, 0.9f), A(Mathf.Abs(edge + 1.5f) - 2.2f));   // тонкая светлая граница
+                    col = Over(col, body, A(edge + 3));
+                }
+                else
+                {
+                    col = Over(col, new Color(0.04f, 0.05f, 0.15f, 1), A(edge - 4));          // контур
+                    var top = Color.Lerp(c, Color.white, 0.35f); var bot = Color.Lerp(c, Color.black, 0.3f);
+                    var body = Color.Lerp(bot, top, Mathf.Clamp01(d.y * 0.6f + 0.55f));
+                    body = Color.Lerp(body, Color.Lerp(c, Color.black, 0.45f), Mathf.Clamp01((q - 0.82f) * 4) * 0.6f);   // затемнение к краю
+                    float bounce = Mathf.Clamp01(1 - ((d - new Vector2(0, -0.62f)) * new Vector2(1.4f, 3f)).magnitude);
+                    body = Color.Lerp(body, Color.Lerp(c, Color.white, 0.5f), bounce * 0.5f);   // отсвет снизу
+                    body.a = 1;
+                    col = Over(col, body, A(edge));
+                }
+                // блики: большой мягкий сверху-слева и маленькая искра
+                float hl = ((d - new Vector2(-0.32f, 0.48f)) * new Vector2(1.9f, 3.4f)).magnitude;
+                col = Over(col, new Color(1, 1, 1, soap ? 0.8f : 0.6f), Mathf.Clamp01((1 - hl) * 2.2f) * A(edge + 4));
+                float sp = ((d - new Vector2(0.5f, 0.42f)) / 0.07f).magnitude;
+                col = Over(col, Color.white, Mathf.Clamp01((1 - sp) * 3) * A(edge + 4));
+                return col;
+            });
+        }
+
+        /// Глянцевая «пилюля» для растяжения по 9 частям (края 48 px): верх светлее, широкий блик-полоса.
+        public static Texture2D BubblePill(Color c)
+        {
+            const int W = 192, H = 104; const float R = 46;
+            return Make(W, H, p =>
+            {
+                var col = new Color(0, 0, 0, 0);
+                float sh = RoundBox(p, new Vector2(W / 2f + 3, H / 2f - 4), new Vector2(W / 2f - 6, R), R);
+                col = Over(col, new Color(0.02f, 0.03f, 0.12f, 0.3f), Mathf.Clamp01(-sh / 8 + 0.3f));
+                float e = RoundBox(p, new Vector2(W / 2f, H / 2f + 3), new Vector2(W / 2f - 6, R), R);
+                col = Over(col, new Color(0.04f, 0.05f, 0.15f, 1), A(e - 4));
+                float v = Mathf.Clamp01((p.y - (H / 2f + 3 - R)) / (2 * R));
+                var body = Color.Lerp(Color.Lerp(c, Color.black, 0.28f), Color.Lerp(c, Color.white, 0.3f), v);
+                body = Color.Lerp(body, Color.Lerp(c, Color.black, 0.4f), Mathf.Clamp01((e + 8) / 8) * 0.5f);
+                body.a = 1;
+                col = Over(col, body, A(e));
+                // блик-полоса сверху
+                float hb = RoundBox(p, new Vector2(W / 2f, H / 2f + R * 0.55f), new Vector2(W / 2f - 26, R * 0.22f), R * 0.22f);
+                col = Over(col, new Color(1, 1, 1, 0.5f), A(hb) * Mathf.Clamp01((p.y - (H / 2f + R * 0.35f)) / 10 + 0.4f));
+                return col;
+            });
+        }
+
         // ---------- прицел ----------
         /// Четыре дуги-скобы с тёмной обводкой и короткие засечки внутрь — читается на светлом льду и тёмных трибунах.
         public static Texture2D Reticle()
