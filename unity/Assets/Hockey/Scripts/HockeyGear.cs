@@ -225,9 +225,9 @@ namespace Hockey
             else if (name == "glove")
             {
                 // ладонь краги (≈62% высоты от раструба) — в центр кулака; ширина — как у вылепленной краги
-                kk = wantS.x * 1.05f / bb.size.x;
+                kk = wantS.x * 1.75f / bb.size.x;   // крупная крага целиком закрывает кулак и предплечье модели
                 anchorSculpt = new Vector3(0, 0.05f, 0);
-                anchorModel = new Vector3(bb.center.x, bb.min.y + bb.size.y * 0.62f, bb.center.z);
+                anchorModel = new Vector3(bb.center.x, bb.min.y + bb.size.y * 0.58f, bb.center.z);
             }
             else { kk = Mathf.Min(wantS.x / bb.size.x, Mathf.Min(wantS.y / bb.size.y, wantS.z / bb.size.z)); anchorSculpt = sb.center; anchorModel = bb.center; }
             var hold = new GameObject("gear_" + name + "_fit").transform;
