@@ -15,6 +15,8 @@ Shader "Hockey/Toon"
         _Gloss ("Gloss", Range(0,1)) = 0.18
         _Unlit ("Unlit", Range(0,1)) = 0
         _UseVColor ("Use Vertex Color", Range(0,1)) = 1
+        _Outline ("Outline Width", Range(0,3)) = 0
+        _OutlineColor ("Outline Color", Color) = (0.1,0.08,0.18,1)
     }
     SubShader
     {
@@ -67,6 +69,38 @@ Shader "Hockey/Toon"
             o.Alpha = tex.a;
         }
         ENDCG
+
+        // мультяшная обводка: вывернутая оболочка, толщина постоянна на экране
+        Pass
+        {
+            Name "OUTLINE"
+            Tags { "LightMode"="Always" }
+            Cull Front
+            ZWrite On
+            CGPROGRAM
+            #pragma vertex vo
+            #pragma fragment fo
+            #pragma multi_compile_fog
+            #include "UnityCG.cginc"
+            float _Outline;
+            fixed4 _OutlineColor;
+            struct a2v { float4 vertex : POSITION; float3 normal : NORMAL; };
+            struct v2f { float4 pos : SV_POSITION; UNITY_FOG_COORDS(0) };
+            v2f vo(a2v v)
+            {
+                v2f o;
+                o.pos = UnityObjectToClipPos(v.vertex);
+                if (_Outline <= 0) { o.pos = float4(2, 2, 2, 1); UNITY_TRANSFER_FOG(o, o.pos); return o; }
+                float3 n = mul((float3x3)UNITY_MATRIX_VP, UnityObjectToWorldNormal(v.normal));
+                float2 off = normalize(n.xy + 1e-5);
+                off.x *= _ScreenParams.y / _ScreenParams.x;
+                o.pos.xy += off * _Outline * 0.0035 * o.pos.w;
+                UNITY_TRANSFER_FOG(o, o.pos);
+                return o;
+            }
+            fixed4 fo(v2f i) : SV_Target { fixed4 c = _OutlineColor; UNITY_APPLY_FOG(i.fogCoord, c); return c; }
+            ENDCG
+        }
     }
     FallBack "Diffuse"
 }

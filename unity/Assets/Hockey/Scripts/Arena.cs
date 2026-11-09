@@ -86,8 +86,16 @@ namespace Hockey
 
         void BuildRink()
         {
-            var ice = Obj("Ice", MeshKit.Ice(), Mats.Standard(TexArt.Ice(), 0.78f), Root, Vector3.zero);
+            var iceTex = TexArt.Ice();
+            Material iceMat = null;
+            var iceBase = Resources.Load<Material>("HockeyIce");
+            if (iceBase != null) iceMat = new Material(iceBase);
+            else { var sh = Shader.Find("Hockey/Ice"); if (sh != null && sh.isSupported) iceMat = new Material(sh); }
+            if (iceMat != null) iceMat.mainTexture = iceTex;
+            else iceMat = Mats.Standard(iceTex, 0.78f);
+            var ice = Obj("Ice", MeshKit.Ice(), iceMat, Root, Vector3.zero);
             ice.GetComponent<MeshRenderer>().receiveShadows = true;
+            if (iceMat.HasProperty("_ReflTex")) ice.AddComponent<IceReflection>();
 
             var boardsMat = Mats.Toon(TexArt.Boards(), "#ffffff", 0.25f);
             Obj("Boards", MeshKit.RingWall(0, 0.25f, 0, Rink.BoardH, true, false, false, TexArt.BoardsMeters), boardsMat, Root, Vector3.zero, true);

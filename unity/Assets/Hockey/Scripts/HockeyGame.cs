@@ -125,6 +125,8 @@ namespace Hockey
             c.backgroundColor = Mats.Hex("#1b1f4a");
             c.fieldOfView = Settings.Fov; c.nearClipPlane = 0.1f; c.farClipPlane = 400;
             c.allowMSAA = true;
+            c.allowHDR = true;
+            go.AddComponent<PostFx>();
             return c;
         }
 
@@ -813,6 +815,13 @@ namespace Hockey
                 v.Cam.transform.position = pos;
                 v.Cam.transform.LookAt(v.Look);
                 v.Cam.fieldOfView = Mathf.Lerp(v.Cam.fieldOfView, Settings.Fov + (s.Has(Buff.Turbo) ? 8 : 0) + Mathf.Max(0, s.Spd - 8) * 1.2f, 1 - Mathf.Exp(-dt * 4));
+                var pfx = v.Cam.GetComponent<PostFx>();
+                if (pfx != null)
+                {
+                    float sp = Mathf.Clamp01((s.Spd - 8.5f) / 4f) + (s.Has(Buff.Turbo) ? 0.4f : 0);
+                    pfx.Speed = Mathf.Lerp(pfx.Speed, Mathf.Clamp01(sp), 1 - Mathf.Exp(-dt * 5));
+                    pfx.ExtraBloom = Mathf.Lerp(pfx.ExtraBloom, flash > 0 ? 0.8f : 0, 1 - Mathf.Exp(-dt * 6));
+                }
             }
             shake = Mathf.Max(0, shake - dt * 1.5f);
         }

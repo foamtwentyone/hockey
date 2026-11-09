@@ -621,6 +621,19 @@ namespace Hockey
             return m;
         }
 
+        static readonly Dictionary<Material, Material> outlined = new Dictionary<Material, Material>();
+
+        /// Копия материала с мультяшной обводкой (только для мультяшного шейдера).
+        public static Material Outlined(Material src, float width = 1f)
+        {
+            if (src == null || !ToonAvailable || !src.HasProperty("_Outline")) return src;
+            if (outlined.TryGetValue(src, out var m)) return m;
+            m = new Material(src);
+            m.SetFloat("_Outline", width);
+            outlined[src] = m;
+            return m;
+        }
+
         /// Материал для текстурированных моделей без цвета вершин (KayKit).
         public static Material ToonModel(Texture tex, float gloss = 0.12f)
         {

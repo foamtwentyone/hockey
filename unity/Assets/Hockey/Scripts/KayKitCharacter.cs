@@ -132,7 +132,7 @@ namespace Hockey
                 bool body = n.EndsWith("ArmLeft") || n.EndsWith("ArmRight") || n.EndsWith("Body") || n.EndsWith("_Head") || n.EndsWith("LegLeft") || n.EndsWith("LegRight");
                 if (!body) { r.enabled = false; r.gameObject.SetActive(false); continue; }
                 if (r is SkinnedMeshRenderer sk) parts[n.Substring(n.IndexOf('_') + 1)] = sk;
-                r.sharedMaterial = mat;
+                r.sharedMaterial = Mats.Outlined(mat, 1f);
                 r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
                 r.receiveShadows = true;
                 if (r is SkinnedMeshRenderer smr) smr.updateWhenOffscreen = true;

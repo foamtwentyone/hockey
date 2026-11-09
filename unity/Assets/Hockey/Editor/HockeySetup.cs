@@ -36,6 +36,10 @@ namespace Hockey.EditorTools
             if (!Directory.Exists(ResDir)) Directory.CreateDirectory(ResDir);
             var toon = Shader.Find("Hockey/Toon");
             if (toon != null) Create("HockeyToon", toon, m => { });
+            var post = Shader.Find("Hockey/Post");
+            if (post != null) Create("HockeyPost", post, m => { });
+            var ice = Shader.Find("Hockey/Ice");
+            if (ice != null) Create("HockeyIce", ice, m => { });
             var std = Shader.Find("Standard");
             if (std == null) return;
             Create("HockeyOpaque", std, m => { });

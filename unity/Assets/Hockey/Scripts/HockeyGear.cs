@@ -90,7 +90,7 @@ namespace Hockey
                     extMats[key] = em;
                 }
                 var mats = r.sharedMaterials;
-                for (int k = 0; k < mats.Length; k++) mats[k] = em;
+                for (int k = 0; k < mats.Length; k++) mats[k] = Mats.Outlined(em, 0.8f);
                 r.sharedMaterials = mats;
                 r.shadowCastingMode = shadow ? UnityEngine.Rendering.ShadowCastingMode.On : UnityEngine.Rendering.ShadowCastingMode.Off;
             }
@@ -113,7 +113,7 @@ namespace Hockey
             if (scale.HasValue) go.transform.localScale = scale.Value;
             go.AddComponent<MeshFilter>().sharedMesh = GearModels.Sculpted.Contains(mesh) ? mesh : MeshKit.Faceted(mesh);
             var mr = go.AddComponent<MeshRenderer>();
-            mr.sharedMaterial = mat;
+            mr.sharedMaterial = shadow ? Mats.Outlined(mat, 0.8f) : mat;
             mr.shadowCastingMode = shadow ? UnityEngine.Rendering.ShadowCastingMode.On : UnityEngine.Rendering.ShadowCastingMode.Off;
             go.transform.SetParent(bone, true);
             return go.transform;
