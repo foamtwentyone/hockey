@@ -57,6 +57,45 @@ namespace Hockey
         static readonly Dictionary<string, GameObject> extCache = new Dictionary<string, GameObject>();
         static readonly Dictionary<string, Material> extMats = new Dictionary<string, Material>();
 
+        static readonly Dictionary<string, Mesh> bytesCache = new Dictionary<string, Mesh>();
+
+        /// Компактная сетка из Resources/Gear/<name>_mesh.bytes (подготовлена конвертером):
+        /// позиции, нормали и категория цвета (0 — основной цвет, 1 — тёмная подкладка, 2 — визор).
+        static Mesh LoadBytesMesh(string name, Color tint)
+        {
+            string key = name + ColorUtility.ToHtmlStringRGB(tint);
+            if (bytesCache.TryGetValue(key, out var cached)) return cached;
+            Mesh mesh = null;
+            var ta = Resources.Load<TextAsset>("Gear/" + name + "_mesh");
+            if (ta != null)
+            {
+                using var br = new System.IO.BinaryReader(new System.IO.MemoryStream(ta.bytes));
+                if (new string(br.ReadChars(4)) == "PKM1")
+                {
+                    int vc = br.ReadInt32(), tc = br.ReadInt32();
+                    var V = new Vector3[vc]; var N = new Vector3[vc]; var C = new Color[vc];
+                    Color dark = Mats.Hex("#2b2b33"), visor = Mats.Hex("#9fd8ff");
+                    for (int i = 0; i < vc; i++)
+                    {
+                        V[i] = new Vector3(br.ReadSingle(), br.ReadSingle(), br.ReadSingle());
+                        N[i] = new Vector3(br.ReadSingle(), br.ReadSingle(), br.ReadSingle());
+                        byte cat = br.ReadByte();
+                        C[i] = cat == 1 ? dark : cat == 2 ? visor : tint;
+                    }
+                    var T = new int[tc * 3];
+                    for (int i = 0; i < T.Length; i++) T[i] = br.ReadInt32();
+                    mesh = new Mesh { name = name };
+                    if (vc > 65000) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+                    mesh.vertices = V; mesh.normals = N; mesh.colors = C; mesh.triangles = T;
+                    mesh.RecalculateBounds();
+                }
+            }
+            bytesCache[key] = mesh;
+            return mesh;
+        }
+
+        static bool HasExt(string name) => LoadExt(name) != null || Resources.Load<TextAsset>("Gear/" + name + "_mesh") != null;
+
         static GameObject LoadExt(string name)
         {
             if (!extCache.TryGetValue(name, out var go)) { go = Resources.Load<GameObject>("Gear/" + name); extCache[name] = go; }
@@ -67,6 +106,27 @@ namespace Hockey
         /// Иначе — вылепленную. tint — цвет команды (умножается на текстуру модели).
         static Transform Gear(string name, Mesh sculpt, Material mat, Vector3 pos, Quaternion rot, Transform bone, Vector3 scale, Color tint, bool shadow = true)
         {
+            var bm = LoadBytesMesh(name, tint);
+            if (bm != null)
+            {
+                // сетка из конвертера: подгоняем габарит под вылепленную модель
+                var absS = new Vector3(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z));
+                var wantS = Vector3.Scale(sculpt.bounds.size, absS);
+                var bb = bm.bounds;
+                float kk = Mathf.Min(wantS.x / bb.size.x, Mathf.Min(wantS.y / bb.size.y, wantS.z / bb.size.z));
+                var hold = new GameObject("gear_" + name + "_fit").transform;
+                hold.SetPositionAndRotation(pos + rot * Vector3.Scale(sculpt.bounds.center, scale), rot);
+                var g = new GameObject("gear_" + name);
+                g.transform.SetParent(hold, false);
+                g.transform.localScale = new Vector3(Mathf.Sign(scale.x), 1, 1) * kk;
+                g.transform.localPosition = -Vector3.Scale(bb.center, g.transform.localScale);
+                g.AddComponent<MeshFilter>().sharedMesh = bm;
+                var mr = g.AddComponent<MeshRenderer>();
+                mr.sharedMaterial = Mats.Outlined(Mats.Get("#ffffff", 0.15f), 0.8f);
+                mr.shadowCastingMode = shadow ? UnityEngine.Rendering.ShadowCastingMode.On : UnityEngine.Rendering.ShadowCastingMode.Off;
+                hold.SetParent(bone, true);
+                return hold;
+            }
             var prefab = LoadExt(name);
             if (prefab == null) return Piece(sculpt, mat, pos, rot, bone, shadow, scale);
             var go = Object.Instantiate(prefab);
@@ -140,7 +200,7 @@ namespace Hockey
             var helmScale = new Vector3(hs.x, hs.y, hs.z) * 1.02f;
             if (!goalie)
             {
-                bool extHelmet = LoadExt("helmet") != null;
+                bool extHelmet = HasExt("helmet");
                 helmet.Add(Gear("helmet", GearModels.Helmet(Mats.Hex(tc.Main), Mats.Hex(tc.Dark), Mats.Hex("#2b2b33")), vcol, hc, helmRot, head, helmScale, Mats.Hex(tc.Main)));
                 if (!extHelmet) helmet.Add(Piece(GearModels.Visor(), visorM, hc, helmRot, head, false, helmScale));
                 // ремешок под подбородком

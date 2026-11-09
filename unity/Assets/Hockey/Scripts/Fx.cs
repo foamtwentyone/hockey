@@ -33,9 +33,10 @@ namespace Hockey
             root.SetParent(this.root, false);
             root.position = center;
             float minY = 0;
-            foreach (var p in parts)
+            var pieces = new List<Transform>();
+            foreach (var p in parts) if (p != null) foreach (var mfc in p.GetComponentsInChildren<MeshFilter>()) pieces.Add(mfc.transform);
+            foreach (var p in pieces)
             {
-                if (p == null) continue;
                 var mf = p.GetComponent<MeshFilter>(); var mr = p.GetComponent<MeshRenderer>();
                 if (mf == null || mr == null) continue;
                 var c = new GameObject("piece");
