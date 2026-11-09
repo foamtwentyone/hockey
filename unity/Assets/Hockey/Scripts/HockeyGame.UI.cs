@@ -1065,8 +1065,8 @@ namespace Hockey
             float ch = Mathf.Clamp01(p.Charge);
             float gx = Rink.TeamDir[team] * Rink.GoalX;
             // точка вылета: шайба у клюшки или крюк
-            float px = st.PuckOwner == v.Follow ? st.PuckX : p.X + Mathf.Sin(p.H) * 1.15f - Mathf.Cos(p.H) * 0.28f;
-            float pz = st.PuckOwner == v.Follow ? st.PuckZ : p.Z + Mathf.Cos(p.H) * 1.15f + Mathf.Sin(p.H) * 0.28f;
+            float px = st.PuckOwner == v.Follow ? st.PuckX : p.X + Mathf.Sin(p.H) * 1.2f - Mathf.Cos(p.H) * 0.42f;
+            float pz = st.PuckOwner == v.Follow ? st.PuckZ : p.Z + Mathf.Cos(p.H) * 1.2f + Mathf.Sin(p.H) * 0.42f;
             float dx = Mathf.Sin(v.Yaw), dz = Mathf.Cos(v.Yaw);
             float along = Mathf.Abs(dx) > 0.05f ? (gx - px) / dx : -1;
             float hitZ = pz + dz * along;

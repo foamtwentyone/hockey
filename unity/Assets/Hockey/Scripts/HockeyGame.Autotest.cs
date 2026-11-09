@@ -210,11 +210,11 @@ namespace Hockey
                 yield return Shot("17b_face");
                 // руки и краги крупно, с двух сторон
                 var hands = p + Vector3.up * 0.8f;
-                cam.transform.position = hands + fwd * 2.4f + Vector3.up * 0.5f;
+                cam.transform.position = hands + fwd * 3.4f + Vector3.up * 0.4f;
                 cam.transform.LookAt(hands);
                 yield return Wait(0.4f);
                 yield return Shot("17c_hands_front");
-                cam.transform.position = hands - Vector3.Cross(Vector3.up, fwd) * 2.4f + fwd * 0.6f + Vector3.up * 0.5f;   // слева — видно левую руку
+                cam.transform.position = hands - Vector3.Cross(Vector3.up, fwd) * 3.4f + fwd * 0.8f + Vector3.up * 0.4f;   // слева — видно левую руку
                 cam.transform.LookAt(hands);
                 yield return Wait(0.4f);
                 yield return Shot("17d_hands_side");

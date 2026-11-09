@@ -444,8 +444,8 @@ namespace Hockey
         {
             float fx = MathF.Sin(p.H), fz = MathF.Cos(p.H);
             float rx = fz, rz = -fx;   // правая сторона игрока; крюк слева (левый хват)
-            bx = p.X + fx * 1.15f - rx * 0.28f;
-            bz = p.Z + fz * 1.15f - rz * 0.28f;
+            bx = p.X + fx * 1.2f - rx * 0.42f;
+            bz = p.Z + fz * 1.2f - rz * 0.42f;
         }
 
         void UpdateSkater(Player p, PlayerInput inp, float dt, bool live)

@@ -225,7 +225,7 @@ namespace Hockey
             else if (name == "glove")
             {
                 // ладонь краги (≈62% высоты от раструба) — в центр кулака; ширина — как у вылепленной краги
-                kk = wantS.x * 1.6f / bb.size.x;   // крупная крага целиком закрывает кулак и предплечье модели
+                kk = wantS.x * 1.15f / bb.size.x;   // крага в пропорции к фигуре; тонкие предплечья модели внутри не торчат
                 anchorSculpt = new Vector3(0, 0.05f, 0);
                 anchorModel = new Vector3(bb.center.x, bb.min.y + bb.size.y * 0.58f, bb.center.z);
             }

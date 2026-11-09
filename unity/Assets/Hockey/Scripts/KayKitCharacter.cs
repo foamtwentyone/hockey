@@ -289,7 +289,7 @@ namespace Hockey
             // компенсируем масштаб модели, чтобы клюшка была в метрах
             var s = HandR.lossyScale;
             stick.localScale = new Vector3(1 / Mathf.Max(1e-4f, s.x), 1 / Mathf.Max(1e-4f, s.y), 1 / Mathf.Max(1e-4f, s.z));
-            float len = Goalie ? 1.1f : 1.25f;
+            float len = Goalie ? 1.1f : 1.4f;
             Stick = stick; stickLen = len;
             void P(Mesh m, Material mt, Vector3 pos)
             {
@@ -552,7 +552,7 @@ namespace Hockey
             // как у настоящего хоккеиста: верхняя (левая) рука с набалдашником у бедра, нижняя (правая) — далеко
             // по древку на почти выпрямленной руке, клюшка длинная и пологая, крюк далеко впереди на льду
             // левый хват (крюк слева): правая рука сверху у правого бедра, левая — снизу, далеко по древку
-            var top = chest + Vector3.down * reach * 0.42f + fwd * reach * 0.3f + right * reach * 0.3f;
+            var top = chest + Vector3.down * reach * 0.72f + fwd * reach * 0.38f + right * reach * 0.36f;   // у правого бедра
             float g = Stick.lossyScale.y;
             var dir = StickDir(top, (stickLen - 0.25f + GripL) * g, s, fwd, right, out var bladeFwd);
             var rot = Quaternion.LookRotation(bladeFwd, -dir);
@@ -574,7 +574,7 @@ namespace Hockey
         Vector3 StickDir(Vector3 pivot, float L, PlayerView s, Vector3 fwd, Vector3 right, out Vector3 bladeFwd)
         {
             float g = Stick.lossyScale.y;
-            var target = Model.position + (fwd * (Goalie ? 0.75f : 1.05f) + right * (Goalie ? 0.05f : -0.46f)) * g;   // клюшка слева: левый хват, как у большинства хоккеистов
+            var target = Model.position + (fwd * (Goalie ? 0.75f : 1.2f) + right * (Goalie ? 0.05f : -0.55f)) * g;   // клюшка слева: левый хват, как у большинства хоккеистов
             float drop = pivot.y - (Model.position.y + 0.04f);
             var hor = target - pivot; hor.y = 0;
             Vector3 dir;
@@ -637,7 +637,7 @@ namespace Hockey
             float g = Stick.lossyScale.y;
             float L = (stickLen - 0.25f) * g;
             var h = Stick.position;
-            var target = Model.position + (fwd * (Goalie ? 0.75f : 1.05f) + right * (Goalie ? 0.05f : -0.46f)) * g;   // клюшка слева: левый хват, как у большинства хоккеистов
+            var target = Model.position + (fwd * (Goalie ? 0.75f : 1.2f) + right * (Goalie ? 0.05f : -0.55f)) * g;   // клюшка слева: левый хват, как у большинства хоккеистов
             float drop = h.y - (Model.position.y + 0.04f);
             var hor = target - h; hor.y = 0;
             Vector3 dir;
