@@ -13,7 +13,8 @@ namespace Hockey
     public class KayKitCharacter
     {
         public Transform Model, HandR, Head, StickBlade, Stick;
-        Transform armL0, armL1, armL2, armR0, armR1, armR2;   // плечо, предплечье, кисть левой руки — для хвата клюшки двумя руками
+        Transform armL0, armL1, armL2, armR0, armR1, armR2;   // плечо, предплечье, кисть обеих рук — для хвата клюшки
+        Vector3 restL2, restR2;   // исходное положение кистей (рука «тянется» только на кадр)
         float gripW;
         readonly List<Transform> hands = new List<Transform>();
         class GloveRig { public Transform T, Hand, Lower; public float Along; public Vector3 BackLocal; }
@@ -215,6 +216,8 @@ namespace Hockey
                     k.hands.Add(hb);
                     foreach (Transform ch in hb) { ch.localPosition /= HandShrink; ch.localScale /= HandShrink; }
                 }
+            if (k.armL2 != null) k.restL2 = k.armL2.localPosition;
+            if (k.armR2 != null) k.restR2 = k.armR2.localPosition;
             go.AddComponent<KayKitGraphOwner>().Graph = k.graph;
             return k;
         }
@@ -455,6 +458,8 @@ namespace Hockey
             Apply();
             graph.Evaluate(0);
             foreach (var hb in hands) hb.localScale = Vector3.one * HandShrink;
+            if (armL2 != null) armL2.localPosition = restL2;   // сброс «растяжки» руки прошлого кадра
+            if (armR2 != null) armR2.localPosition = restR2;
             if (Stick != null && Stick.parent != null)
             {   // клюшка — в метрах независимо от масштаба кисти
                 var ls = Stick.parent.lossyScale;
@@ -494,8 +499,8 @@ namespace Hockey
             float reachR = (armR1.position - armR0.position).magnitude + (armR2.position - armR1.position).magnitude;
             float best = 0.2f;
             for (float t = 0.62f; t >= 0.2f; t -= 0.02f)
-                if ((top + dir * t * g - armR0.position).magnitude <= reachR * 0.97f) { best = t; break; }
-            var lowGrip = top + dir * best * g;
+                if ((top + dir * t * g - armR0.position).magnitude <= reachR * 1.4f) { best = t; break; }
+            var lowGrip = top + dir * best * g;   // руки мультяшно тянутся, поэтому хват далеко по древку
             var slotOff = armR2.position - HandR.position;
             Ik(armL0, armL1, armL2, top, w, -right);
             Ik(armR0, armR1, armR2, lowGrip + slotOff, w, right);
@@ -541,6 +546,13 @@ namespace Hockey
             t0.rotation = Quaternion.FromToRotation(b - a, elbow - a) * t0.rotation;
             var c2 = t2.position; var b2 = t1.position;
             t1.rotation = Quaternion.FromToRotation(c2 - b2, a + dir * d - b2) * t1.rotation;
+            // мультяшно «тянущаяся» рука: если не достаём — удлиняем предплечье (до +50%)
+            float need = at.magnitude - (l1 + l2) * 0.999f;
+            if (need > 0)
+            {
+                var fd = (t2.position - t1.position).normalized;
+                t2.position += fd * Mathf.Min(need, (l1 + l2) * 0.5f);
+            }
         }
 
         /// Удар по голове: голова резко откидывается назад и качается.
