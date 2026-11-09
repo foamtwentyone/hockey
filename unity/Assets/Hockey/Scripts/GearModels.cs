@@ -122,25 +122,17 @@ namespace Hockey
                         if ((val[Idx(x, y, z)] < 0) != (val[Idx(x, y, z + 1)] < 0))
                             Quad(cellVert[CIdx(x - 1, y - 1, z)], cellVert[CIdx(x, y - 1, z)], cellVert[CIdx(x, y, z)], cellVert[CIdx(x - 1, y, z)]);
 
-            // стиль KayKit: грани с плоским затенением, цвет грани — по её центру
-            var fV = new List<Vector3>(T.Count); var fN = new List<Vector3>(T.Count); var fC = new List<Color>(T.Count); var fT = new List<int>(T.Count);
-            for (int i = 0; i < T.Count; i += 3)
-            {
-                Vector3 a = V[T[i]], b = V[T[i + 1]], c = V[T[i + 2]];
-                var n = Vector3.Cross(b - a, c - a);
-                if (n.sqrMagnitude < 1e-14f) continue;
-                n.Normalize();
-                var col = color((a + b + c) / 3);
-                for (int k = 0; k < 3; k++) { fT.Add(fV.Count); fV.Add(V[T[i + k]]); fN.Add(n); fC.Add(col); }
-            }
-            V = fV; N = fN; C = fC; T = fT;
             var mesh = new Mesh { name = key };
             if (V.Count > 65000) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
             mesh.SetVertices(V); mesh.SetNormals(N); mesh.SetColors(C); mesh.SetTriangles(T, 0);
             mesh.RecalculateBounds();
             cache[key] = mesh;
+            Sculpted.Add(mesh);
             return mesh;
         }
+
+        /// Вылепленные модели — гладкие, их не нужно разбивать на грани.
+        public static readonly HashSet<Mesh> Sculpted = new HashSet<Mesh>();
 
         // ---------------- шлем (в единицах головы: голова ≈ куб 1×1×1 с центром в нуле) ----------------
         static readonly Vector3 HelmC = new Vector3(0, 0.07f, -0.03f);
@@ -200,7 +192,7 @@ namespace Hockey
                     float g = Mathf.Lerp(0.82f, 1f, Mathf.Clamp01((q.y + 0.3f) / 0.7f));
                     return main * g;
                 },
-                new Bounds(HelmC + new Vector3(0, 0.05f, 0), new Vector3(1.45f, 1.35f, 1.5f)), 34);
+                new Bounds(HelmC + new Vector3(0, 0.05f, 0), new Vector3(1.45f, 1.35f, 1.5f)), 52);
         }
 
         /// Прозрачный визор, повторяющий форму шлема спереди.
@@ -214,7 +206,7 @@ namespace Hockey
                 d = SMax(d, q.y - 0.04f, 0.02f);              // сверху — под краем шлема
                 d = SMax(d, -0.24f - q.y, 0.03f);             // снизу — до носа
                 return d;
-            }, p => Color.white, new Bounds(HelmC + new Vector3(0, -0.1f, 0.4f), new Vector3(1.4f, 0.5f, 0.6f)), 44);
+            }, p => Color.white, new Bounds(HelmC + new Vector3(0, -0.1f, 0.4f), new Vector3(1.4f, 0.5f, 0.6f)), 64);
         }
 
         // ---------------- маска вратаря: шлем с закрытыми щеками и вплавленной решёткой ----------------
@@ -257,7 +249,7 @@ namespace Hockey
                     if (q.y < 0.1f && q.y > 0.0f && Mathf.Abs(q.x) > 0.4f) return accent;   // полосы по бокам
                     return main * Mathf.Lerp(0.85f, 1f, Mathf.Clamp01((q.y + 0.5f) / 0.9f));
                 },
-                new Bounds(HelmC + new Vector3(0, 0f, 0.02f), new Vector3(1.4f, 1.35f, 1.45f)), 56);
+                new Bounds(HelmC + new Vector3(0, 0f, 0.02f), new Vector3(1.4f, 1.35f, 1.45f)), 72);
         }
 
         // ---------------- щиток вратаря (высота вдоль +Y, лицевая сторона +Z) ----------------
@@ -296,7 +288,7 @@ namespace Hockey
                     if (p.y > -0.1f && p.y < -0.02f) return accent;                // поперечная полоса
                     return main;
                 },
-                new Bounds(new Vector3(0.04f, -0.02f, 0), new Vector3(0.8f, 1.3f, 0.55f)), 30);
+                new Bounds(new Vector3(0.04f, -0.02f, 0), new Vector3(0.8f, 1.3f, 0.55f)), 40);
         }
 
         // ---------------- блин (щит вдоль +Y, лицевая сторона +Z) ----------------
@@ -323,7 +315,7 @@ namespace Hockey
                     }
                     return Color.Lerp(accent, Color.black, 0.3f);
                 },
-                new Bounds(new Vector3(0, -0.05f, 0), new Vector3(0.85f, 1.2f, 0.55f)), 30);
+                new Bounds(new Vector3(0, -0.05f, 0), new Vector3(0.85f, 1.2f, 0.55f)), 40);
         }
 
         // ---------------- ловушка (ладонь +Z, пальцы +Y) ----------------
@@ -356,7 +348,7 @@ namespace Hockey
                     if (p.z > 0.05f && Ellipsoid(p - new Vector3(0.02f, 0.12f, 0.2f), new Vector3(0.3f, 0.34f, 0.18f)) < 0.03f) return new Color(0.78f, 0.62f, 0.45f); // кожа кармана
                     return Mathf.Abs(p.x) < 0.06f && p.z < 0 ? accent : main;
                 },
-                new Bounds(new Vector3(-0.03f, 0, 0.02f), new Vector3(1.1f, 1.3f, 0.6f)), 32);
+                new Bounds(new Vector3(-0.03f, 0, 0.02f), new Vector3(1.1f, 1.3f, 0.6f)), 44);
         }
 
         // ---------------- крага (пальцы вдоль +Y, тыльная сторона +Z, большой палец +X) ----------------
@@ -410,7 +402,7 @@ namespace Hockey
                     if (finger < 0.012f) return Color.Lerp(main, dark, 0.15f);
                     return main;
                 },
-                new Bounds(new Vector3(0.05f, -0.06f, 0), new Vector3(1.0f, 1.45f, 0.75f)), 32);
+                new Bounds(new Vector3(0.05f, -0.06f, 0), new Vector3(1.0f, 1.45f, 0.75f)), 44);
         }
     }
 }

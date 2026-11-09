@@ -58,7 +58,7 @@ namespace Hockey
             var go = new GameObject("gear");
             go.transform.SetPositionAndRotation(worldPos, worldRot);
             if (scale.HasValue) go.transform.localScale = scale.Value;
-            go.AddComponent<MeshFilter>().sharedMesh = MeshKit.Faceted(mesh);
+            go.AddComponent<MeshFilter>().sharedMesh = GearModels.Sculpted.Contains(mesh) ? mesh : MeshKit.Faceted(mesh);
             var mr = go.AddComponent<MeshRenderer>();
             mr.sharedMaterial = mat;
             mr.shadowCastingMode = shadow ? UnityEngine.Rendering.ShadowCastingMode.On : UnityEngine.Rendering.ShadowCastingMode.Off;
@@ -95,7 +95,7 @@ namespace Hockey
             else
             {
                 // маска вратаря: цельная модель с закрытыми щеками и решёткой, вплавленной в рамку
-                Piece(GearModels.GoalieMask(Mats.Hex("#f6f6f2"), Mats.Hex(tc.Main)), vcol, hc, fr.Rot * Quaternion.Euler(-3, 0, 0), head, true, helmScale);
+                Piece(GearModels.GoalieMask(Mats.Hex("#e6e3dc"), Mats.Hex(tc.Main)), vcol, hc, fr.Rot * Quaternion.Euler(-3, 0, 0), head, true, helmScale);
             }
 
             // ---------------- номер на спине ----------------
@@ -131,8 +131,8 @@ namespace Hockey
                     // ловушка — на левой, блин — на правой; лицевой стороной к шайбе
                     var face = Quaternion.LookRotation(fr.Fwd, Vector3.ProjectOnPlane(fingerDir, fr.Fwd).normalized);
                     float gsz = Mathf.Max(u * 0.55f, fr0 * 2 * 2.8f);
-                    if (i == 0) Piece(GearModels.Catcher(Mats.Hex("#f6f6f2"), Mats.Hex(tc.Main)), Mats.Get("#ffffff", 0.1f), fist + fr.Fwd * fr0 * 0.3f, face, hand, true, new Vector3(-gsz, gsz, gsz));
-                    else Piece(GearModels.Blocker(Mats.Hex("#f6f6f2"), Mats.Hex(tc.Main)), Mats.Get("#ffffff", 0.1f), fist + fr.Fwd * fr0 * 0.2f, face, hand, true, new Vector3(gsz, gsz, gsz));
+                    if (i == 0) Piece(GearModels.Catcher(Mats.Hex("#e6e3dc"), Mats.Hex(tc.Main)), Mats.Get("#ffffff", 0.1f), fist + fr.Fwd * fr0 * 0.3f, face, hand, true, new Vector3(-gsz, gsz, gsz));
+                    else Piece(GearModels.Blocker(Mats.Hex("#e6e3dc"), Mats.Hex(tc.Main)), Mats.Get("#ffffff", 0.1f), fist + fr.Fwd * fr0 * 0.2f, face, hand, true, new Vector3(gsz, gsz, gsz));
                 }
                 else
                 {
@@ -165,7 +165,7 @@ namespace Hockey
                     float h = Mathf.Max(u * 0.45f, kneeY - groundY + u * 0.12f);
                     float w = Mathf.Max(lb.size.x, lb.size.z) * 1.35f;
                     var padC = new Vector3(lb.center.x, groundY + h * 0.5f, lb.center.z) + fr.Fwd * w * 0.25f;
-                    Piece(GearModels.LegPad(Mats.Hex("#f6f6f2"), Mats.Hex(tc.Main)), Mats.Get("#ffffff", 0.1f), padC, fr.Rot, shin, true,
+                    Piece(GearModels.LegPad(Mats.Hex("#e6e3dc"), Mats.Hex(tc.Main)), Mats.Get("#ffffff", 0.1f), padC, fr.Rot, shin, true,
                         new Vector3((i == 0 ? -1 : 1) * w / 0.7f, h / 1.15f, w / 0.7f * 0.8f));
                 }
             }
