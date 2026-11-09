@@ -208,6 +208,16 @@ namespace Hockey
                 cam.transform.LookAt(head);
                 yield return Wait(0.4f);
                 yield return Shot("17b_face");
+                // руки и краги крупно, с двух сторон
+                var hands = p + Vector3.up * 0.8f;
+                cam.transform.position = hands + fwd * 1.3f + Vector3.up * 0.25f;
+                cam.transform.LookAt(hands);
+                yield return Wait(0.4f);
+                yield return Shot("17c_hands_front");
+                cam.transform.position = hands + Vector3.Cross(Vector3.up, fwd) * 1.3f + Vector3.up * 0.25f;
+                cam.transform.LookAt(hands);
+                yield return Wait(0.4f);
+                yield return Shot("17d_hands_side");
                 cam.transform.position = new Vector3(0, 46, -0.01f);
                 cam.transform.rotation = Quaternion.Euler(90, 0, 0);
                 yield return Wait(0.4f);

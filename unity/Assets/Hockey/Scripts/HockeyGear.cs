@@ -222,6 +222,13 @@ namespace Hockey
             float kk; Vector3 anchorSculpt, anchorModel;
             if (headGear) { kk = wantS.x * (name == "helmet" ? 0.98f : 1.06f) / bb.size.x; anchorSculpt = new Vector3(sb.center.x, sb.max.y, sb.center.z); anchorModel = new Vector3(bb.center.x, bb.max.y, bb.center.z); }
             else if (legGear) { kk = wantS.y / bb.size.y; anchorSculpt = new Vector3(sb.center.x, sb.min.y, sb.center.z); anchorModel = new Vector3(bb.center.x, bb.min.y, bb.center.z); }
+            else if (name == "glove")
+            {
+                // ладонь краги (≈62% высоты от раструба) — в центр кулака; ширина — как у вылепленной краги
+                kk = wantS.x * 1.05f / bb.size.x;
+                anchorSculpt = new Vector3(0, 0.05f, 0);
+                anchorModel = new Vector3(bb.center.x, bb.min.y + bb.size.y * 0.62f, bb.center.z);
+            }
             else { kk = Mathf.Min(wantS.x / bb.size.x, Mathf.Min(wantS.y / bb.size.y, wantS.z / bb.size.z)); anchorSculpt = sb.center; anchorModel = bb.center; }
             var hold = new GameObject("gear_" + name + "_fit").transform;
             hold.SetPositionAndRotation(pos + rot * Vector3.Scale(anchorSculpt, scale), rot);
