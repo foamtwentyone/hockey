@@ -446,8 +446,12 @@ namespace Hockey
             float l1 = (b - a).magnitude, l2 = (c - b).magnitude;
             // не тянемся, если рукоять далеко или выше плеча — иначе рука неестественно задирается
             float reach = l1 + l2, dd = (target - a).magnitude;
+            float w0 = w;
             w *= Mathf.Clamp01((reach * 1.3f - dd) / (reach * 0.3f));
-            w *= Mathf.Clamp01((a.y - target.y) / (reach * 0.25f) + 0.3f);
+            w *= Mathf.Clamp01((a.y - target.y - reach * 0.1f) / (reach * 0.25f));
+            w *= Mathf.Clamp01(Vector3.Dot(target - a, Model.forward) / (reach * 0.2f) + 0.5f);   // рукоять перед грудью, а не за спиной
+            if (Application.isPlaying && System.Environment.CommandLine.Contains("-autotest") && Time.frameCount % 20 == 0)
+                Debug.Log($"[grip] {Model.root.name}@{Model.position:F2} shoulder={a:F2} hand={c:F2} target={target:F2} reach={reach:F2} d={dd:F2} w0={w0:F2} w={w:F2} stickUp={Stick.up:F2}");
             if (w <= 0.001f) return;
             target = Vector3.Lerp(c, target, w);
             var at = target - a;
