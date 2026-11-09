@@ -53,6 +53,59 @@ namespace Hockey
             return true;
         }
 
+        // ---------------- внешние модели (Resources/Gear/*.fbx) ----------------
+        static readonly Dictionary<string, GameObject> extCache = new Dictionary<string, GameObject>();
+        static readonly Dictionary<string, Material> extMats = new Dictionary<string, Material>();
+
+        static GameObject LoadExt(string name)
+        {
+            if (!extCache.TryGetValue(name, out var go)) { go = Resources.Load<GameObject>("Gear/" + name); extCache[name] = go; }
+            return go;
+        }
+
+        /// Ставит внешнюю модель name (если она есть) на место вылепленной: та же точка, поворот и габарит.
+        /// Иначе — вылепленную. tint — цвет команды (умножается на текстуру модели).
+        static Transform Gear(string name, Mesh sculpt, Material mat, Vector3 pos, Quaternion rot, Transform bone, Vector3 scale, Color tint, bool shadow = true)
+        {
+            var prefab = LoadExt(name);
+            if (prefab == null) return Piece(sculpt, mat, pos, rot, bone, shadow, scale);
+            var go = Object.Instantiate(prefab);
+            go.name = "gear_" + name;
+            var rends = go.GetComponentsInChildren<Renderer>(true);
+            // габарит модели в её собственных координатах
+            var b = new Bounds(); bool first = true;
+            foreach (var r in rends)
+            {
+                var mf = r.GetComponent<MeshFilter>();
+                var m = mf != null ? mf.sharedMesh : (r as SkinnedMeshRenderer)?.sharedMesh;
+                if (m == null) continue;
+                var toRoot = go.transform.worldToLocalMatrix * r.transform.localToWorldMatrix;
+                foreach (var v in m.vertices) { var p = toRoot.MultiplyPoint3x4(v); if (first) { b = new Bounds(p, Vector3.zero); first = false; } else b.Encapsulate(p); }
+                string key = name + ColorUtility.ToHtmlStringRGB(tint);
+                if (!extMats.TryGetValue(key, out var em))
+                {
+                    var src = r.sharedMaterial;
+                    em = Mats.ToonModel(src != null ? src.mainTexture : null);
+                    em.color = tint;
+                    extMats[key] = em;
+                }
+                var mats = r.sharedMaterials;
+                for (int k = 0; k < mats.Length; k++) mats[k] = em;
+                r.sharedMaterials = mats;
+                r.shadowCastingMode = shadow ? UnityEngine.Rendering.ShadowCastingMode.On : UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
+            var abs = new Vector3(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z));
+            var want = Vector3.Scale(sculpt.bounds.size, abs);
+            float k0 = Mathf.Min(want.x / Mathf.Max(1e-4f, b.size.x), Mathf.Min(want.y / Mathf.Max(1e-4f, b.size.y), want.z / Mathf.Max(1e-4f, b.size.z)));
+            var holder = new GameObject("gear_" + name + "_fit").transform;
+            holder.SetPositionAndRotation(pos + rot * Vector3.Scale(sculpt.bounds.center, scale), rot);
+            go.transform.SetParent(holder, false);
+            go.transform.localScale = new Vector3(Mathf.Sign(scale.x), 1, 1) * k0;
+            go.transform.localPosition = -Vector3.Scale(b.center, go.transform.localScale);
+            holder.SetParent(bone, true);
+            return holder;
+        }
+
         static Transform Piece(Mesh mesh, Material mat, Vector3 worldPos, Quaternion worldRot, Transform bone, bool shadow = true, Vector3? scale = null)
         {
             var go = new GameObject("gear");
@@ -87,15 +140,16 @@ namespace Hockey
             var helmScale = new Vector3(hs.x, hs.y, hs.z) * 1.02f;
             if (!goalie)
             {
-                helmet.Add(Piece(GearModels.Helmet(Mats.Hex(tc.Main), Mats.Hex(tc.Dark), Mats.Hex("#2b2b33")), vcol, hc, helmRot, head, true, helmScale));
-                helmet.Add(Piece(GearModels.Visor(), visorM, hc, helmRot, head, false, helmScale));
+                bool extHelmet = LoadExt("helmet") != null;
+                helmet.Add(Gear("helmet", GearModels.Helmet(Mats.Hex(tc.Main), Mats.Hex(tc.Dark), Mats.Hex("#2b2b33")), vcol, hc, helmRot, head, helmScale, Mats.Hex(tc.Main)));
+                if (!extHelmet) helmet.Add(Piece(GearModels.Visor(), visorM, hc, helmRot, head, false, helmScale));
                 // ремешок под подбородком
                 helmet.Add(Piece(MeshKit.Superellipsoid(hs.x * 0.47f, hs.y * 0.03f, hs.z * 0.5f, 0.9f, 0.8f, 24, -0.6f, 0.6f), black, hc - fr.Up * hs.y * 0.36f, fr.Rot * Quaternion.Euler(-20, 0, 0), head));
             }
             else
             {
                 // маска вратаря: цельная модель с закрытыми щеками и решёткой, вплавленной в рамку
-                Piece(GearModels.GoalieMask(Mats.Hex("#e6e3dc"), Mats.Hex(tc.Main)), vcol, hc, fr.Rot * Quaternion.Euler(-3, 0, 0), head, true, helmScale);
+                Gear("goalie_mask", GearModels.GoalieMask(Mats.Hex("#e6e3dc"), Mats.Hex(tc.Main)), vcol, hc, fr.Rot * Quaternion.Euler(-3, 0, 0), head, helmScale, Color.white);
             }
 
             // ---------------- номер на спине ----------------
@@ -131,15 +185,15 @@ namespace Hockey
                     // ловушка — на левой, блин — на правой; лицевой стороной к шайбе
                     var face = Quaternion.LookRotation(fr.Fwd, Vector3.ProjectOnPlane(fingerDir, fr.Fwd).normalized);
                     float gsz = Mathf.Max(u * 0.55f, fr0 * 2 * 2.8f);
-                    if (i == 0) Piece(GearModels.Catcher(Mats.Hex("#e6e3dc"), Mats.Hex(tc.Main)), Mats.Get("#ffffff", 0.1f), fist + fr.Fwd * fr0 * 0.3f, face, hand, true, new Vector3(-gsz, gsz, gsz));
-                    else Piece(GearModels.Blocker(Mats.Hex("#e6e3dc"), Mats.Hex(tc.Main)), Mats.Get("#ffffff", 0.1f), fist + fr.Fwd * fr0 * 0.2f, face, hand, true, new Vector3(gsz, gsz, gsz));
+                    if (i == 0) Gear("catcher", GearModels.Catcher(Mats.Hex("#e6e3dc"), Mats.Hex(tc.Main)), Mats.Get("#ffffff", 0.1f), fist + fr.Fwd * fr0 * 0.3f, face, hand, new Vector3(-gsz, gsz, gsz), Color.white);
+                    else Gear("blocker", GearModels.Blocker(Mats.Hex("#e6e3dc"), Mats.Hex(tc.Main)), Mats.Get("#ffffff", 0.1f), fist + fr.Fwd * fr0 * 0.2f, face, hand, new Vector3(gsz, gsz, gsz), Color.white);
                 }
                 else
                 {
                     // ладонная часть краги (y≈0.05, ширина ≈0.78 в её единицах) охватывает кулак с запасом
                     float gs = Mathf.Max(u * 0.28f, fr0 * 2 * 1.2f / 0.78f);
                     var glove = GearModels.Glove(Mats.Hex(tc.Main), Mats.Hex(tc.Dark), Mats.Hex("#c9a27a"));
-                    Piece(glove, Mats.Get("#ffffff", 0.1f), fist - fingerDir * gs * 0.05f, rot, hand, true, new Vector3(i == 0 ? -gs : gs, gs, gs));
+                    Gear("glove", glove, Mats.Get("#ffffff", 0.1f), fist - fingerDir * gs * 0.05f, rot, hand, new Vector3(i == 0 ? -gs : gs, gs, gs), Mats.Hex(tc.Main));
                 }
             }
 
@@ -165,8 +219,8 @@ namespace Hockey
                     float h = Mathf.Max(u * 0.45f, kneeY - groundY + u * 0.12f);
                     float w = Mathf.Max(lb.size.x, lb.size.z) * 1.35f;
                     var padC = new Vector3(lb.center.x, groundY + h * 0.5f, lb.center.z) + fr.Fwd * w * 0.25f;
-                    Piece(GearModels.LegPad(Mats.Hex("#e6e3dc"), Mats.Hex(tc.Main)), Mats.Get("#ffffff", 0.1f), padC, fr.Rot, shin, true,
-                        new Vector3((i == 0 ? -1 : 1) * w / 0.7f, h / 1.15f, w / 0.7f * 0.8f));
+                    Gear("pad", GearModels.LegPad(Mats.Hex("#e6e3dc"), Mats.Hex(tc.Main)), Mats.Get("#ffffff", 0.1f), padC, fr.Rot, shin,
+                        new Vector3((i == 0 ? -1 : 1) * w / 0.7f, h / 1.15f, w / 0.7f * 0.8f), Color.white);
                 }
             }
             return helmet;
