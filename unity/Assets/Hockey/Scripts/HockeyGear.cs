@@ -147,7 +147,7 @@ namespace Hockey
                 if (headGear)
                 {
                     // по ширине головы с запасом, макушка к макушке
-                    kk = wantS.x * (name == "helmet" ? 0.98f : 1.06f) / bb.size.x;
+                    kk = wantS.x * (name == "helmet" ? 0.98f : 1.15f) / bb.size.x;
                     anchorSculpt = new Vector3(sb.center.x, sb.max.y, sb.center.z);
                     anchorModel = new Vector3(bb.center.x, bb.max.y, bb.center.z);
                 }
@@ -220,7 +220,7 @@ namespace Hockey
             bool headGear = name == "helmet" || name == "goalie_mask";
             bool legGear = name == "pad";
             float kk; Vector3 anchorSculpt, anchorModel;
-            if (headGear) { kk = wantS.x * (name == "helmet" ? 0.98f : 1.06f) / bb.size.x; anchorSculpt = new Vector3(sb.center.x, sb.max.y, sb.center.z); anchorModel = new Vector3(bb.center.x, bb.max.y, bb.center.z); }
+            if (headGear) { kk = wantS.x * (name == "helmet" ? 0.98f : 1.15f) / bb.size.x; anchorSculpt = new Vector3(sb.center.x, sb.max.y, sb.center.z); anchorModel = new Vector3(bb.center.x, bb.max.y, bb.center.z); }
             else if (legGear) { kk = wantS.y / bb.size.y; anchorSculpt = new Vector3(sb.center.x, sb.min.y, sb.center.z); anchorModel = new Vector3(bb.center.x, bb.min.y, bb.center.z); }
             else if (name == "glove")
             {
