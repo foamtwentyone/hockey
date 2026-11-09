@@ -35,6 +35,7 @@ namespace Hockey
         Mode mode = Mode.None;
         Sim sim;
         readonly ViewState simView = new ViewState(), netView = new ViewState();
+        readonly int[] shots = new int[2];
         readonly ViewState prevView = new ViewState(), curView = new ViewState(), smoothView = new ViewState();
         ViewState view;
         List<RosterEntry> roster = new List<RosterEntry>();
@@ -274,6 +275,7 @@ namespace Hockey
             ApplyRoster(r, true);
             screen = UiScreen.Match;
             paused = false; endShown = false; endTimer = -1;
+            shots[0] = shots[1] = 0;
             message = "";
             foreach (var c in showcase) c.Root.gameObject.SetActive(false);
             audioFx.SetMusic(false);
@@ -638,6 +640,7 @@ namespace Hockey
         void HandleEvent(GameEvent e, ViewState st)
         {
             audioFx.Event(e);
+            if (e.Type == EvType.Shot && e.Who >= 0 && e.Who < roster.Count) shots[roster[e.Who].Team & 1]++;
             if (st == null) return;
             var who = PlayerPos(st, e.Who);
             switch (e.Type)

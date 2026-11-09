@@ -19,6 +19,9 @@ namespace Hockey
         Texture2D white, circleTex;
         GUIStyle sHudRed, sHudBlue, sHudMid, sTrack, sHudNum, sHudTime, sHudName, sMeterText;
         readonly Dictionary<string, GUIStyle> fills = new Dictionary<string, GUIStyle>();
+        Texture2D hudRing, hudPuck, hudStickE, hudStickF, hudBladeE, hudBladeF, hudRink, hudRays;
+        readonly Texture2D[] hudShield = new Texture2D[2];
+        GUIStyle sBoard;
         readonly int[] shownScore = { 0, 0 };
         readonly float[] scorePop = { 0, 0 };
         GUIStyle sPanel, sCard, sCardOn, sTitle, sH1, sH2, sLabel, sSmall, sCenter, sField, sTag, sKey, sBig, sScore, sCode, sSliderBg, sThumb, sPill;
@@ -152,6 +155,29 @@ namespace Hockey
             sHudTime = new GUIStyle(sHudNum) { fontSize = 42 };
             sHudName = new GUIStyle(GUI.skin.label) { font = uiFont, fontSize = 17, alignment = TextAnchor.MiddleCenter, wordWrap = false, clipping = TextClipping.Overflow };
             sMeterText = new GUIStyle(sHudName) { fontSize = 15 };
+            // хоккейные элементы: шайба-часы, гербы, клюшка, лезвие конька, площадка
+            hudPuck = HudArt.Puck();
+            for (int t = 0; t < 2; t++) { var m = Mats.Hex(TeamColors.All[t].Main); hudShield[t] = HudArt.Shield(m, Color.Lerp(m, Color.black, 0.45f)); }
+            hudStickE = HudArt.Stick(false); hudStickF = HudArt.Stick(true);
+            hudBladeE = HudArt.Blade(false); hudBladeF = HudArt.Blade(true);
+            hudRink = HudArt.Rink(320);
+            hudRays = HudArt.Rays();
+            hudRing = HudArt.FaceoffRing();
+            // табличка как хоккейный борт: белая доска, тёмная кайма
+            sBoard = new GUIStyle { border = new RectOffset(22, 22, 22, 28) };
+            sBoard.normal.background = TexArt.RoundRect(64, 18, Mats.Hex("#ffffff"), Mats.Hex("#dbe3f4"), Mats.Hex("#0d1030"), 4, 6);
+        }
+
+        /// Рисует текстуру, обрезанную слева направо до доли v (с учётом пустых полей текстуры).
+        void DrawClipped(Rect r, Texture2D t, float v, float margin0, float margin1, float alpha = 1)
+        {
+            float w = r.width * (margin0 + Mathf.Clamp01(v) * (1 - margin0 - margin1));
+            if (v <= 0.001f) return;
+            var old = GUI.color; GUI.color = new Color(1, 1, 1, alpha);
+            GUI.BeginGroup(new Rect(r.x, r.y, w, r.height));
+            GUI.DrawTexture(new Rect(0, 0, r.width, r.height), t);
+            GUI.EndGroup();
+            GUI.color = old;
         }
 
         /// Заливка-«леденец» нужного цвета (кэшируется).
@@ -849,35 +875,61 @@ namespace Hockey
 
         void DrawHud(ViewState st)
         {
-            // табло: две пухлые плашки команд и жёлто-синий значок времени посередине
+            // табло хоккейной арены: часы-шайба посередине, по бокам «борта» с гербами команд, счётом и бросками
             for (int t = 0; t < 2; t++)
             {
                 int sc = t == 0 ? st.Score0 : st.Score1;
                 if (sc != shownScore[t]) { if (sc > shownScore[t]) scorePop[t] = 1; shownScore[t] = sc; }
-                if (Event.current.type == EventType.Repaint) scorePop[t] = Mathf.Max(0, scorePop[t] - Time.unscaledDeltaTime * 1.4f);
+                if (Event.current.type == EventType.Repaint) scorePop[t] = Mathf.Max(0, scorePop[t] - Time.unscaledDeltaTime * 1.2f);
             }
-            float pw = 236, ph = 66, cw = 150, top = 14;
-            float cx0 = VW / 2;
-            var redR = new Rect(cx0 - cw / 2 - pw + 22, top + 4, pw, ph);
-            var blueR = new Rect(cx0 + cw / 2 - 22, top + 4, pw, ph);
-            GUI.Label(redR, "", sHudRed);
-            GUI.Label(blueR, "", sHudBlue);
-            Shadowed(new Rect(redR.x + 14, redR.y + 4, 120, ph - 14), "КРАСНЫЕ", sHudName, Color.white, Mats.Hex("#7a1531"), 2);
-            Shadowed(new Rect(blueR.xMax - 134, blueR.y + 4, 120, ph - 14), "СИНИЕ", sHudName, Color.white, Mats.Hex("#16235e"), 2);
+            float cx0 = VW / 2, top = 10;
+            float puckW = 200, puckH = puckW * 200f / 320f;
+            float plateW = 300, plateH = 66;
             for (int t = 0; t < 2; t++)
             {
-                float sp2 = 1 + Mathf.Sin(scorePop[t] * Mathf.PI) * 0.6f * scorePop[t];
-                var ns = new GUIStyle(sHudNum) { fontSize = (int)(50 * sp2) };
-                var r = t == 0 ? new Rect(redR.xMax - 92, redR.y - 2, 70, ph - 6) : new Rect(blueR.x + 22, blueR.y - 2, 70, ph - 6);
-                Shadowed(r, (t == 0 ? st.Score0 : st.Score1).ToString(), ns, scorePop[t] > 0 ? Mats.Hex("#ffd23f") : Color.white, Mats.Hex(t == 0 ? "#a01c33" : "#1d3596"), 3);
+                bool left = t == 0;
+                var pr = left ? new Rect(cx0 - plateW - 40, top + 4, plateW + 40, plateH) : new Rect(cx0, top + 4, plateW + 40, plateH);
+                GUI.Label(pr, "", sBoard);
+                // цветная полоса команды сверху и жёлтый «плинтус» снизу — как у бортов на арене
+                Box(new Rect(pr.x + 10, pr.y + 7, pr.width - 20, 6), TeamColors.All[t].Main);
+                Box(new Rect(pr.x + 10, pr.y + plateH - 22, pr.width - 20, 6), "#ffd23f");
+                // герб
+                float shW = 76, shH = shW * 190f / 160f;
+                float shX = left ? pr.x - shW * 0.45f : pr.xMax - shW * 0.55f;
+                float bob = scorePop[t] > 0 ? Mathf.Sin(scorePop[t] * Mathf.PI * 3) * 6 * scorePop[t] : 0;
+                GUI.DrawTexture(new Rect(shX, top - 6 - bob, shW, shH), hudShield[t]);
+                // название команды
+                string name = left ? "КРАСНЫЕ" : "СИНИЕ";
+                var nameR = left ? new Rect(shX + shW + 2, pr.y + 13, 130, 32) : new Rect(shX - 132, pr.y + 13, 130, 32);
+                var ns = new GUIStyle(sHudName) { fontSize = 18, alignment = left ? TextAnchor.MiddleLeft : TextAnchor.MiddleRight };
+                ns.normal.textColor = Mats.Hex("#1b1f52");
+                GUI.Label(nameR, name, ns);
+                // броски по воротам
+                var ss = new GUIStyle(sHudName) { fontSize = 12, alignment = left ? TextAnchor.MiddleLeft : TextAnchor.MiddleRight };
+                ss.normal.textColor = Mats.Hex("#5a6396");
+                GUI.Label(left ? new Rect(nameR.x, pr.y + 38, 130, 16) : new Rect(nameR.x, pr.y + 38, 130, 16), "БРОСКИ  " + shots[t], ss);
+                // счёт
+                float sp2 = 1 + Mathf.Sin(scorePop[t] * Mathf.PI) * 0.7f * scorePop[t];
+                var nsty = new GUIStyle(sHudNum) { fontSize = (int)(54 * sp2) };
+                var r = left ? new Rect(cx0 - puckW / 2 - 78, pr.y - 4, 70, plateH) : new Rect(cx0 + puckW / 2 + 8, pr.y - 4, 70, plateH);
+                Shadowed(r, (t == 0 ? st.Score0 : st.Score1).ToString(), nsty, scorePop[t] > 0 ? Mats.Hex("#ffd23f") : Mats.Hex(TeamColors.All[t].Main), Mats.Hex("#0d1030"), 3);
             }
-            var midR = new Rect(cx0 - cw / 2, top - 2, cw, ph + 18);
-            GUI.Label(midR, "", sHudMid);
+            // часы-шайба
+            var puckR = new Rect(cx0 - puckW / 2, top - 8, puckW, puckH);
+            bool goalNow = st.Phase == Phase.Goal;
+            if (goalNow)
+            {   // гол-лампа: красное зарево за шайбой
+                GUI.color = new Color(1, 0.2f, 0.15f, 0.55f + Mathf.Sin(time * 12) * 0.3f);
+                GUI.DrawTexture(new Rect(cx0 - 140, top - 90, 280, 280), circleTex);
+                GUI.color = Color.white;
+            }
+            GUI.DrawTexture(puckR, hudPuck);
             int tt = Mathf.Max(0, Mathf.CeilToInt(st.Time));
             bool hurry = !st.Overtime && st.Phase == Phase.Play && tt <= 10;
-            var tsty = new GUIStyle(sHudTime) { fontSize = (int)(42 * (hurry ? 1 + Mathf.Abs(Mathf.Sin(time * 6)) * 0.12f : 1)) };
-            Shadowed(new Rect(midR.x, midR.y + 2, cw, ph - 4), st.Overtime ? "ОТ" : $"{tt / 60}:{tt % 60:00}", tsty, hurry ? Mats.Hex("#ff6a5c") : Mats.Hex("#ffd23f"), Mats.Hex("#0d1030"), 3);
-            Shadowed(new Rect(midR.x, midR.y + ph - 10, cw, 22), st.Overtime ? "ДО ГОЛА" : st.Phase == Phase.Faceoff ? "ВБРАСЫВАНИЕ" : "ВРЕМЯ", new GUIStyle(sMeterText) { fontSize = 12 }, Mats.Hex("#c8d0ff"), Mats.Hex("#0d1030"), 1);
+            var tsty = new GUIStyle(sHudTime) { fontSize = (int)(44 * (hurry ? 1 + Mathf.Abs(Mathf.Sin(time * 6)) * 0.12f : 1)) };
+            Shadowed(new Rect(puckR.x, puckR.y + puckH * 0.41f - 30, puckW, 54), st.Overtime ? "ОТ" : $"{tt / 60}:{tt % 60:00}", tsty, hurry ? Mats.Hex("#ff6a5c") : Color.white, Mats.Hex("#000000"), 2);
+            string sub = st.Overtime ? "ДО ГОЛА" : goalNow ? "ГОЛ!" : st.Phase == Phase.Faceoff ? "ВБРАСЫВАНИЕ" : "ПЕРИОД";
+            Shadowed(new Rect(puckR.x, puckR.y + puckH * 0.76f, puckW, puckH * 0.18f), sub, new GUIStyle(sMeterText) { fontSize = 12 }, Mats.Hex("#ffd23f"), Mats.Hex("#000000"), 1);
 
             // баннер
             string big = "", small = "";
@@ -900,6 +952,22 @@ namespace Hockey
             {
                 string col = st.Phase == Phase.Goal ? (st.LastGoal.Team == 0 ? "#ff5a4c" : "#4a8ff0") : "#ff4f5e";
                 var bs = new GUIStyle(sTitle) { fontSize = (int)(120 * pop), alignment = TextAnchor.MiddleCenter };
+                var centerB = new Vector2(VW / 2, VH * 0.2f + 80);
+                var oldM = GUI.matrix;
+                if (st.Phase == Phase.Goal)
+                {   // вращающиеся лучи гол-лампы
+                    GUIUtility.RotateAroundPivot(time * 40, centerB);
+                    GUI.color = WithA(Mats.Hex(col), 0.75f);
+                    GUI.DrawTexture(new Rect(centerB.x - 330, centerB.y - 330, 660, 660), hudRays);
+                    GUI.matrix = oldM;
+                }
+                else
+                {   // круг вбрасывания за отсчётом
+                    GUI.color = WithA(Mats.Hex("#ff4f5e"), 0.85f);
+                    float rr = 120 * pop;
+                    GUI.DrawTexture(new Rect(centerB.x - rr, centerB.y - rr, rr * 2, rr * 2), hudRing);
+                }
+                GUI.color = Color.white;
                 Shadowed(new Rect(0, VH * 0.2f, VW, 160), big, bs, Mats.Hex("#ffd23f"), Mats.Hex(col), 8);
                 Shadowed(new Rect(0, VH * 0.2f + 150, VW, 44), small, new GUIStyle(sH2) { alignment = TextAnchor.MiddleCenter, fontSize = 30 }, Color.white, Mats.Hex("#1d2250"), 3);
             }
@@ -928,18 +996,32 @@ namespace Hockey
                 var p = st.Players[v.Follow];
                 var area = new Rect(v.Rect.x * VW, 0, v.Rect.width * VW, VH);
                 // шкалы: сила броска (появляется, пока замахиваешься) и рывок
-                float bw = Mathf.Min(300, area.width * 0.55f), bx = area.x + (area.width - bw) / 2, by = VH - 62;
                 if (!v.HudInit) { v.ChargeA = 0; v.HudInit = true; }
                 if (Event.current.type == EventType.Repaint) v.ChargeA = Mathf.MoveTowards(v.ChargeA, p.Charge > 0.02f ? 1 : 0, Time.unscaledDeltaTime * (p.Charge > 0.02f ? 8 : 2.5f));
                 if (p.Charge > 0.02f) v.LastCharge = p.Charge;
                 if (v.ChargeA > 0.01f)
                 {
+                    // сила броска — клюшка, которая «наливается» от рукоятки к крюку
                     bool hot = v.LastCharge > 0.7f;
-                    float shake2 = hot ? Mathf.Sin(time * 50) * 1.5f : 0;
-                    Meter(new Rect(bx - 10 + shake2, by - 50 + (1 - v.ChargeA) * 14, bw + 20, 42), v.LastCharge, hot ? "#ffb04a" : "#ffe46a", hot ? "#ff3d4a" : "#ffa21f", hot ? "МОЩНО!" : "БРОСОК", v.ChargeA);
+                    float sw = Mathf.Min(360, area.width * 0.6f), sh = sw * 100f / 560f;
+                    float jig = hot ? Mathf.Sin(time * 50) * 1.5f : 0;
+                    var sr = new Rect(area.x + (area.width - sw) / 2 + jig, VH - 66 - sh + (1 - v.ChargeA) * 16, sw, sh);
+                    GUI.color = new Color(1, 1, 1, v.ChargeA);
+                    GUI.DrawTexture(sr, hudStickE);
+                    DrawClipped(sr, hudStickF, v.LastCharge, 6f / 560, 16f / 560, v.ChargeA);
+                    GUI.color = Color.white;
+                    if (hot) Shadowed(new Rect(sr.xMax - 40, sr.y - 30, 160, 34), "МОЩНО!", new GUIStyle(sHudNum) { fontSize = 26, alignment = TextAnchor.MiddleLeft }, Mats.Hex("#ffd23f"), Mats.Hex("#a01c33"), 2);
                 }
+                // рывок — лезвие конька, заполненное «льдом»
                 bool turbo = p.Has(Buff.Turbo);
-                Meter(new Rect(bx, by, bw, 36), turbo ? 1 : p.Stamina, turbo ? "#7ff7ff" : "#8dfba8", turbo ? "#1fb8d8" : "#22b866", turbo ? "ТУРБО" : "", p.Stamina < 0.999f || turbo ? 1 : 0.55f);
+                float bw2 = Mathf.Min(300, area.width * 0.5f), bh2 = bw2 * 72f / 520f;
+                var brr = new Rect(area.x + (area.width - bw2) / 2, VH - 20 - bh2, bw2, bh2);
+                float ba = p.Stamina < 0.999f || turbo ? 1 : 0.6f;
+                GUI.color = new Color(1, 1, 1, ba);
+                GUI.DrawTexture(brr, hudBladeE);
+                DrawClipped(brr, hudBladeF, turbo ? 1 : p.Stamina, 3f / 520, 9f / 520, ba);
+                GUI.color = Color.white;
+                if (turbo) Shadowed(new Rect(brr.x, brr.y - 2, brr.width * 0.9f, brr.height * 0.8f), "ТУРБО", sMeterText, Color.white, Mats.Hex("#0d3a5a"), 1.5f);
                 DrawHints(v, st, area);
                 // активные бонусы
                 float ix = area.x + area.width / 2 - 200, iy = 96;
@@ -974,18 +1056,12 @@ namespace Hockey
         void DrawMinimap(ViewState st)
         {
             bool split = views.Count > 1;
-            float mw = split ? 200 : 260, mh = mw * Rink.W / Rink.L + 16;
+            float mw = split ? 200 : 260, mh = mw * Rink.W / Rink.L;
             float mx = split ? (VW - mw) / 2 : 22, my = split ? 96 : VH - mh - 22;
-            GUI.Label(new Rect(mx - 10, my - 10, mw + 20, mh + 20), "", sTag);
-            Box(new Rect(mx, my, mw, mh), "#eef6ff", 0.92f);
+            GUI.DrawTexture(new Rect(mx, my, mw, mh), hudRink);
             float sx = mw / Rink.L, sz = mh / Rink.W;
             float X(float x) => mx + (x + Rink.L / 2) * sx;
             float Z(float z) => my + (Rink.W / 2 - z) * sz; // сверху вниз: +Z вверху, как на виде сверху
-            Box(new Rect(X(0) - 1, my, 2, mh), "#e8443c");
-            Box(new Rect(X(Rink.BlueX) - 1, my, 2, mh), "#2f74e4");
-            Box(new Rect(X(-Rink.BlueX) - 1, my, 2, mh), "#2f74e4");
-            Box(new Rect(X(Rink.GoalX), Z(Rink.GoalW / 2), 3, Rink.GoalW * sz), "#e8443c");
-            Box(new Rect(X(-Rink.GoalX) - 3, Z(Rink.GoalW / 2), 3, Rink.GoalW * sz), "#e8443c");
             foreach (var it in st.Items)
             {
                 GUI.color = Mats.Hex(Fx.ItemColors[Mathf.Clamp(it.Type, 0, 4)]);
@@ -999,6 +1075,8 @@ namespace Hockey
                 var p = st.Players[i]; var r = roster[i];
                 float s = mine.Contains(i) ? 14 : r.Human != null ? 11 : 9;
                 if (r.Human != null) { GUI.color = Mats.Hex(SlotColor(r.Human)); GUI.DrawTexture(new Rect(X(p.X) - s / 2 - 3, Z(p.Z) - s / 2 - 3, s + 6, s + 6), circleTex); }
+                GUI.color = Mats.Hex("#0d1030");
+                GUI.DrawTexture(new Rect(X(p.X) - s / 2 - 1.5f, Z(p.Z) - s / 2 - 1.5f, s + 3, s + 3), circleTex);
                 GUI.color = Mats.Hex(r.Team == 0 ? "#ef5a4c" : "#4a8ff0");
                 GUI.DrawTexture(new Rect(X(p.X) - s / 2, Z(p.Z) - s / 2, s, s), circleTex);
                 if (mine.Contains(i))
