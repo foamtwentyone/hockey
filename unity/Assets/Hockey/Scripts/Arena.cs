@@ -18,7 +18,7 @@ namespace Hockey
         public float Excite;
         public const int CrowdLayer = 9;
         Texture2D scoreTex;
-        Color32[] scorePx;
+        Color[] scorePx;
         string scoreKey;
         ReflectionProbe probe;
         bool probeRendered;
@@ -275,8 +275,8 @@ namespace Hockey
             Obj("Box", MeshKit.RoundedBox(6.4f, 3.2f, 6.4f, 0.4f), Mats.Get("#2b2f55", 0.5f), cube, Vector3.zero);
             Obj("Top", MeshKit.RoundedBox(4f, 0.6f, 4f, 0.25f), Mats.Get("#3b5bd6", 0.5f), cube, new Vector3(0, 1.9f, 0));
             Obj("Glow", MeshKit.RoundedBox(6.5f, 0.12f, 6.5f, 0.05f, 1, 0), Mats.Emissive("#5cf2ff", 1f), cube, new Vector3(0, -1.65f, 0));
-            scoreTex = new Texture2D(64, 32, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp };
-            scorePx = new Color32[64 * 32];
+            scoreTex = new Texture2D(512, 256, TextureFormat.RGBA32, true) { filterMode = FilterMode.Trilinear, wrapMode = TextureWrapMode.Clamp, anisoLevel = 4 };
+            scorePx = new Color[512 * 256];
             var m = Mats.TexturedEmissive(scoreTex);
             for (int i = 0; i < 4; i++)
             {
@@ -310,20 +310,18 @@ namespace Hockey
             string key = $"{s0}:{s1}:{t}";
             if (key == scoreKey) return;
             scoreKey = key;
+            const int W = 512, H = 256;
             var bg = new Color32(16, 18, 44, 255);
-            for (int i = 0; i < scorePx.Length; i++) scorePx[i] = bg;
-            for (int y = 26; y < 31; y++) for (int x = 2; x < 30; x++) { scorePx[y * 64 + x] = new Color32(239, 90, 76, 255); scorePx[y * 64 + x + 32] = new Color32(74, 143, 240, 255); }
-            var yellow = new Color32(255, 210, 63, 255);
-            string a = s0.ToString(), b = s1.ToString();
-            Tex.DrawText(scorePx, 64, 32, a, 16 - Tex.TextWidth(a, 3) / 2, 9, 3, yellow);
-            Tex.DrawText(scorePx, 64, 32, b, 48 - Tex.TextWidth(b, 3) / 2, 9, 3, yellow);
-            string clock = $"{t / 60}:{t % 60:00}";
-            Tex.DrawText(scorePx, 64, 32, clock, 32 - Tex.TextWidth(clock, 1) / 2, 1, 1, new Color32(92, 242, 255, 255));
-            scoreTex.SetPixels32(scorePx);
-            scoreTex.Apply();
+            for (int i = 0; i < scorePx.Length; i++) scorePx[i] = (Color)bg;
+            for (int y = 200; y < 236; y++) for (int x = 16; x < 240; x++) { scorePx[y * W + x] = Mats.Hex("#ef5a4c"); scorePx[y * W + x + 256] = Mats.Hex("#4a8ff0"); }
+            var yellow = Mats.Hex("#ffd23f");
+            Tex.DrawSmooth(scorePx, W, H, s0.ToString(), 128, 110, 120, yellow, 0.22f);
+            Tex.DrawSmooth(scorePx, W, H, s1.ToString(), 384, 110, 120, yellow, 0.22f);
+            Tex.DrawSmooth(scorePx, W, H, $"{t / 60}:{t % 60:00}", 256, 28, 34, Mats.Hex("#5cf2ff"), 0.2f);
+            scoreTex.SetPixels(scorePx);
+            scoreTex.Apply(true);
         }
 
-        /// Общая яркость сцены: свет и окружающее освещение.
         public void SetBrightness(float b)
         {
             RenderSettings.ambientSkyColor = Mats.Hex("#cfdcff") * 0.8f * b;

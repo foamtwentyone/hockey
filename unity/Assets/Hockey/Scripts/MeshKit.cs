@@ -756,12 +756,18 @@ namespace Hockey
 
         public static Texture2D Net()
         {
-            var t = new Texture2D(32, 32, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Repeat };
-            var px = new Color32[32 * 32];
-            for (int y = 0; y < 32; y++)
-                for (int x = 0; x < 32; x++)
-                    px[y * 32 + x] = (x % 8 < 1 || y % 8 < 1) ? new Color32(250, 250, 250, 255) : new Color32(0, 0, 0, 0);
-            t.SetPixels32(px); t.Apply(true);
+            const int S = 128;
+            var t = new Texture2D(S, S, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Trilinear, anisoLevel = 4 };
+            var px = new Color[S * S];
+            for (int y = 0; y < S; y++)
+                for (int x = 0; x < S; x++)
+                {
+                    float dx = Mathf.Abs(Mathf.Repeat(x + 0.5f, 32) - 16) , dy = Mathf.Abs(Mathf.Repeat(y + 0.5f, 32) - 16);
+                    float d = 16 - Mathf.Max(dx, dy);           // расстояние до ближайшей нити
+                    float a = Mathf.Clamp01(2.6f - d);
+                    px[y * S + x] = new Color(0.98f, 0.98f, 0.98f, a);
+                }
+            t.SetPixels(px); t.Apply(true);
             return t;
         }
 
@@ -818,16 +824,74 @@ namespace Hockey
 
         static void Put(Color32[] px, int w, int h, int x, int y, Color32 c) { if (x >= 0 && y >= 0 && x < w && y < h) px[y * w + x] = c; }
 
+        // ---------- гладкие цифры: сегменты-капсулы со сглаживанием краёв ----------
+        static readonly int[] Seg7 = { 0b1110111, 0b0010010, 0b1011101, 0b1011011, 0b0111010, 0b1101011, 0b1101111, 0b1010010, 0b1111111, 0b1111011 };
+        // сегменты: 0 верх, 1 лево-верх, 2 право-верх, 3 середина, 4 лево-низ, 5 право-низ, 6 низ (в единицах цифры 1×2)
+        static readonly Vector4[] SegLines =
+        {
+            new Vector4(0, 2, 1, 2), new Vector4(0, 1, 0, 2), new Vector4(1, 1, 1, 2), new Vector4(0, 1, 1, 1),
+            new Vector4(0, 0, 0, 1), new Vector4(1, 0, 1, 1), new Vector4(0, 0, 1, 0),
+        };
+
+        static float SegDist(Vector2 p, Vector4 s)
+        {
+            var a = new Vector2(s.x, s.y); var b = new Vector2(s.z, s.w);
+            var pa = p - a; var ba = b - a;
+            float h = Mathf.Clamp01(Vector2.Dot(pa, ba) / ba.sqrMagnitude);
+            return (pa - ba * h).magnitude;
+        }
+
+        /// Строка из цифр и «:» гладкими сегментами. (cx, cy) — центр строки в пикселях, height — высота цифры.
+        public static void DrawSmooth(Color[] px, int w, int h, string s, float cx, float cy, float height, Color col, float thick = 0.17f)
+        {
+            float dw = height * 0.5f, gap = height * 0.22f;
+            float total = 0;
+            foreach (char ch in s) total += ch == ':' ? gap * 1.2f : dw + gap;
+            total -= gap;
+            float x = cx - total / 2;
+            foreach (char ch in s)
+            {
+                if (ch == ':')
+                {
+                    for (int k = 0; k < 2; k++) Dot(px, w, h, x + gap * 0.6f, cy + (k == 0 ? -0.25f : 0.25f) * height, height * thick * 0.9f, col);
+                    x += gap * 1.2f; continue;
+                }
+                if (ch < '0' || ch > '9') { x += dw + gap; continue; }
+                int mask = Seg7[ch - '0'];
+                float r = height * thick * 0.5f;
+                int x0 = Mathf.Max(0, (int)(x - r - 2)), x1 = Mathf.Min(w - 1, (int)(x + dw + r + 2));
+                int y0 = Mathf.Max(0, (int)(cy - height / 2 - r - 2)), y1 = Mathf.Min(h - 1, (int)(cy + height / 2 + r + 2));
+                for (int py = y0; py <= y1; py++)
+                    for (int qx = x0; qx <= x1; qx++)
+                    {
+                        var p = new Vector2((qx + 0.5f - x) / dw, (py + 0.5f - (cy - height / 2)) / dw);
+                        float d = 1e9f;
+                        for (int sgi = 0; sgi < 7; sgi++) if ((mask & (1 << (6 - sgi))) != 0) d = Mathf.Min(d, SegDist(p, SegLines[sgi]));
+                        float a = Mathf.Clamp01((r - d * dw) + 0.5f);
+                        if (a > 0) px[py * w + qx] = Color.Lerp(px[py * w + qx], col, a * col.a);
+                    }
+                x += dw + gap;
+            }
+        }
+
+        static void Dot(Color[] px, int w, int h, float cx, float cy, float r, Color col)
+        {
+            for (int y = Mathf.Max(0, (int)(cy - r - 2)); y <= Mathf.Min(h - 1, (int)(cy + r + 2)); y++)
+                for (int x = Mathf.Max(0, (int)(cx - r - 2)); x <= Mathf.Min(w - 1, (int)(cx + r + 2)); x++)
+                {
+                    float a = Mathf.Clamp01(r - Mathf.Sqrt((x + 0.5f - cx) * (x + 0.5f - cx) + (y + 0.5f - cy) * (y + 0.5f - cy)) + 0.5f);
+                    if (a > 0) px[y * w + x] = Color.Lerp(px[y * w + x], col, a);
+                }
+        }
+
         public static Texture2D Number(int num)
         {
-            const int S = 32;
-            var t = new Texture2D(S, S, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp };
-            var px = new Color32[S * S];
-            string s = num.ToString();
-            int scale = 4;
-            int tw = TextWidth(s, scale);
-            DrawText(px, S, S, s, (S - tw) / 2, (S - 5 * scale) / 2, scale, new Color32(255, 255, 255, 255));
-            t.SetPixels32(px); t.Apply();
+            const int S = 128;
+            var t = new Texture2D(S, S, TextureFormat.RGBA32, true) { filterMode = FilterMode.Trilinear, wrapMode = TextureWrapMode.Clamp, anisoLevel = 4 };
+            var px = new Color[S * S];
+            for (int i = 0; i < px.Length; i++) px[i] = new Color(1, 1, 1, 0);
+            DrawSmooth(px, S, S, num.ToString(), S / 2f, S / 2f, S * 0.62f, Color.white, 0.24f);
+            t.SetPixels(px); t.Apply(true);
             return t;
         }
     }

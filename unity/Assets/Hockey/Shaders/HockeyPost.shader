@@ -17,6 +17,27 @@ Shader "Hockey/Post"
     struct v2f { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; };
     v2f vert(appdata_img v) { v2f o; o.pos = UnityObjectToClipPos(v.vertex); o.uv = v.texcoord; return o; }
 
+    half Luma(half3 c) { return dot(c, half3(0.299, 0.587, 0.114)); }
+
+    // сглаживание краёв в духе FXAA: размываем вдоль найденной границы
+    half3 Fxaa(float2 uv)
+    {
+        float2 t = _MainTex_TexelSize.xy;
+        half3 cM = tex2D(_MainTex, uv).rgb;
+        half lM = Luma(cM);
+        half lN = Luma(tex2D(_MainTex, uv + float2(0, t.y)).rgb), lS = Luma(tex2D(_MainTex, uv - float2(0, t.y)).rgb);
+        half lE = Luma(tex2D(_MainTex, uv + float2(t.x, 0)).rgb), lW = Luma(tex2D(_MainTex, uv - float2(t.x, 0)).rgb);
+        half mx = max(lM, max(max(lN, lS), max(lE, lW))), mn = min(lM, min(min(lN, lS), min(lE, lW)));
+        if (mx - mn < max(0.04, mx * 0.12)) return cM;
+        float2 dir = float2(-(lN - lS), (lE - lW));
+        float len = max(abs(dir.x), abs(dir.y));
+        dir = dir / max(len, 1e-4) * t;
+        half3 a = 0.5 * (tex2D(_MainTex, uv + dir * (1.0 / 3.0 - 0.5)).rgb + tex2D(_MainTex, uv + dir * (2.0 / 3.0 - 0.5)).rgb);
+        half3 b = a * 0.5 + 0.25 * (tex2D(_MainTex, uv - dir * 0.5).rgb + tex2D(_MainTex, uv + dir * 0.5).rgb);
+        half lb = Luma(b);
+        return (lb < mn || lb > mx) ? a : b;
+    }
+
     half3 Box(float2 uv, float d)
     {
         float4 o = _MainTex_TexelSize.xyxy * float4(-d, -d, d, d);
@@ -72,7 +93,7 @@ Shader "Hockey/Post"
             half4 frag(v2f i) : SV_Target
             {
                 float2 uv = i.uv;
-                half3 c = tex2D(_MainTex, uv).rgb;
+                half3 c = Fxaa(uv);
                 // радиальное размытие по краям на скорости
                 if (_Speed > 0.001)
                 {

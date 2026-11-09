@@ -22,7 +22,8 @@ a = np.asarray(img.filter(ImageFilter.MedianFilter(7))).astype(float)
 pal = np.array([[238, 238, 234], [40, 40, 46], [214, 52, 56], [214, 176, 128], [120, 80, 52], [150, 150, 158]], float)
 d = ((a[:, :, None, :] - pal[None, None]) ** 2).sum(-1)
 q = pal[d.argmin(-1)].astype(np.uint8)
-clean = Image.fromarray(q).filter(ImageFilter.ModeFilter(5)).resize((1024, 1024), Image.NEAREST)
+# чистые цвета + мягкие (сглаженные) границы между ними, 2048 px — без «лесенок»
+clean = Image.fromarray(q).filter(ImageFilter.ModeFilter(5)).filter(ImageFilter.GaussianBlur(1.2))
 m.visual.material.baseColorTexture = clean
 m.export(os.path.join(tmp, 'in.obj'))
 ms = ml.MeshSet()

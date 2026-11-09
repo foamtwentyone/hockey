@@ -49,9 +49,9 @@ namespace Hockey
         // ---------- лёд ----------
         public static Texture2D Ice()
         {
-            const int ppm = 26;
+            const int ppm = 34;
             int w = (int)Rink.L * ppm, h = (int)Rink.W * ppm;
-            var t = new Texture2D(w, h, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Clamp, anisoLevel = 8 };
+            var t = new Texture2D(w, h, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Clamp, anisoLevel = 16, filterMode = FilterMode.Trilinear };
             var px = new Color[w * h];
             float pxm = 1f / ppm;
             Color iceA = Mats.Hex("#f4f9ff"), iceB = Mats.Hex("#dbeafa"), red = Mats.Hex("#e8443c"), blue = Mats.Hex("#2f74e4");
@@ -126,7 +126,7 @@ namespace Hockey
         public static Texture2D Fabric()
         {
             const int S = 64;
-            var t = new Texture2D(S, S, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Repeat };
+            var t = new Texture2D(S, S, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Trilinear, anisoLevel = 8 };
             var px = new Color[S * S];
             for (int y = 0; y < S; y++)
                 for (int x = 0; x < S; x++)
@@ -144,7 +144,7 @@ namespace Hockey
         public static Texture2D Wood()
         {
             const int W = 32, H = 256;
-            var t = new Texture2D(W, H, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Repeat };
+            var t = new Texture2D(W, H, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Trilinear, anisoLevel = 8 };
             var px = new Color[W * H];
             Color a = Mats.Hex("#e7b77a"), b = Mats.Hex("#c98f52");
             for (int y = 0; y < H; y++)
@@ -163,7 +163,7 @@ namespace Hockey
         public static Texture2D Boards()
         {
             const int W = 2048, H = 96;
-            var t = new Texture2D(W, H, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Repeat, anisoLevel = 4 };
+            var t = new Texture2D(W, H, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Repeat, anisoLevel = 8, filterMode = FilterMode.Trilinear };
             var px = new Color[W * H];
             Color white = Mats.Hex("#fbfbf6"), yellow = Mats.Hex("#ffc93c");
             string[] ad = { "#e2483d", "#3f86e8", "#2fbf71", "#ff8a3d", "#9b59d0", "#ff5fa2", "#1fb5c9", "#f2c230" };
