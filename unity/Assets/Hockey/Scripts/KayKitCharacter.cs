@@ -17,7 +17,9 @@ namespace Hockey
         Vector3 restL2, restR2;   // исходное положение кистей (рука «тянется» только на кадр)
         float gripW;
         readonly List<Transform> hands = new List<Transform>();
-        class GloveRig { public Transform T, Hand, Lower; public float Along; public Vector3 BackLocal; }
+        class GloveRig { public Transform T, Hand, Lower; public float Along; public Vector3 BackLocal; public bool Left; }
+        // текущий хват: точки на древке для правой (верхней) и левой (нижней) руки и направление древка к крюку
+        Vector3 gripTop, gripLow, gripDir; float gripNow;
         readonly List<GloveRig> gloves = new List<GloveRig>();
 
         void PlaceGloves()
@@ -29,8 +31,28 @@ namespace Hockey
                 fdir.Normalize();
                 var back = Vector3.ProjectOnPlane(g.Hand.rotation * g.BackLocal, fdir);
                 if (back.sqrMagnitude < 1e-6f) back = Vector3.ProjectOnPlane(Model.forward, fdir);
-                g.T.SetPositionAndRotation(g.Hand.position + fdir * g.Along, Quaternion.LookRotation(back.normalized, fdir));
+                var pos = g.Hand.position + fdir * g.Along;
+                var rot = Quaternion.LookRotation(back.normalized, fdir);
+                if (gripNow > 0.01f)
+                {
+                    // кулак обхватывает древко: центр краги — на древке, пальцы — по руке (от локтя),
+                    // древко проходит сквозь кулак поперёк, большой палец смотрит вниз по древку, к крюку
+                    var grip = g.Left ? gripLow : gripTop;
+                    var up = Vector3.ProjectOnPlane(grip - g.Lower.position, gripDir);
+                    if (up.sqrMagnitude < 1e-6f) up = Vector3.ProjectOnPlane(Vector3.up, gripDir);
+                    up.Normalize();
+                    var x = g.Left ? gripDir : -gripDir;   // модель — левая крага (большой палец +X), правая зеркальна
+                    var gr = Quaternion.LookRotation(Vector3.Cross(x, up), up);
+                    pos = Vector3.Lerp(pos, grip, gripNow);
+                    rot = Quaternion.Slerp(rot, gr, gripNow);
+                }
+                g.T.SetPositionAndRotation(pos, rot);
             }
+        }
+        float GloveAlong(bool left)
+        {
+            foreach (var g in gloves) if (g.Left == left) return Mathf.Max(0, g.Along);
+            return 0;
         }
         const float HandShrink = 0.62f;
         const float StickTop = 0.36f, GripL = 0.32f;
@@ -242,6 +264,7 @@ namespace Hockey
                             T = ch, Hand = hb0, Lower = lb0,
                             Along = Vector3.Dot(ch.position - hb0.position, fdir),
                             BackLocal = Quaternion.Inverse(hb0.rotation) * (ch.rotation * Vector3.forward),
+                            Left = side == ".l",
                         });
                         ch.SetParent(go.transform, true);
                     }
@@ -510,7 +533,8 @@ namespace Hockey
             // левая рука держит клюшку за верх рукояти (правая — ниже), и при замахе, и при броске
             bool grip = !Goalie && upper > 0.5f && punchT >= 0.4f && !s.Brawl && !s.Stun;
             gripW += ((grip ? 1 : 0) - gripW) * (1 - Mathf.Exp(-dt * 12));
-            if (gripW > 0.01f && Stick != null) TwoHandGrip(s, gripW);
+            gripNow = 0;
+            if (gripW > 0.01f && Stick != null) { TwoHandGrip(s, gripW); gripNow = gripW; }
             PlaceGloves();
         }
 
@@ -535,12 +559,14 @@ namespace Hockey
             var origin = top + dir * GripL * g;   // локальный ноль древка
             float reachL = (armL1.position - armL0.position).magnitude + (armL2.position - armL1.position).magnitude;
             float best = 0.2f;
-            for (float t = 0.62f; t >= 0.2f; t -= 0.02f)
+            for (float t = 0.5f; t >= 0.2f; t -= 0.02f)
                 if ((top + dir * t * g - armL0.position).magnitude <= reachL * 1.4f) { best = t; break; }
             var lowGrip = top + dir * best * g;   // руки мультяшно тянутся, поэтому хват далеко по древку
-            var slotOff = armR2.position - HandR.position;
-            Ik(armR0, armR1, armR2, top + slotOff, w, right);
-            Ik(armL0, armL1, armL2, lowGrip, w, -right);
+            // кисть — у манжеты краги: чуть ближе к плечу, чем точка хвата
+            float alongR = GloveAlong(false), alongL = GloveAlong(true);
+            Ik(armR0, armR1, armR2, top - (top - armR0.position).normalized * alongR, w, right);
+            Ik(armL0, armL1, armL2, lowGrip - (lowGrip - armL0.position).normalized * alongL, w, -right);
+            gripTop = top; gripLow = lowGrip; gripDir = dir;
             Stick.SetPositionAndRotation(Vector3.Lerp(Stick.position, origin, w), Quaternion.Slerp(Stick.rotation, rot, w));
         }
 
