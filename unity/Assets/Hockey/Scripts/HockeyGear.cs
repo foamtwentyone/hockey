@@ -58,7 +58,7 @@ namespace Hockey
             var go = new GameObject("gear");
             go.transform.SetPositionAndRotation(worldPos, worldRot);
             if (scale.HasValue) go.transform.localScale = scale.Value;
-            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            go.AddComponent<MeshFilter>().sharedMesh = MeshKit.Faceted(mesh);
             var mr = go.AddComponent<MeshRenderer>();
             mr.sharedMaterial = mat;
             mr.shadowCastingMode = shadow ? UnityEngine.Rendering.ShadowCastingMode.On : UnityEngine.Rendering.ShadowCastingMode.Off;
@@ -77,12 +77,12 @@ namespace Hockey
             var hs = hb.size; var hc = hb.center;
             float u = hs.x; // базовый размер — ширина головы
 
-            Material team1 = Mats.Get(tc.Main, 0.75f), dark = Mats.Get(tc.Dark, 0.55f), white = Mats.Get("#f6f6f2", 0.45f);
-            Material black = Mats.Get("#25252d", 0.6f), steel = Mats.Get("#dfe8f2", 1f, 0.8f), visorM = Mats.Fade("#8fd8ff", 0.35f, true);
+            Material team1 = Mats.Get(tc.Main, 0.12f), dark = Mats.Get(tc.Dark, 0.1f), white = Mats.Get("#f6f6f2", 0.1f);
+            Material black = Mats.Get("#2c2c36", 0.1f), steel = Mats.Get("#dfe8f2", 0.35f), visorM = Mats.Fade("#8fd8ff", 0.35f, true);
 
             // ---------------- голова ----------------
             // вылепленный шлем (поле расстояний): рёбра, вентиляция, ушные раковины, подкладка внутри
-            var vcol = Mats.Get("#ffffff", 0.85f);
+            var vcol = Mats.Get("#ffffff", 0.1f);
             var helmRot = fr.Rot * Quaternion.Euler(-6, 0, 0);
             var helmScale = new Vector3(hs.x, hs.y, hs.z) * 1.02f;
             if (!goalie)
@@ -131,15 +131,15 @@ namespace Hockey
                     // ловушка — на левой, блин — на правой; лицевой стороной к шайбе
                     var face = Quaternion.LookRotation(fr.Fwd, Vector3.ProjectOnPlane(fingerDir, fr.Fwd).normalized);
                     float gsz = Mathf.Max(u * 0.55f, fr0 * 2 * 2.8f);
-                    if (i == 0) Piece(GearModels.Catcher(Mats.Hex("#f6f6f2"), Mats.Hex(tc.Main)), Mats.Get("#ffffff", 0.45f), fist + fr.Fwd * fr0 * 0.3f, face, hand, true, new Vector3(-gsz, gsz, gsz));
-                    else Piece(GearModels.Blocker(Mats.Hex("#f6f6f2"), Mats.Hex(tc.Main)), Mats.Get("#ffffff", 0.45f), fist + fr.Fwd * fr0 * 0.2f, face, hand, true, new Vector3(gsz, gsz, gsz));
+                    if (i == 0) Piece(GearModels.Catcher(Mats.Hex("#f6f6f2"), Mats.Hex(tc.Main)), Mats.Get("#ffffff", 0.1f), fist + fr.Fwd * fr0 * 0.3f, face, hand, true, new Vector3(-gsz, gsz, gsz));
+                    else Piece(GearModels.Blocker(Mats.Hex("#f6f6f2"), Mats.Hex(tc.Main)), Mats.Get("#ffffff", 0.1f), fist + fr.Fwd * fr0 * 0.2f, face, hand, true, new Vector3(gsz, gsz, gsz));
                 }
                 else
                 {
                     // ладонная часть краги (y≈0.05, ширина ≈0.78 в её единицах) охватывает кулак с запасом
                     float gs = Mathf.Max(u * 0.28f, fr0 * 2 * 1.2f / 0.78f);
                     var glove = GearModels.Glove(Mats.Hex(tc.Main), Mats.Hex(tc.Dark), Mats.Hex("#c9a27a"));
-                    Piece(glove, Mats.Get("#ffffff", 0.55f), fist - fingerDir * gs * 0.05f, rot, hand, true, new Vector3(i == 0 ? -gs : gs, gs, gs));
+                    Piece(glove, Mats.Get("#ffffff", 0.1f), fist - fingerDir * gs * 0.05f, rot, hand, true, new Vector3(i == 0 ? -gs : gs, gs, gs));
                 }
             }
 
@@ -165,7 +165,7 @@ namespace Hockey
                     float h = Mathf.Max(u * 0.45f, kneeY - groundY + u * 0.12f);
                     float w = Mathf.Max(lb.size.x, lb.size.z) * 1.35f;
                     var padC = new Vector3(lb.center.x, groundY + h * 0.5f, lb.center.z) + fr.Fwd * w * 0.25f;
-                    Piece(GearModels.LegPad(Mats.Hex("#f6f6f2"), Mats.Hex(tc.Main)), Mats.Get("#ffffff", 0.45f), padC, fr.Rot, shin, true,
+                    Piece(GearModels.LegPad(Mats.Hex("#f6f6f2"), Mats.Hex(tc.Main)), Mats.Get("#ffffff", 0.1f), padC, fr.Rot, shin, true,
                         new Vector3((i == 0 ? -1 : 1) * w / 0.7f, h / 1.15f, w / 0.7f * 0.8f));
                 }
             }

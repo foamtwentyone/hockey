@@ -122,6 +122,18 @@ namespace Hockey
                         if ((val[Idx(x, y, z)] < 0) != (val[Idx(x, y, z + 1)] < 0))
                             Quad(cellVert[CIdx(x - 1, y - 1, z)], cellVert[CIdx(x, y - 1, z)], cellVert[CIdx(x, y, z)], cellVert[CIdx(x - 1, y, z)]);
 
+            // стиль KayKit: грани с плоским затенением, цвет грани — по её центру
+            var fV = new List<Vector3>(T.Count); var fN = new List<Vector3>(T.Count); var fC = new List<Color>(T.Count); var fT = new List<int>(T.Count);
+            for (int i = 0; i < T.Count; i += 3)
+            {
+                Vector3 a = V[T[i]], b = V[T[i + 1]], c = V[T[i + 2]];
+                var n = Vector3.Cross(b - a, c - a);
+                if (n.sqrMagnitude < 1e-14f) continue;
+                n.Normalize();
+                var col = color((a + b + c) / 3);
+                for (int k = 0; k < 3; k++) { fT.Add(fV.Count); fV.Add(V[T[i + k]]); fN.Add(n); fC.Add(col); }
+            }
+            V = fV; N = fN; C = fC; T = fT;
             var mesh = new Mesh { name = key };
             if (V.Count > 65000) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
             mesh.SetVertices(V); mesh.SetNormals(N); mesh.SetColors(C); mesh.SetTriangles(T, 0);
@@ -188,7 +200,7 @@ namespace Hockey
                     float g = Mathf.Lerp(0.82f, 1f, Mathf.Clamp01((q.y + 0.3f) / 0.7f));
                     return main * g;
                 },
-                new Bounds(HelmC + new Vector3(0, 0.05f, 0), new Vector3(1.45f, 1.35f, 1.5f)), 84);
+                new Bounds(HelmC + new Vector3(0, 0.05f, 0), new Vector3(1.45f, 1.35f, 1.5f)), 34);
         }
 
         /// Прозрачный визор, повторяющий форму шлема спереди.
@@ -197,12 +209,12 @@ namespace Hockey
             return Build("visor", p =>
             {
                 var q = p - HelmC;
-                float d = Mathf.Max(Ellipsoid(q, new Vector3(0.635f, 0.6f, 0.675f)), -Ellipsoid(q, new Vector3(0.595f, 0.565f, 0.635f)));
+                float d = Mathf.Max(Ellipsoid(q, new Vector3(0.65f, 0.61f, 0.69f)), -Ellipsoid(q, new Vector3(0.59f, 0.56f, 0.625f)));
                 d = SMax(d, 0.18f - q.z, 0.03f);              // только спереди
                 d = SMax(d, q.y - 0.04f, 0.02f);              // сверху — под краем шлема
                 d = SMax(d, -0.24f - q.y, 0.03f);             // снизу — до носа
                 return d;
-            }, p => Color.white, new Bounds(HelmC + new Vector3(0, -0.1f, 0.4f), new Vector3(1.4f, 0.5f, 0.6f)), 96);
+            }, p => Color.white, new Bounds(HelmC + new Vector3(0, -0.1f, 0.4f), new Vector3(1.4f, 0.5f, 0.6f)), 44);
         }
 
         // ---------------- маска вратаря: шлем с закрытыми щеками и вплавленной решёткой ----------------
@@ -225,7 +237,7 @@ namespace Hockey
             float surf = Mathf.Abs(Ellipsoid(cq, new Vector3(0.6f, 0.62f, 0.66f)));
             float dx = Mathf.Abs(q.x - Mathf.Round(q.x / 0.085f) * 0.085f);
             float dy = Mathf.Abs((q.y + 0.14f) - Mathf.Round((q.y + 0.14f) / 0.11f) * 0.11f);
-            bars = Mathf.Max(surf - 0.015f, Mathf.Min(dx, dy) - 0.015f);
+            bars = Mathf.Max(surf - 0.022f, Mathf.Min(dx, dy) - 0.019f);
             bars = Mathf.Max(bars, RoundBox(q - new Vector3(0, -0.14f, 0.5f), new Vector3(0.31f, 0.28f, 0.4f), 0.1f));
             stripe = Mathf.Abs(q.x) - 0.07f;
             return SMin(shell, bars, 0.008f);
@@ -245,7 +257,7 @@ namespace Hockey
                     if (q.y < 0.1f && q.y > 0.0f && Mathf.Abs(q.x) > 0.4f) return accent;   // полосы по бокам
                     return main * Mathf.Lerp(0.85f, 1f, Mathf.Clamp01((q.y + 0.5f) / 0.9f));
                 },
-                new Bounds(HelmC + new Vector3(0, 0f, 0.02f), new Vector3(1.4f, 1.35f, 1.45f)), 120);
+                new Bounds(HelmC + new Vector3(0, 0f, 0.02f), new Vector3(1.4f, 1.35f, 1.45f)), 56);
         }
 
         // ---------------- щиток вратаря (высота вдоль +Y, лицевая сторона +Z) ----------------
@@ -284,7 +296,7 @@ namespace Hockey
                     if (p.y > -0.1f && p.y < -0.02f) return accent;                // поперечная полоса
                     return main;
                 },
-                new Bounds(new Vector3(0.04f, -0.02f, 0), new Vector3(0.8f, 1.3f, 0.55f)), 72);
+                new Bounds(new Vector3(0.04f, -0.02f, 0), new Vector3(0.8f, 1.3f, 0.55f)), 30);
         }
 
         // ---------------- блин (щит вдоль +Y, лицевая сторона +Z) ----------------
@@ -311,7 +323,7 @@ namespace Hockey
                     }
                     return Color.Lerp(accent, Color.black, 0.3f);
                 },
-                new Bounds(new Vector3(0, -0.05f, 0), new Vector3(0.85f, 1.2f, 0.55f)), 64);
+                new Bounds(new Vector3(0, -0.05f, 0), new Vector3(0.85f, 1.2f, 0.55f)), 30);
         }
 
         // ---------------- ловушка (ладонь +Z, пальцы +Y) ----------------
@@ -329,7 +341,7 @@ namespace Hockey
                 var wq = p - new Vector3(-0.3f, 0.38f, 0.1f);
                 float webPlane = RoundBox(wq, new Vector3(0.12f, 0.16f, 0.025f), 0.02f);
                 float gx = Mathf.Abs(wq.x - Mathf.Round(wq.x / 0.07f) * 0.07f), gy = Mathf.Abs(wq.y - Mathf.Round(wq.y / 0.07f) * 0.07f);
-                web = Mathf.Max(webPlane, Mathf.Min(gx, gy) - 0.014f);
+                web = webPlane;
                 cuff = RoundBox(p - new Vector3(0, -0.42f, -0.02f), new Vector3(0.22f, 0.14f, 0.16f), 0.09f);
                 float d = SMin(body, thumb, 0.06f);
                 d = SMin(d, web, 0.01f);
@@ -344,7 +356,7 @@ namespace Hockey
                     if (p.z > 0.05f && Ellipsoid(p - new Vector3(0.02f, 0.12f, 0.2f), new Vector3(0.3f, 0.34f, 0.18f)) < 0.03f) return new Color(0.78f, 0.62f, 0.45f); // кожа кармана
                     return Mathf.Abs(p.x) < 0.06f && p.z < 0 ? accent : main;
                 },
-                new Bounds(new Vector3(-0.03f, 0, 0.02f), new Vector3(1.1f, 1.3f, 0.6f)), 72);
+                new Bounds(new Vector3(-0.03f, 0, 0.02f), new Vector3(1.1f, 1.3f, 0.6f)), 32);
         }
 
         // ---------------- крага (пальцы вдоль +Y, тыльная сторона +Z, большой палец +X) ----------------
@@ -398,7 +410,7 @@ namespace Hockey
                     if (finger < 0.012f) return Color.Lerp(main, dark, 0.15f);
                     return main;
                 },
-                new Bounds(new Vector3(0.05f, -0.06f, 0), new Vector3(1.0f, 1.45f, 0.75f)), 64);
+                new Bounds(new Vector3(0.05f, -0.06f, 0), new Vector3(1.0f, 1.45f, 0.75f)), 32);
         }
     }
 }

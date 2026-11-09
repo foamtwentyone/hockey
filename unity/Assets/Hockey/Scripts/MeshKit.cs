@@ -277,6 +277,33 @@ namespace Hockey
             return mesh;
         }
 
+        static readonly Dictionary<Mesh, Mesh> flatCache = new Dictionary<Mesh, Mesh>();
+
+        /// Копия меша с плоским затенением по граням (стиль KayKit).
+        public static Mesh Faceted(Mesh src)
+        {
+            if (src == null) return null;
+            if (flatCache.TryGetValue(src, out var m)) return m;
+            var v = src.vertices; var t = src.triangles; var c = src.colors;
+            bool hasC = c != null && c.Length == v.Length;
+            var V = new List<Vector3>(t.Length); var N = new List<Vector3>(t.Length); var C = new List<Color>(t.Length); var T = new List<int>(t.Length);
+            for (int i = 0; i < t.Length; i += 3)
+            {
+                Vector3 a = v[t[i]], b = v[t[i + 1]], cc = v[t[i + 2]];
+                var n = Vector3.Cross(b - a, cc - a);
+                if (n.sqrMagnitude < 1e-16f) continue;
+                n.Normalize();
+                var col = hasC ? (c[t[i]] + c[t[i + 1]] + c[t[i + 2]]) / 3 : Color.white;
+                for (int k = 0; k < 3; k++) { T.Add(V.Count); V.Add(v[t[i + k]]); N.Add(n); C.Add(col); }
+            }
+            m = new Mesh { name = src.name + "_flat" };
+            if (V.Count > 65000) m.indexFormat = IndexFormat.UInt32;
+            m.SetVertices(V); m.SetNormals(N); m.SetColors(C); m.SetTriangles(T, 0);
+            m.RecalculateBounds();
+            flatCache[src] = m;
+            return m;
+        }
+
         /// Вывернутая наизнанку копия меша (для купола неба).
         public static Mesh Flip(Mesh src)
         {
