@@ -201,12 +201,13 @@ namespace Hockey
             return Build("visor", p =>
             {
                 var q = p - HelmC;
-                float d = Mathf.Max(Ellipsoid(q, new Vector3(0.65f, 0.61f, 0.69f)), -Ellipsoid(q, new Vector3(0.59f, 0.56f, 0.625f)));
+                // тонкое стекло: толстый торец снизу на просвет выглядел тёмной полосой под носом
+                float d = Mathf.Max(Ellipsoid(q, new Vector3(0.65f, 0.61f, 0.69f)), -Ellipsoid(q, new Vector3(0.615f, 0.575f, 0.655f)));
                 d = SMax(d, 0.18f - q.z, 0.03f);              // только спереди
                 d = SMax(d, q.y - 0.04f, 0.02f);              // сверху — под краем шлема
-                d = SMax(d, -0.24f - q.y, 0.03f);             // снизу — до носа
+                d = SMax(d, -0.24f - q.y, 0.06f);             // снизу — до носа, край скруглён
                 return d;
-            }, p => Color.white, new Bounds(HelmC + new Vector3(0, -0.1f, 0.4f), new Vector3(1.4f, 0.5f, 0.6f)), 64);
+            }, p => Color.white, new Bounds(HelmC + new Vector3(0, -0.1f, 0.4f), new Vector3(1.4f, 0.5f, 0.6f)), 96);
         }
 
         // ---------------- маска вратаря: шлем с закрытыми щеками и вплавленной решёткой ----------------

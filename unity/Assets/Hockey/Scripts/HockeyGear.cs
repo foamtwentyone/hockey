@@ -293,7 +293,8 @@ namespace Hockey
             float u = hs.x; // базовый размер — ширина головы
 
             Material team1 = Mats.Get(tc.Main, 0.12f), dark = Mats.Get(tc.Dark, 0.1f), white = Mats.Get("#f6f6f2", 0.1f);
-            Material black = Mats.Get("#2c2c36", 0.1f), steel = Mats.Get("#dfe8f2", 0.35f), visorM = Mats.Fade("#8fd8ff", 0.35f, true);
+            Material black = Mats.Get("#2c2c36", 0.1f), steel = Mats.Get("#dfe8f2", 0.35f), visorM = Mats.Fade("#8fd8ff", 0.3f, true);
+            visorM.SetFloat("_Glossiness", 0.25f);   // без тёмного отражения арены на торце стекла
 
             // ---------------- голова ----------------
             // вылепленный шлем (поле расстояний): рёбра, вентиляция, ушные раковины, подкладка внутри
