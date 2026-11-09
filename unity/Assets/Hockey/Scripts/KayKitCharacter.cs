@@ -423,8 +423,11 @@ namespace Hockey
         void GripLeft(float w)
         {
             if (armL0 == null || armL1 == null || armL2 == null) return;
-            var target = Stick.position + Stick.up * (GripL * Stick.lossyScale.y);
             Vector3 a = armL0.position, b = armL1.position, c = armL2.position;
+            // хват — ближайшая к левому плечу точка рукояти, но не ниже правой руки и не выше набалдашника
+            float g = Stick.lossyScale.y;
+            float along = Vector3.Dot(a - Stick.position, Stick.up) / Mathf.Max(1e-4f, g);
+            var target = Stick.position + Stick.up * (Mathf.Clamp(along, 0.13f, GripL) * g);
             target = Vector3.Lerp(c, target, w);
             float l1 = (b - a).magnitude, l2 = (c - b).magnitude;
             var at = target - a;

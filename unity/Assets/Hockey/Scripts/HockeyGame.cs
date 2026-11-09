@@ -530,6 +530,7 @@ namespace Hockey
                 MoveX = fx * raw.MoveY + fz * raw.MoveX,
                 MoveZ = fz * raw.MoveY - fx * raw.MoveX,
                 Shoot = raw.Shoot, Pass = raw.Pass, Check = raw.Check, Sprint = raw.Sprint, Jump = raw.Jump, Fight = raw.Fight,
+                AimYaw = v.Yaw, HasAim = true,
             };
         }
 

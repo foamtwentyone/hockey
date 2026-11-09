@@ -1023,6 +1023,7 @@ namespace Hockey
                 GUI.color = Color.white;
                 if (turbo) Shadowed(new Rect(brr.x, brr.y - 2, brr.width * 0.9f, brr.height * 0.8f), "ТУРБО", sMeterText, Color.white, Mats.Hex("#0d3a5a"), 1.5f);
                 DrawHints(v, st, area);
+                DrawCrosshair(v, st, p, area);
                 // активные бонусы
                 float ix = area.x + area.width / 2 - 200, iy = 96;
                 for (int b = 0; b < 5; b++)
@@ -1051,6 +1052,33 @@ namespace Hockey
 
             if (mode == Mode.Host) GUI.Label(new Rect(VW - 360, 16, 344, 30), $"Хост · игроков по сети: {lobby.Count - 1}", new GUIStyle(sSmall) { alignment = TextAnchor.UpperRight });
             else if (mode == Mode.Client && client != null) GUI.Label(new Rect(VW - 360, 16, 344, 30), $"Пинг: {(client.PingMs >= 0 ? client.PingMs + " мс" : "…")}", new GUIStyle(sSmall) { alignment = TextAnchor.UpperRight });
+        }
+
+        /// Прицел по центру: мини-круг вбрасывания. Бросок и пас летят туда, куда смотрит камера.
+        /// Сжимается при замахе, загорается зелёным, когда в прицеле ворота (сработает доводка).
+        void DrawCrosshair(View v, ViewState st, PlayerView p, Rect area)
+        {
+            if (v.Src == null || st.Phase != Phase.Play || p.Stun || p.Brawl || v.Follow >= roster.Count) return;
+            int team = roster[v.Follow].Team;
+            float gx = Rink.TeamDir[team] * Rink.GoalX;
+            float tx = gx - p.X, tz = -p.Z;
+            float dist = Mathf.Sqrt(tx * tx + tz * tz);
+            float ang = Mathf.Abs(Sim.Wrap(Mathf.Atan2(tx, tz) - v.Yaw));
+            bool onGoal = Rink.TeamDir[team] * (gx - p.X) > 0.5f && ang < 0.65f && dist < 30;
+            float ch = Mathf.Clamp01(p.Charge);
+            float size = Mathf.Lerp(40, 24, ch);
+            var c = new Vector2(area.x + area.width / 2, VH / 2);
+            Color col = ch > 0.7f ? Mats.Hex("#ff5a4c") : ch > 0.02f ? Mats.Hex("#ffb14a") : onGoal ? Mats.Hex("#5cf28a") : Color.white;
+            // тень, кольцо, точка
+            GUI.color = new Color(0.05f, 0.06f, 0.2f, 0.55f);
+            GUI.DrawTexture(new Rect(c.x - size / 2 + 1.5f, c.y - size / 2 + 2, size, size), hudRing);
+            GUI.color = WithA(col, 0.95f);
+            GUI.DrawTexture(new Rect(c.x - size / 2, c.y - size / 2, size, size), hudRing);
+            GUI.color = new Color(0.05f, 0.06f, 0.2f, 0.7f);
+            GUI.DrawTexture(new Rect(c.x - 4, c.y - 4, 8, 8), circleTex);
+            GUI.color = col;
+            GUI.DrawTexture(new Rect(c.x - 2.5f, c.y - 2.5f, 5, 5), circleTex);
+            GUI.color = Color.white;
         }
 
         void DrawMinimap(ViewState st)

@@ -52,11 +52,14 @@ namespace Hockey
     {
         public float MoveX, MoveZ;
         public bool Shoot, Pass, Check, Sprint, Jump, Fight;
+        /// Куда смотрит камера (курс в радианах): бросок и пас идут в прицел по центру экрана.
+        public float AimYaw; public bool HasAim;
         public static readonly PlayerInput None = default;
 
-        public byte Bits => (byte)((Shoot ? 1 : 0) | (Pass ? 2 : 0) | (Check ? 4 : 0) | (Sprint ? 8 : 0) | (Jump ? 16 : 0) | (Fight ? 32 : 0));
-        public static PlayerInput FromBits(float mx, float mz, byte bits)
+        public byte Bits => (byte)((Shoot ? 1 : 0) | (Pass ? 2 : 0) | (Check ? 4 : 0) | (Sprint ? 8 : 0) | (Jump ? 16 : 0) | (Fight ? 32 : 0) | (HasAim ? 64 : 0));
+        public static PlayerInput FromBits(float mx, float mz, byte bits, float aim = 0)
         {
+            if (float.IsNaN(aim) || float.IsInfinity(aim)) aim = 0;
             float l = MathF.Sqrt(mx * mx + mz * mz);
             if (float.IsNaN(l)) { mx = mz = 0; l = 0; }
             if (l > 1) { mx /= l; mz /= l; }
@@ -64,6 +67,7 @@ namespace Hockey
             {
                 MoveX = mx, MoveZ = mz,
                 Shoot = (bits & 1) != 0, Pass = (bits & 2) != 0, Check = (bits & 4) != 0, Sprint = (bits & 8) != 0, Jump = (bits & 16) != 0, Fight = (bits & 32) != 0,
+                HasAim = (bits & 64) != 0, AimYaw = aim,
             };
         }
         public PlayerInput Scaled(float k) { var c = this; c.MoveX *= k; c.MoveZ *= k; return c; }
@@ -170,6 +174,9 @@ namespace Hockey
         public bool Has(Buff b) => Buffs[(int)b] > 0;
         public float Radius => Has(Buff.Giant) ? 0.62f : 0.45f;
         public PlayerInput Prev;
+        public float AimH; public bool HasAim;
+        /// Направление броска/паса: у человека — по прицелу камеры, у ботов — куда смотрит игрок.
+        public float ShotH => HasAim && Human != null ? AimH : H;
         internal BotState Bot = new BotState();
     }
 
@@ -549,6 +556,7 @@ namespace Hockey
                 }
                 if (!diving && !frozen)
                 {
+                    if (inp.HasAim) { p.AimH = inp.AimYaw; p.HasAim = true; }
                     if (inp.Shoot) p.Charge = MathF.Min(1, p.Charge + dt / 0.9f);
                     else if (p.Prev.Shoot && p.Stun <= 0) { Shoot(p, p.Charge); p.Charge = 0; }
                     else p.Charge = 0;
@@ -751,7 +759,8 @@ namespace Hockey
 
             float power = charge < 0.12f ? 0.3f : charge;
             float speed = 15 + 22 * power + (oneTimer ? 4 : 0);
-            float dx = MathF.Sin(p.H), dz = MathF.Cos(p.H);
+            float sh = p.ShotH;
+            float dx = MathF.Sin(sh), dz = MathF.Cos(sh);
             float vy = 0.4f + 3.2f * power * Rnd(0.6f, 1);
 
             // автоприцел, если игрок смотрит примерно в ворота
@@ -762,7 +771,7 @@ namespace Hockey
             float tz = Rnd(0.55f, 1.25f) * side;
             float tx = gx - pk.X, tzz = tz - pk.Z;
             float dist = Hyp(tx, tzz);
-            float ang = MathF.Abs(Wrap(MathF.Atan2(tx, tzz) - p.H));
+            float ang = MathF.Abs(Wrap(MathF.Atan2(tx, tzz) - sh));
             bool facingGoal = Rink.TeamDir[p.Team] * (gx - pk.X) > 0.5f;
             if (facingGoal && ang < 0.65f && dist < 30)
             {
@@ -798,7 +807,7 @@ namespace Hockey
         {
             var pk = Puck;
             if (pk.Owner != p.Idx) { Ev(EvType.Swish); p.Swing = 0.2f; return; }
-            float fx = MathF.Sin(p.H), fz = MathF.Cos(p.H);
+            float fx = MathF.Sin(p.ShotH), fz = MathF.Cos(p.ShotH);
             Player best = null; float bestScore = float.MaxValue;
             foreach (var q in Players)
             {
