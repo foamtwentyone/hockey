@@ -443,8 +443,13 @@ namespace Hockey
             float g = Stick.lossyScale.y;
             float along = Vector3.Dot(a - Stick.position, Stick.up) / Mathf.Max(1e-4f, g);
             var target = Stick.position + Stick.up * (Mathf.Clamp(along, 0.13f, GripL) * g);
-            target = Vector3.Lerp(c, target, w);
             float l1 = (b - a).magnitude, l2 = (c - b).magnitude;
+            // не тянемся, если рукоять далеко или выше плеча — иначе рука неестественно задирается
+            float reach = l1 + l2, dd = (target - a).magnitude;
+            w *= Mathf.Clamp01((reach * 1.3f - dd) / (reach * 0.3f));
+            w *= Mathf.Clamp01((a.y - target.y) / (reach * 0.25f) + 0.3f);
+            if (w <= 0.001f) return;
+            target = Vector3.Lerp(c, target, w);
             var at = target - a;
             float d = Mathf.Clamp(at.magnitude, Mathf.Abs(l1 - l2) + 1e-4f, (l1 + l2) * 0.999f);
             var dir = at.normalized;
