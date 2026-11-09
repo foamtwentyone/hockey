@@ -343,9 +343,9 @@ namespace Hockey
                 p =>
                 {
                     Sdf(p, out float web, out float cuff);
-                    if (web < 0.012f) return new Color(0.35f, 0.22f, 0.14f);
+                    if (web < 0.012f) return new Color(0.16f, 0.16f, 0.2f); // сетка-перепонка: графит
                     if (cuff < 0.012f && p.y < -0.3f) return accent;
-                    if (p.z > 0.05f && Ellipsoid(p - new Vector3(0.02f, 0.12f, 0.2f), new Vector3(0.3f, 0.34f, 0.18f)) < 0.03f) return new Color(0.78f, 0.62f, 0.45f); // кожа кармана
+                    if (p.z > 0.05f && Ellipsoid(p - new Vector3(0.02f, 0.12f, 0.2f), new Vector3(0.3f, 0.34f, 0.18f)) < 0.03f) return Color.Lerp(main, accent, 0.3f); // карман: светлый с оттенком команды (раньше коричневый — выглядел пятном у маски)
                     return Mathf.Abs(p.x) < 0.06f && p.z < 0 ? accent : main;
                 },
                 new Bounds(new Vector3(-0.03f, 0, 0.02f), new Vector3(1.1f, 1.3f, 0.6f)), 44);
