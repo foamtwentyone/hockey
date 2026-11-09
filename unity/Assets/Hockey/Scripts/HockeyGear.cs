@@ -307,8 +307,9 @@ namespace Hockey
                 helmet.Add(Gear("helmet", GearModels.Helmet(Mats.Hex(tc.Main), Mats.Hex(tc.Dark), Mats.Hex("#2b2b33")), vcol, hc, helmRot, head, helmScale, Mats.Hex(tc.Main)));
                 // прозрачный визор: генераторы не умеют стекло, поэтому он всегда наш
                 helmet.Add(Piece(GearModels.Visor(), visorM, hc + (extHelmet ? fr.Fwd * hs.z * 0.02f - fr.Up * hs.y * 0.13f : Vector3.zero), helmRot, head, false, extHelmet ? helmScale * 0.98f : helmScale));
-                // ремешок под подбородком
-                helmet.Add(Piece(MeshKit.Superellipsoid(hs.x * 0.47f, hs.y * 0.03f, hs.z * 0.5f, 0.9f, 0.8f, 24, -0.6f, 0.6f), black, hc - fr.Up * hs.y * 0.36f, fr.Rot * Quaternion.Euler(-20, 0, 0), head));
+                // ремешок под подбородком — только у вылепленного шлема: у модели KayKit нет подбородка,
+                // и чёрное кольцо проходило прямо под носом
+                if (!extHelmet) helmet.Add(Piece(MeshKit.Superellipsoid(hs.x * 0.47f, hs.y * 0.03f, hs.z * 0.5f, 0.9f, 0.8f, 24, -0.6f, 0.6f), black, hc - fr.Up * hs.y * 0.36f, fr.Rot * Quaternion.Euler(-20, 0, 0), head));
             }
             else
             {
