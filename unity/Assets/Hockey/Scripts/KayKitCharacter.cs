@@ -13,6 +13,9 @@ namespace Hockey
     public class KayKitCharacter
     {
         public Transform Model, HandR, Head, StickBlade, Stick;
+        Transform armL0, armL1, armL2;   // плечо, предплечье, кисть левой руки — для хвата клюшки двумя руками
+        float gripW;
+        const float StickTop = 0.36f, GripL = 0.27f;
         public List<Transform> HelmetParts = new List<Transform>();
         Spring headKick;
         float stickLen;
@@ -143,6 +146,9 @@ namespace Hockey
             {
                 if (!bones.ContainsKey(t.name)) bones[t.name] = t;
                 if (t.name == "handslot.r") k.HandR = t;
+                else if (t.name == "upperarm.l") k.armL0 = t;
+                else if (t.name == "lowerarm.l") k.armL1 = t;
+                else if (t.name == "hand.l") k.armL2 = t;
                 else if (t.name == "head") k.Head = t;
             }
 
@@ -187,10 +193,10 @@ namespace Hockey
             var carbon = Mats.Get("#2b2f3d", 0.85f);
             var stripe = Mats.Get(TeamColors.All[team].Main, 0.8f);
             var tape = Mats.Get("#" + ColorUtility.ToHtmlStringRGB(tapeColor), 0.25f);
-            float shaft = len - 0.25f + 0.22f;
+            float shaft = len - 0.25f + StickTop;
             // рукоять: карбон с полосками цвета команды, сверху — набалдашник из обмотки
             float sw = Goalie ? 0.036f : 0.027f, sd = Goalie ? 0.028f : 0.021f;
-            P(MeshKit.Superellipsoid(sw, shaft / 2, sd, 0.25f, 0.35f, 20), carbon, new Vector3(0, 0.22f - shaft / 2, 0));
+            P(MeshKit.Superellipsoid(sw, shaft / 2, sd, 0.25f, 0.35f, 20), carbon, new Vector3(0, StickTop - shaft / 2, 0));
             if (Goalie)
             {
                 // широкая «лопата» вратарской клюшки над крюком
@@ -199,7 +205,7 @@ namespace Hockey
             }
             P(MeshKit.Superellipsoid(0.03f, 0.05f, 0.024f, 0.25f, 0.35f, 16), stripe, new Vector3(0, -0.15f, 0));
             P(MeshKit.Superellipsoid(0.03f, 0.03f, 0.024f, 0.25f, 0.35f, 16), stripe, new Vector3(0, -0.3f, 0));
-            P(MeshKit.Superellipsoid(0.034f, 0.08f, 0.028f, 0.5f, 0.5f, 16), tape, new Vector3(0, 0.19f, 0));
+            P(MeshKit.Superellipsoid(0.034f, 0.08f, 0.028f, 0.5f, 0.5f, 16), tape, new Vector3(0, StickTop - 0.03f, 0));
             // изогнутый крюк с обмоткой
             float bl = Goalie ? 0.56f : 0.37f;
             var blade = new GameObject("blade").transform;
@@ -407,6 +413,33 @@ namespace Hockey
             if (Head != null && Mathf.Abs(headKick.X) > 0.001f)
                 Head.rotation = Quaternion.AngleAxis(-headKick.X * Mathf.Rad2Deg, Model.right) * Head.rotation;
             AimStick(s);
+            // левая рука держит клюшку за верх рукояти (правая — ниже), и при замахе, и при броске
+            bool grip = !Goalie && upper > 0.5f && punchT >= 0.4f && !s.Brawl && !s.Stun;
+            gripW += ((grip ? 1 : 0) - gripW) * (1 - Mathf.Exp(-dt * 12));
+            if (gripW > 0.01f && Stick != null) GripLeft(gripW);
+        }
+
+        /// Двухзвенный IK левой руки: кисть — к точке хвата на рукояти, локоть остаётся в плоскости анимации.
+        void GripLeft(float w)
+        {
+            if (armL0 == null || armL1 == null || armL2 == null) return;
+            var target = Stick.position + Stick.up * (GripL * Stick.lossyScale.y);
+            Vector3 a = armL0.position, b = armL1.position, c = armL2.position;
+            target = Vector3.Lerp(c, target, w);
+            float l1 = (b - a).magnitude, l2 = (c - b).magnitude;
+            var at = target - a;
+            float d = Mathf.Clamp(at.magnitude, Mathf.Abs(l1 - l2) + 1e-4f, (l1 + l2) * 0.999f);
+            var dir = at.normalized;
+            // плоскость сгиба — по текущему локтю (если рука прямая — локоть вниз-наружу)
+            var pole = Vector3.ProjectOnPlane(b - a, dir);
+            if (pole.sqrMagnitude < 1e-6f) pole = Vector3.ProjectOnPlane(Vector3.down - Model.right * 0.5f, dir);
+            pole.Normalize();
+            float x = (l1 * l1 - l2 * l2 + d * d) / (2 * d);
+            float h = Mathf.Sqrt(Mathf.Max(0, l1 * l1 - x * x));
+            var elbow = a + dir * x + pole * h;
+            armL0.rotation = Quaternion.FromToRotation(b - a, elbow - a) * armL0.rotation;
+            var c2 = armL2.position; var b2 = armL1.position;
+            armL1.rotation = Quaternion.FromToRotation(c2 - b2, a + dir * d - b2) * armL1.rotation;
         }
 
         /// Удар по голове: голова резко откидывается назад и качается.

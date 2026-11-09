@@ -225,7 +225,7 @@ namespace Hockey
             else if (name == "glove")
             {
                 // ладонь краги (≈62% высоты от раструба) — в центр кулака; ширина — как у вылепленной краги
-                kk = wantS.x * 1.75f / bb.size.x;   // крупная крага целиком закрывает кулак и предплечье модели
+                kk = wantS.x * 1.6f / bb.size.x;   // крупная крага целиком закрывает кулак и предплечье модели
                 anchorSculpt = new Vector3(0, 0.05f, 0);
                 anchorModel = new Vector3(bb.center.x, bb.min.y + bb.size.y * 0.58f, bb.center.z);
             }
@@ -358,7 +358,7 @@ namespace Hockey
                     // ладонная часть краги (y≈0.05, ширина ≈0.78 в её единицах) охватывает кулак с запасом
                     float gs = Mathf.Max(u * 0.28f, fr0 * 2 * 1.2f / 0.78f);
                     var glove = GearModels.Glove(Mats.Hex(tc.Main), Mats.Hex(tc.Dark), Mats.Hex("#c9a27a"));
-                    Gear("glove", glove, Mats.Get("#ffffff", 0.1f), fist - fingerDir * gs * 0.05f, rot, hand, new Vector3(i == 0 ? -gs : gs, gs, gs), Mats.Hex(tc.Main));
+                    Gear("glove", glove, Mats.Get("#ffffff", 0.1f), fist - fingerDir * gs * 0.05f, rot, hand, new Vector3(i == 0 ? gs : -gs, gs, gs), Mats.Hex(tc.Main));   // модель — левая крага, на правую руку зеркалим
                 }
             }
 
