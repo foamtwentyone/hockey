@@ -79,6 +79,13 @@ else:
     center = V.mean(axis=0)
     inward = ((V - center) * N).sum(axis=1) < 0
     C = None
+if C is not None:
+    key = np.concatenate([np.round(V, 5), C.astype(float)], axis=1)
+    _, first, inv = np.unique(key, axis=0, return_index=True, return_inverse=True)
+    inv = inv.ravel()
+    F = inv[F]; V = V[first]; C = C[first]
+    wm = trimesh.Trimesh(V, F, process=False)
+    N = wm.vertex_normals.copy()
 # glTF -> Unity: отражение X и смена обхода треугольников
 V[:, 0] *= -1; N[:, 0] *= -1; F = F[:, [0, 2, 1]]
 with open(dst, 'wb') as o:

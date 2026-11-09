@@ -171,7 +171,9 @@ namespace Hockey
                 g.transform.localPosition = -Vector3.Scale(anchorModel, g.transform.localScale) + (headGear ? Vector3.up * wantS.y * 0.04f : Vector3.zero);
                 g.AddComponent<MeshFilter>().sharedMesh = bm;
                 var mr = g.AddComponent<MeshRenderer>();
-                mr.sharedMaterial = Mats.Outlined(Mats.Get("#ffffff", 0.15f), 0.8f);
+                // у моделей из Meshy треугольники не сварены — обводка просвечивает сквозь щели, поэтому без неё
+                bool welded = name == "helmet";
+                mr.sharedMaterial = welded ? Mats.Outlined(Mats.Get("#ffffff", 0.15f), 0.8f) : Mats.Get("#ffffff", 0.15f);
                 mr.shadowCastingMode = shadow ? UnityEngine.Rendering.ShadowCastingMode.On : UnityEngine.Rendering.ShadowCastingMode.Off;
                 hold.SetParent(bone, true);
                 return hold;
