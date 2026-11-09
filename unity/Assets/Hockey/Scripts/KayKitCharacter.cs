@@ -134,6 +134,39 @@ namespace Hockey
             return m;
         }
 
+        static readonly Dictionary<Mesh, Mesh> thinCache = new Dictionary<Mesh, Mesh>();
+
+        /// Сжимает вершины предплечья и кисти к оси кости (ось кости — Y в пространстве кости).
+        static void ThinForearm(SkinnedMeshRenderer smr)
+        {
+            var src = smr.sharedMesh;
+            if (src == null) return;
+            if (thinCache.TryGetValue(src, out var done)) { smr.sharedMesh = done; return; }
+            if (!src.isReadable) return;
+            var m = Object.Instantiate(src);
+            var v = m.vertices; var bw = m.boneWeights; var bp = m.bindposes; var bones = smr.bones;
+            if (bw.Length != v.Length || bones == null) return;
+            for (int i = 0; i < v.Length; i++)
+            {
+                var w = bw[i];
+                int b = w.boneIndex0; float best = w.weight0;
+                if (w.weight1 > best) { b = w.boneIndex1; best = w.weight1; }
+                if (w.weight2 > best) { b = w.boneIndex2; best = w.weight2; }
+                if (w.weight3 > best) { b = w.boneIndex3; }
+                if (b < 0 || b >= bones.Length || bones[b] == null) continue;
+                string n = bones[b].name;
+                float f = n.StartsWith("lowerarm") ? 0.7f : n.StartsWith("hand") || n.StartsWith("handslot") ? 0.65f : 1;
+                if (f >= 1) continue;
+                var lp = bp[b].MultiplyPoint3x4(v[i]);
+                lp.x *= f; lp.z *= f;
+                v[i] = bp[b].inverse.MultiplyPoint3x4(lp);
+            }
+            m.vertices = v;
+            m.RecalculateBounds();
+            thinCache[src] = m;
+            smr.sharedMesh = m;
+        }
+
         /// Создаёт персонажа KayKit или возвращает null, если моделей нет.
         public static KayKitCharacter Create(int team, int skin, int tape, int number, bool goalie, Transform parent)
         {
@@ -159,6 +192,10 @@ namespace Hockey
                 if (r is SkinnedMeshRenderer smr) smr.updateWhenOffscreen = true;
             }
 
+            // предплечья и кисти модели тоньше, чтобы не торчали из краг (у вратаря ловушка и блин крупные — не трогаем)
+            if (!goalie)
+                foreach (var key in new[] { "ArmLeft", "ArmRight" })
+                    if (parts.TryGetValue(key, out var armSmr)) ThinForearm(armSmr);
             var bones = new Dictionary<string, Transform>();
             foreach (var t in go.GetComponentsInChildren<Transform>(true))
             {
@@ -490,20 +527,20 @@ namespace Hockey
             var chest = (armL0.position + armR0.position) * 0.5f;
             // как у настоящего хоккеиста: верхняя (левая) рука с набалдашником у бедра, нижняя (правая) — далеко
             // по древку на почти выпрямленной руке, клюшка длинная и пологая, крюк далеко впереди на льду
-            var top = chest + Vector3.down * reach * 0.42f + fwd * reach * 0.3f - right * reach * 0.3f;
+            // левый хват (крюк слева): правая рука сверху у правого бедра, левая — снизу, далеко по древку
+            var top = chest + Vector3.down * reach * 0.42f + fwd * reach * 0.3f + right * reach * 0.3f;
             float g = Stick.lossyScale.y;
             var dir = StickDir(top, (stickLen - 0.25f + GripL) * g, s, fwd, right, out var bladeFwd);
             var rot = Quaternion.LookRotation(bladeFwd, -dir);
-            var origin = top + dir * GripL * g;   // точка крепления клюшки (локальный ноль древка)
-            // нижняя рука — как можно дальше по древку, но в пределах досягаемости правой руки
-            float reachR = (armR1.position - armR0.position).magnitude + (armR2.position - armR1.position).magnitude;
+            var origin = top + dir * GripL * g;   // локальный ноль древка
+            float reachL = (armL1.position - armL0.position).magnitude + (armL2.position - armL1.position).magnitude;
             float best = 0.2f;
             for (float t = 0.62f; t >= 0.2f; t -= 0.02f)
-                if ((top + dir * t * g - armR0.position).magnitude <= reachR * 1.4f) { best = t; break; }
+                if ((top + dir * t * g - armL0.position).magnitude <= reachL * 1.4f) { best = t; break; }
             var lowGrip = top + dir * best * g;   // руки мультяшно тянутся, поэтому хват далеко по древку
             var slotOff = armR2.position - HandR.position;
-            Ik(armL0, armL1, armL2, top, w, -right);
-            Ik(armR0, armR1, armR2, lowGrip + slotOff, w, right);
+            Ik(armR0, armR1, armR2, top + slotOff, w, right);
+            Ik(armL0, armL1, armL2, lowGrip, w, -right);
             Stick.SetPositionAndRotation(Vector3.Lerp(Stick.position, origin, w), Quaternion.Slerp(Stick.rotation, rot, w));
         }
 
@@ -511,18 +548,18 @@ namespace Hockey
         Vector3 StickDir(Vector3 pivot, float L, PlayerView s, Vector3 fwd, Vector3 right, out Vector3 bladeFwd)
         {
             float g = Stick.lossyScale.y;
-            var target = Model.position + (fwd * (Goalie ? 0.75f : 1.05f) + right * (Goalie ? 0.05f : 0.46f)) * g;
+            var target = Model.position + (fwd * (Goalie ? 0.75f : 1.05f) + right * (Goalie ? 0.05f : -0.46f)) * g;   // клюшка слева: левый хват, как у большинства хоккеистов
             float drop = pivot.y - (Model.position.y + 0.04f);
             var hor = target - pivot; hor.y = 0;
             Vector3 dir;
             if (drop >= L || hor.sqrMagnitude < 1e-4f) dir = Vector3.down;
             else dir = (hor.normalized * Mathf.Sqrt(L * L - drop * drop) + Vector3.down * drop) / L;
-            var wind = (-fwd * 0.45f + Vector3.up * 0.85f + right * 0.3f).normalized;
-            var follow = (fwd * 0.9f + Vector3.up * 0.1f - right * 0.4f).normalized;
+            var wind = (-fwd * 0.45f + Vector3.up * 0.85f + right * (Goalie ? 0.3f : -0.3f)).normalized;
+            var follow = (fwd * 0.9f + Vector3.up * 0.1f + right * (Goalie ? -0.4f : 0.4f)).normalized;
             dir = Vector3.Slerp(dir, wind, Mathf.Clamp01(s.Charge) * 0.9f);
             if (swingT < 0.35f) dir = Vector3.Slerp(dir, follow, Mathf.Sin(swingT / 0.35f * Mathf.PI));
             // крюк лежит поперёк: носок смотрит влево-вперёд, лицевая сторона — вперёд, к шайбе
-            bladeFwd = Vector3.ProjectOnPlane(-right * 0.9f + fwd * 0.35f, dir);
+            bladeFwd = Vector3.ProjectOnPlane(right * 0.9f + fwd * 0.35f, dir);
             if (bladeFwd.sqrMagnitude < 1e-4f) bladeFwd = Vector3.ProjectOnPlane(fwd, dir);
             bladeFwd.Normalize();
             return dir;
@@ -574,17 +611,17 @@ namespace Hockey
             float g = Stick.lossyScale.y;
             float L = (stickLen - 0.25f) * g;
             var h = Stick.position;
-            var target = Model.position + (fwd * (Goalie ? 0.75f : 1.05f) + right * (Goalie ? 0.05f : 0.46f)) * g;
+            var target = Model.position + (fwd * (Goalie ? 0.75f : 1.05f) + right * (Goalie ? 0.05f : -0.46f)) * g;   // клюшка слева: левый хват, как у большинства хоккеистов
             float drop = h.y - (Model.position.y + 0.04f);
             var hor = target - h; hor.y = 0;
             Vector3 dir;
             if (drop >= L || hor.sqrMagnitude < 1e-4f) dir = Vector3.down;
             else dir = (hor.normalized * Mathf.Sqrt(L * L - drop * drop) + Vector3.down * drop) / L;
-            var wind = (-fwd * 0.45f + Vector3.up * 0.85f + right * 0.3f).normalized;
-            var follow = (fwd * 0.9f + Vector3.up * 0.1f - right * 0.4f).normalized;
+            var wind = (-fwd * 0.45f + Vector3.up * 0.85f + right * (Goalie ? 0.3f : -0.3f)).normalized;
+            var follow = (fwd * 0.9f + Vector3.up * 0.1f + right * (Goalie ? -0.4f : 0.4f)).normalized;
             dir = Vector3.Slerp(dir, wind, Mathf.Clamp01(s.Charge) * 0.9f);
             if (swingT < 0.35f) dir = Vector3.Slerp(dir, follow, Mathf.Sin(swingT / 0.35f * Mathf.PI));
-            var bladeFwd = Vector3.ProjectOnPlane(Goalie ? fwd : -right * 0.9f + fwd * 0.35f, dir);
+            var bladeFwd = Vector3.ProjectOnPlane(Goalie ? fwd : right * 0.9f + fwd * 0.35f, dir);
             if (bladeFwd.sqrMagnitude < 1e-4f) bladeFwd = Vector3.ProjectOnPlane(fwd, dir);
             Stick.rotation = Quaternion.LookRotation(bladeFwd.normalized, -dir);
         }

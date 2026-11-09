@@ -8,6 +8,9 @@ namespace Hockey.EditorTools
 {
     public class KayKitImport : AssetPostprocessor
     {
+        // версия настроек: при изменении Unity переимпортирует модели (руки персонажа должны быть читаемыми)
+        public override uint GetVersion() => 2;
+
         bool IsKayKit => assetPath.Replace('\\', '/').Contains("/Resources/KayKit/") || assetPath.Replace('\\', '/').Contains("/Resources/Gear/");
 
         void OnPreprocessModel()
@@ -15,7 +18,7 @@ namespace Hockey.EditorTools
             if (!IsKayKit) return;
             var mi = (ModelImporter)assetImporter;
             if (assetPath.Replace('\\', '/').Contains("/Resources/Gear/")) { mi.animationType = ModelImporterAnimationType.None; mi.importAnimation = false; mi.isReadable = true; }
-            else { mi.animationType = ModelImporterAnimationType.Generic; mi.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel; }
+            else { mi.animationType = ModelImporterAnimationType.Generic; mi.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel; mi.isReadable = true; }
             mi.materialImportMode = ModelImporterMaterialImportMode.None;
             mi.importCameras = false;
             mi.importLights = false;
