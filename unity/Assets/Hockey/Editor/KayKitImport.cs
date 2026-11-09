@@ -14,7 +14,7 @@ namespace Hockey.EditorTools
         {
             if (!IsKayKit) return;
             var mi = (ModelImporter)assetImporter;
-            if (assetPath.Replace('\\', '/').Contains("/Resources/Gear/")) { mi.animationType = ModelImporterAnimationType.None; mi.importAnimation = false; }
+            if (assetPath.Replace('\\', '/').Contains("/Resources/Gear/")) { mi.animationType = ModelImporterAnimationType.None; mi.importAnimation = false; mi.isReadable = true; }
             else { mi.animationType = ModelImporterAnimationType.Generic; mi.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel; }
             mi.materialImportMode = ModelImporterMaterialImportMode.None;
             mi.importCameras = false;

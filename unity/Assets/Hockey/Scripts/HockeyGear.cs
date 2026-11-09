@@ -191,7 +191,13 @@ namespace Hockey
                 var m = mf != null ? mf.sharedMesh : (r as SkinnedMeshRenderer)?.sharedMesh;
                 if (m == null) continue;
                 var toRoot = go.transform.worldToLocalMatrix * r.transform.localToWorldMatrix;
-                foreach (var v in m.vertices) { var p = toRoot.MultiplyPoint3x4(v); if (first) { b = new Bounds(p, Vector3.zero); first = false; } else b.Encapsulate(p); }
+                var mb0 = m.bounds;
+                for (int c = 0; c < 8; c++)
+                {
+                    var corner = mb0.center + Vector3.Scale(mb0.extents, new Vector3((c & 1) == 0 ? -1 : 1, (c & 2) == 0 ? -1 : 1, (c & 4) == 0 ? -1 : 1));
+                    var p = toRoot.MultiplyPoint3x4(corner);
+                    if (first) { b = new Bounds(p, Vector3.zero); first = false; } else b.Encapsulate(p);
+                }
                 var mats = r.sharedMaterials;
                 for (int k = 0; k < mats.Length; k++) mats[k] = em;
                 r.sharedMaterials = mats;
@@ -285,7 +291,8 @@ namespace Hockey
             {
                 bool extHelmet = HasExt("helmet");
                 helmet.Add(Gear("helmet", GearModels.Helmet(Mats.Hex(tc.Main), Mats.Hex(tc.Dark), Mats.Hex("#2b2b33")), vcol, hc, helmRot, head, helmScale, Mats.Hex(tc.Main)));
-                if (!extHelmet) helmet.Add(Piece(GearModels.Visor(), visorM, hc, helmRot, head, false, helmScale));
+                // прозрачный визор: генераторы не умеют стекло, поэтому он всегда наш
+                helmet.Add(Piece(GearModels.Visor(), visorM, hc + (extHelmet ? fr.Fwd * hs.z * 0.03f : Vector3.zero), helmRot, head, false, extHelmet ? helmScale * 1.08f : helmScale));
                 // ремешок под подбородком
                 helmet.Add(Piece(MeshKit.Superellipsoid(hs.x * 0.47f, hs.y * 0.03f, hs.z * 0.5f, 0.9f, 0.8f, 24, -0.6f, 0.6f), black, hc - fr.Up * hs.y * 0.36f, fr.Rot * Quaternion.Euler(-20, 0, 0), head));
             }

@@ -8,11 +8,15 @@ from PIL import Image, ImageFilter
 src, outdir, name = sys.argv[1], sys.argv[2], sys.argv[3]
 target = int(sys.argv[4]) if len(sys.argv) > 4 else 25000
 rotY = float(sys.argv[5]) if len(sys.argv) > 5 else 0
+cutY = float(sys.argv[6]) if len(sys.argv) > 6 else -1e9   # срезать всё ниже этой высоты (например, свисающий ремешок)
 os.makedirs(outdir, exist_ok=True)
 tmp = os.path.join(outdir, '_tmp'); os.makedirs(tmp, exist_ok=True)
 m = trimesh.load(src, force='mesh')
 if rotY: m.apply_transform(trimesh.transformations.rotation_matrix(np.radians(rotY), [0, 1, 0]))
 img = m.visual.material.baseColorTexture.convert('RGB')
+if cutY > -1e8:
+    keep = ~(m.vertices[m.faces][:, :, 1] < cutY).all(axis=1)
+    m.update_faces(keep); m.remove_unreferenced_vertices()
 # --- чистка текстуры
 a = np.asarray(img.filter(ImageFilter.MedianFilter(7))).astype(float)
 pal = np.array([[238, 238, 234], [40, 40, 46], [214, 52, 56], [214, 176, 128], [120, 80, 52], [150, 150, 158]], float)
