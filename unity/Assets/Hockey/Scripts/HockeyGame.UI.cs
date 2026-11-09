@@ -281,7 +281,7 @@ namespace Hockey
 
         void DrawLocker()
         {
-            GUILayout.BeginArea(new Rect(60, 200, 560, VH - 280), sPanel);
+            GUILayout.BeginArea(new Rect(60, 200, 660, VH - 280), sPanel);
             scroll = GUILayout.BeginScrollView(scroll);
             GUILayout.Label("Раздевалка", sH1);
             GUILayout.Label("Твоё имя", sSmall);

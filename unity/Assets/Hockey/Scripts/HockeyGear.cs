@@ -67,15 +67,24 @@ namespace Hockey
             }
             else
             {
-                // маска вратаря: белый купол с вырезом спереди и решёткой
-                var mp = hc + fr.Up * hs.y * 0.04f;
-                Piece(MeshKit.Superellipsoid(hs.x * 0.6f, hs.y * 0.58f, hs.z * 0.62f, 0.75f, 0.75f, 32, -Mathf.PI / 2 * 0.85f, Mathf.PI / 2, 0.75f), white, mp, fr.Rot, head);
-                Piece(MeshKit.Superellipsoid(u * 0.09f, hs.y * 0.5f, hs.z * 0.6f, 0.6f, 0.6f, 20, -0.4f, Mathf.PI / 2), team1, mp + fr.Up * hs.y * 0.1f, fr.Rot, head);
-                var bar = MeshKit.Superellipsoid(0.011f * u / 0.6f, hs.y * 0.3f, 0.011f * u / 0.6f, 1, 1, 8);
-                var hbar = MeshKit.Superellipsoid(hs.x * 0.36f, 0.011f * u / 0.6f, 0.011f * u / 0.6f, 1, 1, 8);
-                var front = mp + fr.Fwd * hs.z * 0.6f;
-                for (int i = -2; i <= 2; i++) Piece(bar, black, front + fr.Right * i * hs.x * 0.08f - fr.Fwd * Mathf.Abs(i) * hs.z * 0.03f - fr.Up * hs.y * 0.05f, fr.Rot, head);
-                for (int i = -1; i <= 1; i++) Piece(hbar, black, front + fr.Up * (i * hs.y * 0.12f - hs.y * 0.05f), fr.Rot, head);
+                // маска вратаря: белый шлем, полоса цвета команды и решётка перед лицом
+                var hp = hc + fr.Up * hs.y * 0.18f - fr.Fwd * hs.z * 0.04f;
+                var rot = fr.Rot * Quaternion.Euler(-6, 0, 0);
+                Piece(MeshKit.Superellipsoid(hs.x * 0.58f, hs.y * 0.52f, hs.z * 0.6f, 0.6f, 0.75f, 32, -0.35f, Mathf.PI / 2), white, hp, rot, head);
+                Piece(MeshKit.Superellipsoid(u * 0.1f, hs.y * 0.1f, hs.z * 0.52f, 0.5f, 0.5f, 16), team1, hp + fr.Up * hs.y * 0.48f, rot, head);
+                for (int i = 0; i < 2; i++)
+                {
+                    float sd = i == 0 ? 1 : -1;
+                    Piece(MeshKit.Superellipsoid(u * 0.09f, hs.y * 0.3f, hs.z * 0.32f, 0.6f, 0.6f, 18), white, hc + fr.Right * sd * hs.x * 0.52f - fr.Up * hs.y * 0.05f, fr.Rot, head);
+                }
+                float t = 0.012f * u / 0.6f;
+                var front = hc + fr.Fwd * hs.z * 0.56f - fr.Up * hs.y * 0.12f;
+                var vbar = MeshKit.Superellipsoid(t, hs.y * 0.26f, t, 1, 1, 8);
+                var hbar = MeshKit.Superellipsoid(hs.x * 0.42f, t, t, 1, 1, 8);
+                for (int i = -3; i <= 3; i++) Piece(vbar, black, front + fr.Right * i * hs.x * 0.11f - fr.Fwd * (i * i) * hs.z * 0.012f, fr.Rot, head);
+                for (int i = -1; i <= 1; i++) Piece(hbar, black, front + fr.Up * i * hs.y * 0.14f, fr.Rot, head);
+                // подбородник
+                Piece(MeshKit.Superellipsoid(hs.x * 0.36f, hs.y * 0.08f, hs.z * 0.2f, 0.6f, 0.6f, 16), white, front - fr.Up * hs.y * 0.26f - fr.Fwd * hs.z * 0.08f, fr.Rot, head);
             }
 
             // ---------------- номер на спине ----------------

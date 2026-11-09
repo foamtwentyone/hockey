@@ -125,9 +125,9 @@ namespace Hockey
                 c.Dizzy = Group("dizzy", c.Tilt, new Vector3(0, 2.0f, 0));
                 for (int i = 0; i < 5; i++)
                 {
-                    var st = Part(MeshKit.Star(i % 2 == 0 ? 0.12f : 0.08f), Mats.Emissive(i % 2 == 0 ? "#ffd23f" : "#ffffff", 0.9f), Vector3.zero, c.Dizzy, false);
+                    var st = Part(MeshKit.Star(i % 2 == 0 ? 0.2f : 0.14f), Mats.Emissive(i % 2 == 0 ? "#ffd23f" : "#ffffff", 1.4f), Vector3.zero, c.Dizzy, false);
                     float a = i * Mathf.PI * 2 / 5;
-                    st.localPosition = new Vector3(Mathf.Cos(a) * 0.4f, Mathf.Sin(a * 2) * 0.05f, Mathf.Sin(a) * 0.4f);
+                    st.localPosition = new Vector3(Mathf.Cos(a) * 0.5f, Mathf.Sin(a * 2) * 0.06f, Mathf.Sin(a) * 0.5f);
                     st.localRotation = Quaternion.Euler(0, -a * Mathf.Rad2Deg + 90, 0);
                 }
                 c.Dizzy.gameObject.SetActive(false);
