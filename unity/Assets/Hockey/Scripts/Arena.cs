@@ -315,9 +315,9 @@ namespace Hockey
             for (int i = 0; i < scorePx.Length; i++) scorePx[i] = (Color)bg;
             for (int y = 200; y < 236; y++) for (int x = 16; x < 240; x++) { scorePx[y * W + x] = Mats.Hex("#ef5a4c"); scorePx[y * W + x + 256] = Mats.Hex("#4a8ff0"); }
             var yellow = Mats.Hex("#ffd23f");
-            Tex.DrawSmooth(scorePx, W, H, s0.ToString(), 128, 110, 120, yellow, 0.22f);
-            Tex.DrawSmooth(scorePx, W, H, s1.ToString(), 384, 110, 120, yellow, 0.22f);
-            Tex.DrawSmooth(scorePx, W, H, $"{t / 60}:{t % 60:00}", 256, 28, 34, Mats.Hex("#5cf2ff"), 0.2f);
+            Tex.DrawSmooth(scorePx, W, H, s0.ToString(), 128, 128, 110, yellow, 0.22f);
+            Tex.DrawSmooth(scorePx, W, H, s1.ToString(), 384, 128, 110, yellow, 0.22f);
+            Tex.DrawSmooth(scorePx, W, H, $"{t / 60}:{t % 60:00}", 256, 34, 52, Mats.Hex("#5cf2ff"), 0.24f);
             scoreTex.SetPixels(scorePx);
             scoreTex.Apply(true);
         }
