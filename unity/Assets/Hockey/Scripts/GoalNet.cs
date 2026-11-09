@@ -67,7 +67,7 @@ namespace Hockey
             // двусторонняя сетка: вторая копия вершин с обратными нормалями и обратным обходом
             verts = new Vector3[n * 2];
             var allN = new Vector3[n * 2]; var allUv = new Vector2[n * 2];
-            for (int i = 0; i < n; i++) { verts[i] = verts[i + n] = rest[i]; allN[i] = normal[i]; allN[i + n] = -normal[i]; allUv[i] = allUv[i + n] = uv[i]; }
+            for (int i = 0; i < n; i++) { verts[i] = verts[i + n] = rest[i]; allN[i] = allN[i + n] = Vector3.up; allUv[i] = allUv[i + n] = uv[i]; }
             var all = new List<int>(tris);
             for (int t = 0; t < tris.Count; t += 3) { all.Add(tris[t] + n); all.Add(tris[t + 2] + n); all.Add(tris[t + 1] + n); }
             mesh = new Mesh { name = "goal-net" };
@@ -83,6 +83,7 @@ namespace Hockey
             var mr = go.AddComponent<MeshRenderer>();
             mr.sharedMaterial = mat;
             mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+            mr.receiveShadows = false;   // нормали «вверх» и без собственных теней — шнур светлый с любой стороны
             tr = goal;
         }
 
