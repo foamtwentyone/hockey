@@ -227,8 +227,8 @@ namespace Hockey
                 yield return Wait(0.4f);
                 yield return Shot("19_arena");
                 // сетка ворот: шайба влетает и прогибает её
-                cam.transform.position = new Vector3(Rink.GoalX - 3.4f, 1.5f, 2.4f);
-                cam.transform.LookAt(new Vector3(Rink.GoalX + 0.5f, 0.6f, 0));
+                cam.transform.position = new Vector3(Rink.GoalX + 0.9f, 1.5f, 3.6f);   // сбоку от ворот, вратарь не загораживает
+                cam.transform.LookAt(new Vector3(Rink.GoalX + 0.6f, 0.55f, 0));
                 yield return Wait(0.3f);
                 yield return Shot("19a_net");
                 for (int i = 0; i < 9; i++) arena.UpdateNets(new Vector3(Rink.GoalX - 0.4f + i * 0.2f, 0.6f, 0.5f), 1 / 60f);
