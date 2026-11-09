@@ -8,14 +8,14 @@ namespace Hockey.EditorTools
 {
     public class KayKitImport : AssetPostprocessor
     {
-        bool IsKayKit => assetPath.Replace('\\', '/').Contains("/Resources/KayKit/");
+        bool IsKayKit => assetPath.Replace('\\', '/').Contains("/Resources/KayKit/") || assetPath.Replace('\\', '/').Contains("/Resources/Gear/");
 
         void OnPreprocessModel()
         {
             if (!IsKayKit) return;
             var mi = (ModelImporter)assetImporter;
-            mi.animationType = ModelImporterAnimationType.Generic;
-            mi.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
+            if (assetPath.Replace('\\', '/').Contains("/Resources/Gear/")) { mi.animationType = ModelImporterAnimationType.None; mi.importAnimation = false; }
+            else { mi.animationType = ModelImporterAnimationType.Generic; mi.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel; }
             mi.materialImportMode = ModelImporterMaterialImportMode.None;
             mi.importCameras = false;
             mi.importLights = false;

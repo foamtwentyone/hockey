@@ -183,7 +183,7 @@ namespace Hockey
             var go = Object.Instantiate(prefab);
             go.name = "gear_" + name;
             var rends = go.GetComponentsInChildren<Renderer>(true);
-            // габарит модели в её собственных координатах
+            var em = ExtMaterial(name, tint, team);
             var b = new Bounds(); bool first = true;
             foreach (var r in rends)
             {
@@ -192,29 +192,61 @@ namespace Hockey
                 if (m == null) continue;
                 var toRoot = go.transform.worldToLocalMatrix * r.transform.localToWorldMatrix;
                 foreach (var v in m.vertices) { var p = toRoot.MultiplyPoint3x4(v); if (first) { b = new Bounds(p, Vector3.zero); first = false; } else b.Encapsulate(p); }
-                string key = name + ColorUtility.ToHtmlStringRGB(tint);
-                if (!extMats.TryGetValue(key, out var em))
-                {
-                    var src = r.sharedMaterial;
-                    em = Mats.ToonModel(src != null ? src.mainTexture : null);
-                    em.color = tint;
-                    extMats[key] = em;
-                }
                 var mats = r.sharedMaterials;
-                for (int k = 0; k < mats.Length; k++) mats[k] = Mats.Outlined(em, 0.8f);
+                for (int k = 0; k < mats.Length; k++) mats[k] = em;
                 r.sharedMaterials = mats;
                 r.shadowCastingMode = shadow ? UnityEngine.Rendering.ShadowCastingMode.On : UnityEngine.Rendering.ShadowCastingMode.Off;
             }
-            var abs = new Vector3(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z));
-            var want = Vector3.Scale(sculpt.bounds.size, abs);
-            float k0 = Mathf.Min(want.x / Mathf.Max(1e-4f, b.size.x), Mathf.Min(want.y / Mathf.Max(1e-4f, b.size.y), want.z / Mathf.Max(1e-4f, b.size.z)));
-            var holder = new GameObject("gear_" + name + "_fit").transform;
-            holder.SetPositionAndRotation(pos + rot * Vector3.Scale(sculpt.bounds.center, scale), rot);
+            var holder = FitHolder(name, sculpt, pos, rot, scale, b, out var lscale, out var lpos);
             go.transform.SetParent(holder, false);
-            go.transform.localScale = new Vector3(Mathf.Sign(scale.x), 1, 1) * k0;
-            go.transform.localPosition = -Vector3.Scale(b.center, go.transform.localScale);
+            go.transform.localScale = lscale;
+            go.transform.localPosition = lpos;
             holder.SetParent(bone, true);
             return holder;
+        }
+
+        /// Подгонка внешней модели (габарит b) под место вылепленной: голова — по ширине макушкой к макушке, щиток — по высоте от льда.
+        static Transform FitHolder(string name, Mesh sculpt, Vector3 pos, Quaternion rot, Vector3 scale, Bounds bb, out Vector3 lscale, out Vector3 lpos)
+        {
+            var absS = new Vector3(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z));
+            var wantS = Vector3.Scale(sculpt.bounds.size, absS);
+            var sb = sculpt.bounds;
+            bool headGear = name == "helmet" || name == "goalie_mask";
+            bool legGear = name == "pad";
+            float kk; Vector3 anchorSculpt, anchorModel;
+            if (headGear) { kk = wantS.x * 1.12f / bb.size.x; anchorSculpt = new Vector3(sb.center.x, sb.max.y, sb.center.z); anchorModel = new Vector3(bb.center.x, bb.max.y, bb.center.z); }
+            else if (legGear) { kk = wantS.y / bb.size.y; anchorSculpt = new Vector3(sb.center.x, sb.min.y, sb.center.z); anchorModel = new Vector3(bb.center.x, bb.min.y, bb.center.z); }
+            else { kk = Mathf.Min(wantS.x / bb.size.x, Mathf.Min(wantS.y / bb.size.y, wantS.z / bb.size.z)); anchorSculpt = sb.center; anchorModel = bb.center; }
+            var hold = new GameObject("gear_" + name + "_fit").transform;
+            hold.SetPositionAndRotation(pos + rot * Vector3.Scale(anchorSculpt, scale), rot);
+            lscale = new Vector3(Mathf.Sign(scale.x), 1, 1) * kk;
+            lpos = -Vector3.Scale(anchorModel, lscale) + (headGear ? Vector3.up * wantS.y * 0.04f : Vector3.zero);
+            return hold;
+        }
+
+        /// Материал внешней модели: её текстура (Resources/Gear/<name>.png), у синей команды красное перекрашено в синий.
+        static Material ExtMaterial(string name, Color tint, int team)
+        {
+            string key = name + ColorUtility.ToHtmlStringRGB(tint) + team;
+            if (extMats.TryGetValue(key, out var em)) return em;
+            var tex = Resources.Load<Texture2D>("Gear/" + name);
+            Texture2D use = tex;
+            if (tex != null && tex.isReadable && team == 1)
+            {
+                Color.RGBToHSV(Mats.Hex(TeamColors.All[1].Main), out float blueH, out _, out _);
+                var px = tex.GetPixels();
+                for (int i = 0; i < px.Length; i++)
+                {
+                    Color.RGBToHSV(px[i], out float h, out float s, out float v);
+                    if ((h < 0.05f || h > 0.93f) && s > 0.35f && v > 0.25f) px[i] = Color.HSVToRGB(blueH, s, v);
+                }
+                use = new Texture2D(tex.width, tex.height, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Clamp };
+                use.SetPixels(px); use.Apply(true);
+            }
+            em = Mats.ToonModel(use, 0.15f);
+            em.color = tint;
+            extMats[key] = em;
+            return em;
         }
 
         static Transform Piece(Mesh mesh, Material mat, Vector3 worldPos, Quaternion worldRot, Transform bone, bool shadow = true, Vector3? scale = null)

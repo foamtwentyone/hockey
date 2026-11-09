@@ -1,0 +1,3 @@
+newmtl goalie_mask
+Kd 1 1 1
+map_Kd goalie_mask.png
