@@ -1066,7 +1066,7 @@ namespace Hockey
             float ang = Mathf.Abs(Sim.Wrap(Mathf.Atan2(tx, tz) - v.Yaw));
             bool onGoal = Rink.TeamDir[team] * (gx - p.X) > 0.5f && ang < 0.65f && dist < 30;
             float ch = Mathf.Clamp01(p.Charge);
-            float size = Mathf.Lerp(40, 24, ch);
+            float size = Mathf.Lerp(22, 14, ch);
             var c = new Vector2(area.x + area.width / 2, VH / 2);
             Color col = ch > 0.7f ? Mats.Hex("#ff5a4c") : ch > 0.02f ? Mats.Hex("#ffb14a") : onGoal ? Mats.Hex("#5cf28a") : Color.white;
             // тень, кольцо, точка
@@ -1075,9 +1075,9 @@ namespace Hockey
             GUI.color = WithA(col, 0.95f);
             GUI.DrawTexture(new Rect(c.x - size / 2, c.y - size / 2, size, size), hudRing);
             GUI.color = new Color(0.05f, 0.06f, 0.2f, 0.7f);
-            GUI.DrawTexture(new Rect(c.x - 4, c.y - 4, 8, 8), circleTex);
-            GUI.color = col;
             GUI.DrawTexture(new Rect(c.x - 2.5f, c.y - 2.5f, 5, 5), circleTex);
+            GUI.color = col;
+            GUI.DrawTexture(new Rect(c.x - 1.5f, c.y - 1.5f, 3, 3), circleTex);
             GUI.color = Color.white;
         }
 

@@ -15,6 +15,8 @@ namespace Hockey
         public Transform Model, HandR, Head, StickBlade, Stick;
         Transform armL0, armL1, armL2;   // плечо, предплечье, кисть левой руки — для хвата клюшки двумя руками
         float gripW;
+        readonly List<Transform> hands = new List<Transform>();
+        const float HandShrink = 0.62f;
         const float StickTop = 0.36f, GripL = 0.27f;
         public List<Transform> HelmetParts = new List<Transform>();
         Spring headKick;
@@ -169,6 +171,13 @@ namespace Hockey
             k.graph.Evaluate(0);
             k.HelmetParts = HockeyGear.Dress(go.transform, bones, parts, team, number, goalie);
             if (k.HandR != null) k.BuildStick(team, Mats.Hex(TapeColors[Mathf.Abs(tape) % TapeColors.Length]));
+            // кулак модели меньше — чтобы не протыкал крагу; всё надетое на кисть компенсируем, оно остаётся прежнего размера
+            foreach (var hn in new[] { "hand.l", "hand.r" })
+                if (bones.TryGetValue(hn, out var hb))
+                {
+                    k.hands.Add(hb);
+                    foreach (Transform ch in hb) { ch.localPosition /= HandShrink; ch.localScale /= HandShrink; }
+                }
             go.AddComponent<KayKitGraphOwner>().Graph = k.graph;
             return k;
         }
@@ -408,6 +417,12 @@ namespace Hockey
             upperLayerW += (upper - upperLayerW) * k;
             Apply();
             graph.Evaluate(0);
+            foreach (var hb in hands) hb.localScale = Vector3.one * HandShrink;
+            if (Stick != null && Stick.parent != null)
+            {   // клюшка — в метрах независимо от масштаба кисти
+                var ls = Stick.parent.lossyScale;
+                Stick.localScale = new Vector3(1 / Mathf.Max(1e-4f, ls.x), 1 / Mathf.Max(1e-4f, ls.y), 1 / Mathf.Max(1e-4f, ls.z));
+            }
             // откинутая ударом голова — пружиной поверх анимации
             headKick.Step(0, 2.2f, 0.25f, dt);
             if (Head != null && Mathf.Abs(headKick.X) > 0.001f)
