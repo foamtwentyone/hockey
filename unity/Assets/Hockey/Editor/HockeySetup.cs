@@ -27,8 +27,8 @@ namespace Hockey.EditorTools
             EnsureMaterials();
             EnsureScene();
             PlayerSettings.runInBackground = true;
-            if (PlayerSettings.productName == "unity" || PlayerSettings.productName == "Дворовый хоккей 3D" || PlayerSettings.productName == "Шайбятки" || string.IsNullOrEmpty(PlayerSettings.productName))
-                PlayerSettings.productName = "Pucklings";
+            if (PlayerSettings.productName == "unity" || PlayerSettings.productName == "Дворовый хоккей 3D" || PlayerSettings.productName == "Шайбятки" || PlayerSettings.productName == "Pucklings" || string.IsNullOrEmpty(PlayerSettings.productName))
+                PlayerSettings.productName = "Pucko";
         }
 
         static void EnsureMaterials()

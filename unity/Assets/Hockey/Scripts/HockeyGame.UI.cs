@@ -429,7 +429,7 @@ namespace Hockey
             GUILayout.BeginArea(new Rect(60, 200, 760, VH - 280), sPanel);
             scroll = GUILayout.BeginScrollView(scroll);
             GUILayout.Label("Авторы", sH1);
-            GUILayout.Label("<b>PUCKLINGS</b> («Шайбятки») — аркадный хоккей для весёлой компании.", sCenter);
+            GUILayout.Label("<b>PUCKO</b> («Шайбятки») — аркадный хоккей для весёлой компании.", sCenter);
             GUILayout.Space(10);
             GUILayout.Label("<color=#ffd23f><b>Игра, код, физика, эффекты и звуки</b></color>\nсделано вместе с Claude (Anthropic)", sLabel);
             GUILayout.Space(6);
@@ -450,7 +450,7 @@ namespace Hockey
         {
             GUILayout.BeginArea(new Rect(60, 220, 470, 260), sPanel);
             GUILayout.Label("Уже уходишь?", sH1);
-            GUILayout.Label("Пуклинги будут скучать!", sCenter);
+            GUILayout.Label("PUCKO будет скучать!", sCenter);
             GUILayout.BeginHorizontal();
             if (Button("Остаться", BtnMain, GUILayout.Height(60))) uiPage = UiPage.Main;
             if (Button("Выйти", BtnGhost, GUILayout.Height(60), GUILayout.Width(150)))
