@@ -53,6 +53,10 @@ namespace Hockey
         Spring leanF, leanS, squash, headP, headR, headY, tumble, diveS, giant, celebrate, charge, swing;
         Vector3 prevPos, vel, acc; float prevYaw, yawRate; bool init;
         bool wasStun, wasAir; float tumbleSpin, tumbleSide;
+        // «желейные» реакции в духе Fall Guys
+        Spring wob, lunge, sad;
+        bool hadPuck, wasSwingR, wasStag, wasSaveR;
+        float hopY, hopV, celT, spinT = -1, nextSpin;
         Vector3 legL, legR, armL, armR, torsoRot, stickRot;
         float hipsY;
 
@@ -294,7 +298,7 @@ namespace Hockey
 
         public struct AnimCtx
         {
-            public bool HasPuck, Celebrate, Dance;
+            public bool HasPuck, Celebrate, Dance, Sad;
             public Vector3 LookAt;
             public float Dt, Time;
         }
@@ -384,8 +388,44 @@ namespace Hockey
                 foreach (var t in Trails) t.emitting = trail;
                 if (brawl) return;
                 // у модели KayKit падение и нырок — свои анимации; пружины добавляют наклоны по инерции
-                Tilt.localRotation = Quaternion.Euler(leanF.X * 0.45f * Mathf.Rad2Deg, 0, -leanS.X * 0.7f * Mathf.Rad2Deg);
-                Tilt.localPosition = Vector3.zero;
+                // и «мультяшные» реакции: подпрыгивание при подборе шайбы, выпад и дрожь после броска,
+                // покачивание в такт шагам, праздничные прыжки с пируэтами, понурая поза у пропустивших.
+                if (ctx.HasPuck && !hadPuck && !air) { squash.V += 2.5f; hopV = 1.8f; }
+                hadPuck = ctx.HasPuck;
+                bool swingNow = s.Swing > 0;
+                if (swingNow && !wasSwingR) { squash.V -= 3.5f; wob.V += 9; lunge.V += 7; }
+                wasSwingR = swingNow;
+                if (s.Stagger && !wasStag) { wob.V += 16; squash.V -= 2; }
+                wasStag = s.Stagger;
+                bool saveNow = s.Save > 0.3f;
+                if (saveNow && !wasSaveR) { squash.V -= 6; wob.V += 12; }
+                wasSaveR = saveNow;
+                wob.Step(0, 6.5f, 0.12f, dt);
+                lunge.Step(0, 2.6f, 0.4f, dt);
+                sad.Step(ctx.Sad ? 1 : 0, 1.2f, 0.7f, dt);
+                hopV -= 14 * dt; hopY = Mathf.Max(0, hopY + hopV * dt); if (hopY <= 0 && hopV < 0) hopV = 0;
+
+                float celHop = 0, spin = 0;
+                if (ctx.Celebrate || ctx.Dance)
+                {
+                    celT += dt;
+                    celHop = Mathf.Abs(Mathf.Sin(celT * 6.5f + phase)) * 0.22f;
+                    if (spinT < 0 && celT > nextSpin) { spinT = 0; nextSpin = celT + 1.6f + Random.value * 1.5f; }
+                }
+                else { celT = 0; nextSpin = 0.3f + Random.value * 0.8f; }
+                if (spinT >= 0)
+                {   // пируэт на 360° с ускорением в середине
+                    spinT += dt / 0.7f;
+                    spin = Mathf.SmoothStep(0, 360, Mathf.Clamp01(spinT));
+                    if (spinT >= 1) spinT = -1;
+                }
+                float sway = Mathf.Sin(phase) * 0.07f * amp * (air ? 0 : 1);
+                float pitchK = leanF.X * 0.45f - charge.X * 0.22f + lunge.X * 0.45f + sad.X * 0.35f;
+                float rollK = -leanS.X * 0.7f + sway + wob.X * 0.1f + Mathf.Sin(time * 1.3f) * 0.06f * sad.X;
+                Tilt.localRotation = Quaternion.Euler(pitchK * Mathf.Rad2Deg, spin, rollK * Mathf.Rad2Deg);
+                Tilt.localPosition = new Vector3(0, hopY + celHop + Mathf.Abs(Mathf.Sin(phase)) * 0.025f * amp, 0);
+                float wx = 1 + wob.X * 0.07f, wz = 1 - wob.X * 0.07f;
+                Scale.localScale = new Vector3(Scale.localScale.x * wx, Scale.localScale.y * (1 - sad.X * 0.07f), Scale.localScale.z * wz);
                 KK.Update(s, ctx.Celebrate, ctx.Dance, ctx.HasPuck, Vector3.Dot(vel, right), dt);
                 return;
             }

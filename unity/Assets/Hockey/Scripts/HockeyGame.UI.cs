@@ -1085,21 +1085,6 @@ namespace Hockey
             GUI.color = col;
             GUI.DrawTexture(new Rect(c.x - 1.5f, c.y - 1.5f, 3, 3), circleTex);
 
-            // метка на воротах: куда прилетит шайба при текущей силе замаха
-            if (onGoal && v.Cam != null)
-            {
-                var world = new Vector3(gx, Sim.ShotHeight(ch), hitZ);
-                var sp = v.Cam.WorldToScreenPoint(world);
-                if (sp.z > 0.5f)
-                {
-                    float mx = sp.x / uiScale, my = (Screen.height - sp.y) / uiScale;
-                    float pulse = 1 + Mathf.Sin(time * 9) * 0.12f;
-                    GUI.color = WithA(col, 0.45f);
-                    GUI.DrawTexture(new Rect(mx - 9 * pulse, my - 9 * pulse, 18 * pulse, 18 * pulse), circleTex);
-                    GUI.color = Color.white;
-                    GUI.DrawTexture(new Rect(mx - 9, my - 6, 18, 11), hudPuck);
-                }
-            }
             GUI.color = Color.white;
         }
 

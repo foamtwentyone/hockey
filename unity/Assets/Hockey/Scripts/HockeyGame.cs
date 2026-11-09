@@ -773,7 +773,7 @@ namespace Hockey
                 var c = chars[i]; var s = st.Players[i];
                 c.Root.localPosition = new Vector3(s.X, s.Y, s.Z);
                 c.Root.localRotation = Quaternion.Euler(0, s.H * Mathf.Rad2Deg, 0);
-                c.Animate(s, new CharacterRig.AnimCtx { HasPuck = st.PuckOwner == i, Celebrate = c.Team == celebrateTeam && !c.Goalie, Dt = dt, Time = time + i, LookAt = puckPos });
+                c.Animate(s, new CharacterRig.AnimCtx { HasPuck = st.PuckOwner == i, Celebrate = c.Team == celebrateTeam && !c.Goalie, Sad = celebrateTeam >= 0 && c.Team != celebrateTeam, Dt = dt, Time = time + i, LookAt = puckPos });
                 if (rings.TryGetValue(i, out var ring)) ring.localPosition = new Vector3(s.X, 0.015f, s.Z);
                 // ледяная крошка из-под коньков на скорости и в нырке
                 if (!s.Stun && s.Y < 0.05f && (s.Spd > 8.5f || s.Dive) && Random.value < dt * (s.Dive ? 30 : 6))
