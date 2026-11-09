@@ -307,8 +307,8 @@ namespace Hockey
             }
             GUI.color = Color.white;
             DrawTitle(60, 40);
-            if (uiPage != lastPage) { lastPage = uiPage; pageT = time; scroll = Vector2.zero; }
-            float k = Mathf.Clamp01((time - pageT) * 4.5f);
+            if (uiPage != lastPage) { lastPage = uiPage; pageT = Time.realtimeSinceStartup; scroll = Vector2.zero; }
+            float k = Mathf.Clamp01((Time.realtimeSinceStartup - pageT) * 4.5f);
             float ease = 1 - (1 - k) * (1 - k) * (1 - k);
             var baseM = GUI.matrix;
             GUI.matrix = baseM * Matrix4x4.Translate(new Vector3((1 - ease) * -90, 0, 0));
@@ -344,7 +344,7 @@ namespace Hockey
             // кнопки выезжают слева по очереди
             void Enter()
             {
-                float k = Mathf.Clamp01((time - pageT) * 5f - idx * 0.35f);
+                float k = Mathf.Clamp01((Time.realtimeSinceStartup - pageT) * 5f - idx * 0.35f);
                 float e = 1 - Mathf.Pow(1 - k, 3);
                 GUI.matrix = baseM * Matrix4x4.Translate(new Vector3((1 - e) * -220, 0, 0));
                 idx++;
