@@ -130,7 +130,7 @@ namespace Hockey
                 {
                     // ловушка — на левой, блин — на правой; лицевой стороной к шайбе
                     var face = Quaternion.LookRotation(fr.Fwd, Vector3.ProjectOnPlane(fingerDir, fr.Fwd).normalized);
-                    float gsz = fr0 * 2 * 2.1f;
+                    float gsz = Mathf.Max(u * 0.55f, fr0 * 2 * 2.8f);
                     if (i == 0) Piece(GearModels.Catcher(Mats.Hex("#f6f6f2"), Mats.Hex(tc.Main)), Mats.Get("#ffffff", 0.45f), fist + fr.Fwd * fr0 * 0.3f, face, hand, true, new Vector3(-gsz, gsz, gsz));
                     else Piece(GearModels.Blocker(Mats.Hex("#f6f6f2"), Mats.Hex(tc.Main)), Mats.Get("#ffffff", 0.45f), fist + fr.Fwd * fr0 * 0.2f, face, hand, true, new Vector3(gsz, gsz, gsz));
                 }

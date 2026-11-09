@@ -322,7 +322,7 @@ namespace Hockey
             {
                 float body = Ellipsoid(p - new Vector3(0, 0.08f, 0), new Vector3(0.42f, 0.48f, 0.2f));
                 // карман-«ловушка»
-                float pocket = Ellipsoid(p - new Vector3(0.02f, 0.12f, 0.2f), new Vector3(0.3f, 0.34f, 0.18f));
+                float pocket = Ellipsoid(p - new Vector3(0.02f, 0.12f, 0.27f), new Vector3(0.26f, 0.3f, 0.11f));
                 body = SMax(body, -pocket, 0.04f);
                 // большой палец и сетка между ним и ладонью
                 float thumb = Capsule(p, new Vector3(-0.32f, -0.1f, 0.05f), new Vector3(-0.42f, 0.38f, 0.08f), 0.09f);
