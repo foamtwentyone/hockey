@@ -758,33 +758,47 @@ namespace Hockey
             if (!own && !oneTimer) { Ev(EvType.Swish); return; }
 
             float power = charge < 0.12f ? 0.3f : charge;
-            float speed = 15 + 22 * power + (oneTimer ? 4 : 0);
+            float speed = ShotSpeed(charge, oneTimer);
             float sh = p.ShotH;
             float dx = MathF.Sin(sh), dz = MathF.Cos(sh);
-            float vy = 0.4f + 3.2f * power * Rnd(0.6f, 1);
-
-            // автоприцел, если игрок смотрит примерно в ворота
+            float vy;
             float gx = Rink.TeamDir[p.Team] * Rink.GoalX;
-            Player keeper = null;
-            foreach (var q in Players) if (q.Goalie && q.Team != p.Team) keeper = q;
-            float side = keeper != null && keeper.Z > 0 ? -1 : keeper != null && keeper.Z < 0 ? 1 : (Rand() < 0.5f ? -1 : 1);
-            float tz = Rnd(0.55f, 1.25f) * side;
-            float tx = gx - pk.X, tzz = tz - pk.Z;
-            float dist = Hyp(tx, tzz);
-            float ang = MathF.Abs(Wrap(MathF.Atan2(tx, tzz) - sh));
-            bool facingGoal = Rink.TeamDir[p.Team] * (gx - pk.X) > 0.5f;
-            if (facingGoal && ang < 0.65f && dist < 30)
+            if (p.Human != null && p.HasAim)
             {
-                float k = 0.9f - ang * 0.6f;
-                dx = dx * (1 - k) + tx / dist * k; dz = dz * (1 - k) + tzz / dist * k;
-                float l = Hyp(dx, dz); dx /= l; dz /= l;
-                float th = Rnd(0.15f, 1.05f) * (0.6f + power * 0.5f);
-                float t = dist / speed;
-                vy = Clamp((th - 0.1f + 0.5f * G * t * t) / t, 0, 7.5f);
+                // человек: шайба летит ровно в прицел; высота у ворот зависит только от силы замаха
+                // (короткий щелчок — по льду, полный замах — под перекладину). Никаких случайностей.
+                float along = MathF.Abs(dx) > 0.05f ? (gx - bx) / dx : -1;
+                float dist = along > 1 && along < 45 ? along : 14;
+                vy = ShotVy(charge, dist, speed);
+                float err = oneTimer ? 0.02f : 0.006f;
+                float a0 = MathF.Atan2(dx, dz) + Rnd(-err, err);
+                dx = MathF.Sin(a0); dz = MathF.Cos(a0);
             }
-            float err = (p.Human != null ? 0.035f : diff.ShootErr) * (0.6f + power) * (oneTimer ? 1.6f : 1);
-            float a = MathF.Atan2(dx, dz) + Rnd(-err, err);
-            dx = MathF.Sin(a); dz = MathF.Cos(a);
+            else
+            {
+                vy = 0.4f + 3.2f * power * Rnd(0.6f, 1);
+                // боты: автоприцел, если смотрят примерно в ворота
+                Player keeper = null;
+                foreach (var q in Players) if (q.Goalie && q.Team != p.Team) keeper = q;
+                float side = keeper != null && keeper.Z > 0 ? -1 : keeper != null && keeper.Z < 0 ? 1 : (Rand() < 0.5f ? -1 : 1);
+                float tz = Rnd(0.55f, 1.25f) * side;
+                float tx = gx - pk.X, tzz = tz - pk.Z;
+                float dist = Hyp(tx, tzz);
+                float ang = MathF.Abs(Wrap(MathF.Atan2(tx, tzz) - sh));
+                bool facingGoal = Rink.TeamDir[p.Team] * (gx - pk.X) > 0.5f;
+                if (facingGoal && ang < 0.65f && dist < 30)
+                {
+                    float k = 0.9f - ang * 0.6f;
+                    dx = dx * (1 - k) + tx / dist * k; dz = dz * (1 - k) + tzz / dist * k;
+                    float l = Hyp(dx, dz); dx /= l; dz /= l;
+                    float th = Rnd(0.15f, 1.05f) * (0.6f + power * 0.5f);
+                    float t = dist / speed;
+                    vy = Clamp((th - 0.1f + 0.5f * G * t * t) / t, 0, 7.5f);
+                }
+                float err = diff.ShootErr * (0.6f + power) * (oneTimer ? 1.6f : 1);
+                float a = MathF.Atan2(dx, dz) + Rnd(-err, err);
+                dx = MathF.Sin(a); dz = MathF.Cos(a);
+            }
 
             pk.Owner = -1;
             pk.X = bx; pk.Z = bz; pk.Y = 0.08f;
@@ -801,6 +815,23 @@ namespace Hockey
                 Ev(EvType.MegaShot, 0, p.Idx);
             }
             Ev(EvType.Shot, power, p.Idx);
+        }
+
+        /// Скорость броска по силе замаха (0..1); с лёта — быстрее.
+        public static float ShotSpeed(float charge, bool oneTimer = false)
+        {
+            float power = charge < 0.12f ? 0.3f : charge;
+            return 15 + 22 * power + (oneTimer ? 4 : 0);
+        }
+
+        /// Высота шайбы над льдом на линии ворот: от льда (щелчок) до ~1.05 м (полный замах).
+        public static float ShotHeight(float charge) => 0.05f + 1.0f * Math.Clamp(charge, 0, 1);
+
+        /// Вертикальная скорость, чтобы на расстоянии dist шайба была на высоте ShotHeight.
+        public static float ShotVy(float charge, float dist, float speed)
+        {
+            float t = dist / speed;
+            return Math.Clamp((ShotHeight(charge) - 0.08f + 0.5f * G * t * t) / t, 0, 9);
         }
 
         void DoPass(Player p)

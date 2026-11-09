@@ -278,6 +278,31 @@ namespace Hockey
             });
         }
 
+        // ---------- прицел ----------
+        /// Четыре дуги-скобы с тёмной обводкой и короткие засечки внутрь — читается на светлом льду и тёмных трибунах.
+        public static Texture2D Reticle()
+        {
+            const int N = 128;
+            var c0 = new Vector2(N / 2f, N / 2f);
+            return Make(N, N, p =>
+            {
+                var d = p - c0;
+                float r = d.magnitude;
+                float ang = Mathf.Repeat(Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg + 45, 90) - 45;   // −45..45 вокруг ближайшей оси
+                // дуги между осями: вырез ±18° вокруг осей
+                float gap = (18 - Mathf.Abs(ang)) * Mathf.Deg2Rad * r;     // >0 — внутри выреза
+                float ring = Mathf.Abs(r - 46) - 6;
+                float arc = Mathf.Max(ring, gap);
+                // засечки внутрь на осях
+                float tick = Mathf.Max(Mathf.Abs(ang) * Mathf.Deg2Rad * r - 3.5f, Mathf.Abs(r - 30) - 7);
+                float shape = Mathf.Min(arc, tick);
+                var col = new Color(0, 0, 0, 0);
+                col = Over(col, new Color(0.04f, 0.05f, 0.15f, 0.8f), A(shape - 4));
+                col = Over(col, Color.white, A(shape));
+                return col;
+            });
+        }
+
         // ---------- круг вбрасывания ----------
         public static Texture2D FaceoffRing()
         {

@@ -19,7 +19,7 @@ namespace Hockey
         Texture2D white, circleTex;
         GUIStyle sHudRed, sHudBlue, sHudMid, sTrack, sHudNum, sHudTime, sHudName, sMeterText;
         readonly Dictionary<string, GUIStyle> fills = new Dictionary<string, GUIStyle>();
-        Texture2D hudRing, hudPuck, hudStickE, hudStickF, hudBladeE, hudBladeF, hudRink, hudRays;
+        Texture2D hudRing, hudReticle, hudPuck, hudStickE, hudStickF, hudBladeE, hudBladeF, hudRink, hudRays;
         readonly Texture2D[] hudShield = new Texture2D[2];
         GUIStyle sBoard;
         readonly int[] shownScore = { 0, 0 };
@@ -163,6 +163,7 @@ namespace Hockey
             hudRink = HudArt.Rink(320);
             hudRays = HudArt.Rays();
             hudRing = HudArt.FaceoffRing();
+            hudReticle = HudArt.Reticle();
             // табличка как хоккейный борт: белая доска, тёмная кайма
             sBoard = new GUIStyle { border = new RectOffset(22, 22, 22, 28) };
             sBoard.normal.background = TexArt.RoundRect(64, 18, Mats.Hex("#ffffff"), Mats.Hex("#dbe3f4"), Mats.Hex("#0d1030"), 4, 6);
@@ -956,7 +957,7 @@ namespace Hockey
                 var oldM = GUI.matrix;
                 if (st.Phase == Phase.Goal)
                 {   // вращающиеся лучи гол-лампы
-                    GUIUtility.RotateAroundPivot(time * 40, centerB);
+                    GUIUtility.RotateAroundPivot(time * 40, centerB * uiScale);
                     GUI.color = WithA(Mats.Hex(col), 0.75f);
                     GUI.DrawTexture(new Rect(centerB.x - 330, centerB.y - 330, 660, 660), hudRays);
                     GUI.matrix = oldM;
@@ -1054,30 +1055,51 @@ namespace Hockey
             else if (mode == Mode.Client && client != null) GUI.Label(new Rect(VW - 360, 16, 344, 30), $"Пинг: {(client.PingMs >= 0 ? client.PingMs + " мс" : "…")}", new GUIStyle(sSmall) { alignment = TextAnchor.UpperRight });
         }
 
-        /// Прицел по центру: мини-круг вбрасывания. Бросок и пас летят туда, куда смотрит камера.
-        /// Сжимается при замахе, загорается зелёным, когда в прицеле ворота (сработает доводка).
+        /// Прицел по центру: четыре скобы, которые сжимаются и поворачиваются при замахе.
+        /// Бросок летит ровно в прицел; если прицел смотрит в ворота, на воротах видна шайба-метка —
+        /// туда прилетит бросок (выше при более сильном замахе).
         void DrawCrosshair(View v, ViewState st, PlayerView p, Rect area)
         {
             if (v.Src == null || st.Phase != Phase.Play || p.Stun || p.Brawl || v.Follow >= roster.Count) return;
             int team = roster[v.Follow].Team;
-            float gx = Rink.TeamDir[team] * Rink.GoalX;
-            float tx = gx - p.X, tz = -p.Z;
-            float dist = Mathf.Sqrt(tx * tx + tz * tz);
-            float ang = Mathf.Abs(Sim.Wrap(Mathf.Atan2(tx, tz) - v.Yaw));
-            bool onGoal = Rink.TeamDir[team] * (gx - p.X) > 0.5f && ang < 0.65f && dist < 30;
             float ch = Mathf.Clamp01(p.Charge);
-            float size = Mathf.Lerp(22, 14, ch);
-            var c = new Vector2(area.x + area.width / 2, VH / 2);
+            float gx = Rink.TeamDir[team] * Rink.GoalX;
+            // точка вылета: шайба у клюшки или крюк
+            float px = st.PuckOwner == v.Follow ? st.PuckX : p.X + Mathf.Sin(p.H) * 0.95f + Mathf.Cos(p.H) * 0.28f;
+            float pz = st.PuckOwner == v.Follow ? st.PuckZ : p.Z + Mathf.Cos(p.H) * 0.95f - Mathf.Sin(p.H) * 0.28f;
+            float dx = Mathf.Sin(v.Yaw), dz = Mathf.Cos(v.Yaw);
+            float along = Mathf.Abs(dx) > 0.05f ? (gx - px) / dx : -1;
+            float hitZ = pz + dz * along;
+            bool onGoal = along > 1 && along < 45 && Mathf.Abs(hitZ) < Rink.GoalW / 2 + 0.05f;
             Color col = ch > 0.7f ? Mats.Hex("#ff5a4c") : ch > 0.02f ? Mats.Hex("#ffb14a") : onGoal ? Mats.Hex("#5cf28a") : Color.white;
-            // тень, кольцо, точка
-            GUI.color = new Color(0.05f, 0.06f, 0.2f, 0.55f);
-            GUI.DrawTexture(new Rect(c.x - size / 2 + 1.5f, c.y - size / 2 + 2, size, size), hudRing);
-            GUI.color = WithA(col, 0.95f);
-            GUI.DrawTexture(new Rect(c.x - size / 2, c.y - size / 2, size, size), hudRing);
-            GUI.color = new Color(0.05f, 0.06f, 0.2f, 0.7f);
+
+            var c = new Vector2(area.x + area.width / 2, VH / 2);
+            float size = Mathf.Lerp(26, 17, ch) * (1 + Mathf.Sin(time * 7) * 0.04f * (onGoal ? 1 : 0));
+            var oldM = GUI.matrix;
+            GUIUtility.RotateAroundPivot(ch * 45, c * uiScale);
+            GUI.color = col;
+            GUI.DrawTexture(new Rect(c.x - size / 2, c.y - size / 2, size, size), hudReticle);
+            GUI.matrix = oldM;
+            GUI.color = new Color(0.04f, 0.05f, 0.15f, 0.8f);
             GUI.DrawTexture(new Rect(c.x - 2.5f, c.y - 2.5f, 5, 5), circleTex);
             GUI.color = col;
             GUI.DrawTexture(new Rect(c.x - 1.5f, c.y - 1.5f, 3, 3), circleTex);
+
+            // метка на воротах: куда прилетит шайба при текущей силе замаха
+            if (onGoal && v.Cam != null)
+            {
+                var world = new Vector3(gx, Sim.ShotHeight(ch), hitZ);
+                var sp = v.Cam.WorldToScreenPoint(world);
+                if (sp.z > 0.5f)
+                {
+                    float mx = sp.x / uiScale, my = (Screen.height - sp.y) / uiScale;
+                    float pulse = 1 + Mathf.Sin(time * 9) * 0.12f;
+                    GUI.color = WithA(col, 0.45f);
+                    GUI.DrawTexture(new Rect(mx - 9 * pulse, my - 9 * pulse, 18 * pulse, 18 * pulse), circleTex);
+                    GUI.color = Color.white;
+                    GUI.DrawTexture(new Rect(mx - 9, my - 6, 18, 11), hudPuck);
+                }
+            }
             GUI.color = Color.white;
         }
 

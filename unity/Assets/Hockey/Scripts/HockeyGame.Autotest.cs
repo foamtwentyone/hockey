@@ -226,6 +226,14 @@ namespace Hockey
                 cam.transform.LookAt(new Vector3(0, 0, 0));
                 yield return Wait(0.4f);
                 yield return Shot("19_arena");
+                // сетка ворот: шайба влетает и прогибает её
+                cam.transform.position = new Vector3(Rink.GoalX - 3.4f, 1.5f, 2.4f);
+                cam.transform.LookAt(new Vector3(Rink.GoalX + 0.5f, 0.6f, 0));
+                yield return Wait(0.3f);
+                yield return Shot("19a_net");
+                for (int i = 0; i < 9; i++) arena.UpdateNets(new Vector3(Rink.GoalX - 0.4f + i * 0.2f, 0.6f, 0.5f), 1 / 60f);
+                yield return null;
+                yield return Shot("19a_net_hit");
                 views.AddRange(keep);
                 autoFreeze = false;
             }

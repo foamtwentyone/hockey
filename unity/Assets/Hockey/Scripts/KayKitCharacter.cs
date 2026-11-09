@@ -17,7 +17,7 @@ namespace Hockey
         float gripW;
         readonly List<Transform> hands = new List<Transform>();
         const float HandShrink = 0.62f;
-        const float StickTop = 0.36f, GripL = 0.26f;
+        const float StickTop = 0.36f, GripL = 0.32f;
         public List<Transform> HelmetParts = new List<Transform>();
         Spring headKick;
         float stickLen;
@@ -449,7 +449,8 @@ namespace Hockey
             float reach = (armL1.position - armL0.position).magnitude + (armL2.position - armL1.position).magnitude;
             var chest = (armL0.position + armR0.position) * 0.5f;
             // верх рукояти: перед животом, чуть левее середины
-            var top = chest + Vector3.down * reach * 0.38f + fwd * reach * 0.45f - right * reach * 0.04f;
+            // верх рукояти у левого бедра-живота (левая рука на набалдашнике), правая рука ниже по древку
+            var top = chest + Vector3.down * reach * 0.32f + fwd * reach * 0.32f - right * reach * 0.22f;
             float g = Stick.lossyScale.y;
             var dir = StickDir(top, (stickLen - 0.25f + GripL) * g, s, fwd, right, out var bladeFwd);
             var rot = Quaternion.LookRotation(bladeFwd, -dir);
@@ -464,7 +465,7 @@ namespace Hockey
         Vector3 StickDir(Vector3 pivot, float L, PlayerView s, Vector3 fwd, Vector3 right, out Vector3 bladeFwd)
         {
             float g = Stick.lossyScale.y;
-            var target = Model.position + (fwd * (Goalie ? 0.75f : 0.95f) + right * (Goalie ? 0.05f : 0.32f)) * g;
+            var target = Model.position + (fwd * (Goalie ? 0.75f : 0.84f) + right * (Goalie ? 0.05f : 0.46f)) * g;
             float drop = pivot.y - (Model.position.y + 0.04f);
             var hor = target - pivot; hor.y = 0;
             Vector3 dir;
@@ -474,8 +475,9 @@ namespace Hockey
             var follow = (fwd * 0.9f + Vector3.up * 0.1f - right * 0.4f).normalized;
             dir = Vector3.Slerp(dir, wind, Mathf.Clamp01(s.Charge) * 0.9f);
             if (swingT < 0.35f) dir = Vector3.Slerp(dir, follow, Mathf.Sin(swingT / 0.35f * Mathf.PI));
-            bladeFwd = Vector3.ProjectOnPlane(fwd, dir);
-            if (bladeFwd.sqrMagnitude < 1e-4f) bladeFwd = Vector3.ProjectOnPlane(right, dir);
+            // крюк лежит поперёк: носок смотрит влево-вперёд, лицевая сторона — вперёд, к шайбе
+            bladeFwd = Vector3.ProjectOnPlane(-right * 0.9f + fwd * 0.35f, dir);
+            if (bladeFwd.sqrMagnitude < 1e-4f) bladeFwd = Vector3.ProjectOnPlane(fwd, dir);
             bladeFwd.Normalize();
             return dir;
         }
@@ -519,7 +521,7 @@ namespace Hockey
             float g = Stick.lossyScale.y;
             float L = (stickLen - 0.25f) * g;
             var h = Stick.position;
-            var target = Model.position + (fwd * (Goalie ? 0.75f : 0.95f) + right * (Goalie ? 0.05f : 0.32f)) * g;
+            var target = Model.position + (fwd * (Goalie ? 0.75f : 0.84f) + right * (Goalie ? 0.05f : 0.46f)) * g;
             float drop = h.y - (Model.position.y + 0.04f);
             var hor = target - h; hor.y = 0;
             Vector3 dir;
@@ -529,8 +531,8 @@ namespace Hockey
             var follow = (fwd * 0.9f + Vector3.up * 0.1f - right * 0.4f).normalized;
             dir = Vector3.Slerp(dir, wind, Mathf.Clamp01(s.Charge) * 0.9f);
             if (swingT < 0.35f) dir = Vector3.Slerp(dir, follow, Mathf.Sin(swingT / 0.35f * Mathf.PI));
-            var bladeFwd = Vector3.ProjectOnPlane(fwd, dir);
-            if (bladeFwd.sqrMagnitude < 1e-4f) bladeFwd = Vector3.ProjectOnPlane(right, dir);
+            var bladeFwd = Vector3.ProjectOnPlane(Goalie ? fwd : -right * 0.9f + fwd * 0.35f, dir);
+            if (bladeFwd.sqrMagnitude < 1e-4f) bladeFwd = Vector3.ProjectOnPlane(fwd, dir);
             Stick.rotation = Quaternion.LookRotation(bladeFwd.normalized, -dir);
         }
     }

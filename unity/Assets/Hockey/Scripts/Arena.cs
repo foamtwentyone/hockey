@@ -119,6 +119,12 @@ namespace Hockey
             }
         }
 
+        readonly List<GoalNet> nets = new List<GoalNet>();
+        static Texture2D netTex;
+
+        /// Сетки ворот реагируют на шайбу (мировые координаты).
+        public void UpdateNets(Vector3 puckWorld, float dt) { foreach (var nt in nets) nt.Update(puckWorld, dt); }
+
         void BuildGoal(int sgn)
         {
             var g = new GameObject("Goal").transform;
@@ -134,17 +140,8 @@ namespace Hockey
             foreach (float z in new[] { -W / 2, W / 2 }) Obj("Base", MeshKit.Box(D, 0.07f, 0.07f), white, g, new Vector3(D / 2, 0.035f, z));
             Obj("Back", MeshKit.Box(0.07f, 0.07f, W), white, g, new Vector3(D, 0.035f, 0));
 
-            var netMat = Mats.Cutout(Tex.Net(), Color.white);
-            var mb = new MeshBuilder();
-            mb.DoubleQuad(new Vector3(0, H, -W / 2), new Vector3(D * 0.6f, H, -W / 2), new Vector3(D * 0.6f, H, W / 2), new Vector3(0, H, W / 2), Vector3.up, new Vector2(2, 10));
-            var nb = Vector3.Cross(new Vector3(D * 0.4f, -H, 0), Vector3.forward).normalized;
-            mb.DoubleQuad(new Vector3(D * 0.6f, H, -W / 2), new Vector3(D, 0, -W / 2), new Vector3(D, 0, W / 2), new Vector3(D * 0.6f, H, W / 2), nb, new Vector2(4, 10));
-            foreach (float z in new[] { -W / 2, W / 2 })
-            {
-                var n = new Vector3(0, 0, Mathf.Sign(z));
-                mb.DoubleQuad(new Vector3(0, 0, z), new Vector3(D, 0, z), new Vector3(D * 0.6f, H, z), new Vector3(0, H, z), n, new Vector2(4, 4));
-            }
-            Obj("Net", mb.ToMesh("net"), netMat, g, Vector3.zero, true);
+            netTex ??= GoalNet.Texture();
+            nets.Add(new GoalNet(g, Mats.Cutout(netTex, Color.white), W, H, D));
         }
 
         void BuildStands()

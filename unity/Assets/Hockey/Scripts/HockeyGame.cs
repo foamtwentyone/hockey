@@ -794,6 +794,7 @@ namespace Hockey
             }
             if (views.Count > 0) fx.FacingCam = views[0].Cam;
             puck.localPosition = puckPos;
+            arena.UpdateNets(puck.position, dt);
             puckFire.gameObject.SetActive(st.PuckMega);
             if (st.PuckMega) puckFire.localScale = Vector3.one * (1 + Mathf.Sin(time * 30) * 0.15f);
             puckRing.localPosition = new Vector3(st.PuckX, 0.012f, st.PuckZ);
