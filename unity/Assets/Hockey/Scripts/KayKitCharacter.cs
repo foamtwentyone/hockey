@@ -16,6 +16,21 @@ namespace Hockey
         Transform armL0, armL1, armL2, armR0, armR1, armR2;   // плечо, предплечье, кисть левой руки — для хвата клюшки двумя руками
         float gripW;
         readonly List<Transform> hands = new List<Transform>();
+        class GloveRig { public Transform T, Hand, Lower; public float Along; public Vector3 BackLocal; }
+        readonly List<GloveRig> gloves = new List<GloveRig>();
+
+        void PlaceGloves()
+        {
+            foreach (var g in gloves)
+            {
+                var fdir = g.Hand.position - g.Lower.position;
+                if (fdir.sqrMagnitude < 1e-8f) continue;
+                fdir.Normalize();
+                var back = Vector3.ProjectOnPlane(g.Hand.rotation * g.BackLocal, fdir);
+                if (back.sqrMagnitude < 1e-6f) back = Vector3.ProjectOnPlane(Model.forward, fdir);
+                g.T.SetPositionAndRotation(g.Hand.position + fdir * g.Along, Quaternion.LookRotation(back.normalized, fdir));
+            }
+        }
         const float HandShrink = 0.62f;
         const float StickTop = 0.36f, GripL = 0.32f;
         public List<Transform> HelmetParts = new List<Transform>();
@@ -174,6 +189,25 @@ namespace Hockey
             k.graph.Evaluate(0);
             k.HelmetParts = HockeyGear.Dress(go.transform, bones, parts, team, number, goalie);
             if (k.HandR != null) k.BuildStick(team, Mats.Hex(TapeColors[Mathf.Abs(tape) % TapeColors.Length]));
+            // краги — продолжение предплечья: каждый кадр ставим их на ось предплечья у запястья
+            // (а не жёстко на кисть, которую анимация может вывернуть — тогда крага «отлетала» от руки)
+            foreach (var side in new[] { ".l", ".r" })
+                if (bones.TryGetValue("hand" + side, out var hb0) && bones.TryGetValue("lowerarm" + side, out var lb0))
+                {
+                    var fdir = (hb0.position - lb0.position).normalized;
+                    var list = new List<Transform>();
+                    foreach (Transform ch in hb0) if (ch.name.StartsWith("gear_glove")) list.Add(ch);
+                    foreach (var ch in list)
+                    {
+                        k.gloves.Add(new GloveRig
+                        {
+                            T = ch, Hand = hb0, Lower = lb0,
+                            Along = Vector3.Dot(ch.position - hb0.position, fdir),
+                            BackLocal = Quaternion.Inverse(hb0.rotation) * (ch.rotation * Vector3.forward),
+                        });
+                        ch.SetParent(go.transform, true);
+                    }
+                }
             // кулак модели меньше — чтобы не протыкал крагу; всё надетое на кисть компенсируем, оно остаётся прежнего размера
             foreach (var hn in new[] { "hand.l", "hand.r" })
                 if (bones.TryGetValue(hn, out var hb))
@@ -435,6 +469,7 @@ namespace Hockey
             bool grip = !Goalie && upper > 0.5f && punchT >= 0.4f && !s.Brawl && !s.Stun;
             gripW += ((grip ? 1 : 0) - gripW) * (1 - Mathf.Exp(-dt * 12));
             if (gripW > 0.01f && Stick != null) TwoHandGrip(s, gripW);
+            PlaceGloves();
         }
 
         /// Хват двумя руками: верх рукояти — в левой руке перед животом, правая ниже по древку;
