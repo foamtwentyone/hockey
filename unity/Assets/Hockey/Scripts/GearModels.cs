@@ -205,6 +205,148 @@ namespace Hockey
             }, p => Color.white, new Bounds(HelmC + new Vector3(0, -0.1f, 0.4f), new Vector3(1.4f, 0.5f, 0.6f)), 96);
         }
 
+        // ---------------- маска вратаря: шлем с закрытыми щеками и вплавленной решёткой ----------------
+        static float MaskSdf(Vector3 p, out float bars, out float stripe)
+        {
+            var q = p - HelmC;
+            float outer = Ellipsoid(q, new Vector3(0.6f, 0.6f, 0.64f));
+            float inner = Ellipsoid(q, new Vector3(0.53f, 0.535f, 0.57f));
+            float shell = Mathf.Max(outer, -inner);
+            // снизу маска опускается до подбородка
+            shell = SMax(shell, -0.5f - q.y, 0.04f);
+            // окно для лица
+            float window = RoundBox(q - new Vector3(0, -0.14f, 0.5f), new Vector3(0.3f, 0.27f, 0.4f), 0.1f);
+            shell = SMax(shell, -window, 0.03f);
+            // рамка вокруг окна
+            float frame = Mathf.Max(Mathf.Abs(window) - 0.022f, Mathf.Max(outer - 0.02f, -inner - 0.01f));
+            shell = SMin(shell, frame, 0.02f);
+            // решётка на изогнутой поверхности перед лицом
+            var cq = q - new Vector3(0, -0.03f, 0.04f);
+            float surf = Mathf.Abs(Ellipsoid(cq, new Vector3(0.6f, 0.62f, 0.66f)));
+            float dx = Mathf.Abs(q.x - Mathf.Round(q.x / 0.085f) * 0.085f);
+            float dy = Mathf.Abs((q.y + 0.14f) - Mathf.Round((q.y + 0.14f) / 0.11f) * 0.11f);
+            bars = Mathf.Max(surf - 0.015f, Mathf.Min(dx, dy) - 0.015f);
+            bars = Mathf.Max(bars, RoundBox(q - new Vector3(0, -0.14f, 0.5f), new Vector3(0.31f, 0.28f, 0.4f), 0.1f));
+            stripe = Mathf.Abs(q.x) - 0.07f;
+            return SMin(shell, bars, 0.008f);
+        }
+
+        public static Mesh GoalieMask(Color main, Color accent)
+        {
+            string key = "mask" + ColorUtility.ToHtmlStringRGB(main) + ColorUtility.ToHtmlStringRGB(accent);
+            return Build(key, p => MaskSdf(p, out _, out _),
+                p =>
+                {
+                    float d = MaskSdf(p, out float bars, out float stripe);
+                    var q = p - HelmC;
+                    if (bars < 0.012f) return new Color(0.16f, 0.16f, 0.19f);
+                    if (Ellipsoid(q, new Vector3(0.53f, 0.535f, 0.57f)) > -0.03f && Ellipsoid(q, new Vector3(0.6f, 0.6f, 0.64f)) < -0.02f) return new Color(0.17f, 0.17f, 0.2f);
+                    if (stripe < 0 && q.y > 0.1f) return accent;
+                    if (q.y < 0.1f && q.y > 0.0f && Mathf.Abs(q.x) > 0.4f) return accent;   // полосы по бокам
+                    return main * Mathf.Lerp(0.85f, 1f, Mathf.Clamp01((q.y + 0.5f) / 0.9f));
+                },
+                new Bounds(HelmC + new Vector3(0, 0f, 0.02f), new Vector3(1.4f, 1.35f, 1.45f)), 120);
+        }
+
+        // ---------------- щиток вратаря (высота вдоль +Y, лицевая сторона +Z) ----------------
+        static float PadSdf(Vector3 p, out float roll, out float knee, out float strap)
+        {
+            float body = RoundBox(p, new Vector3(0.27f, 0.5f, 0.12f), 0.08f);
+            // три вертикальных валика спереди
+            roll = 1e3f;
+            for (int i = -1; i <= 1; i++) roll = Mathf.Min(roll, Capsule(p, new Vector3(i * 0.16f, -0.36f, 0.1f), new Vector3(i * 0.16f, 0.24f, 0.1f), 0.075f));
+            // коленный блок
+            knee = RoundBox(p - new Vector3(0, 0.36f, 0.12f), new Vector3(0.24f, 0.12f, 0.08f), 0.06f);
+            // боковое крыло
+            float wing = RoundBox(p - new Vector3(0.3f, -0.05f, 0), new Vector3(0.05f, 0.4f, 0.1f), 0.04f);
+            // носок над коньком
+            float toe = Ellipsoid(p - new Vector3(0, -0.5f, 0.12f), new Vector3(0.25f, 0.08f, 0.15f));
+            float d = SMin(body, roll, 0.04f);
+            d = SMin(d, knee, 0.04f);
+            d = SMin(d, wing, 0.03f);
+            d = SMin(d, toe, 0.05f);
+            // ремни сзади
+            strap = 1e3f;
+            for (int i = 0; i < 3; i++) strap = Mathf.Min(strap, RoundBox(p - new Vector3(0, -0.3f + i * 0.25f, -0.13f), new Vector3(0.24f, 0.03f, 0.03f), 0.015f));
+            return SMin(d, strap, 0.01f);
+        }
+
+        public static Mesh LegPad(Color main, Color accent)
+        {
+            string key = "pad" + ColorUtility.ToHtmlStringRGB(main) + ColorUtility.ToHtmlStringRGB(accent);
+            return Build(key, p => PadSdf(p, out _, out _, out _),
+                p =>
+                {
+                    PadSdf(p, out float roll, out float knee, out float strap);
+                    if (strap < 0.01f && p.z < -0.08f) return new Color(0.2f, 0.18f, 0.18f);
+                    if (knee < 0.012f && p.y > 0.24f) return accent;
+                    if (roll < 0.01f && Mathf.Abs(p.x) < 0.05f) return accent;    // средний валик в цвет команды
+                    if (p.y > -0.1f && p.y < -0.02f) return accent;                // поперечная полоса
+                    return main;
+                },
+                new Bounds(new Vector3(0.04f, -0.02f, 0), new Vector3(0.8f, 1.3f, 0.55f)), 72);
+        }
+
+        // ---------------- блин (щит вдоль +Y, лицевая сторона +Z) ----------------
+        public static Mesh Blocker(Color main, Color accent)
+        {
+            string key = "blocker" + ColorUtility.ToHtmlStringRGB(main) + ColorUtility.ToHtmlStringRGB(accent);
+            float Sdf(Vector3 p, out float board)
+            {
+                board = RoundBox(p - new Vector3(0, 0.05f, 0.08f), new Vector3(0.32f, 0.45f, 0.05f), 0.05f);
+                float edge = Mathf.Abs(RoundBox(p - new Vector3(0, 0.05f, 0.08f), new Vector3(0.32f, 0.45f, 0.06f), 0.05f));
+                float glove = RoundBox(p - new Vector3(0, -0.05f, -0.1f), new Vector3(0.2f, 0.22f, 0.12f), 0.09f);
+                float cuff = RoundBox(p - new Vector3(0, -0.4f, -0.08f), new Vector3(0.18f, 0.16f, 0.14f), 0.08f);
+                return SMin(SMin(board, glove, 0.05f), cuff, 0.05f);
+            }
+            return Build(key, p => Sdf(p, out _),
+                p =>
+                {
+                    Sdf(p, out float board);
+                    if (board < 0.012f && p.z > 0.1f)
+                    {
+                        var e = Mathf.Max(Mathf.Abs(p.x) - 0.24f, Mathf.Abs(p.y - 0.05f) - 0.37f);
+                        if (e > 0) return accent;                                    // кант
+                        return Mathf.Abs(p.y - 0.12f) < 0.06f ? accent : main;       // полоса
+                    }
+                    return Color.Lerp(accent, Color.black, 0.3f);
+                },
+                new Bounds(new Vector3(0, -0.05f, 0), new Vector3(0.85f, 1.2f, 0.55f)), 64);
+        }
+
+        // ---------------- ловушка (ладонь +Z, пальцы +Y) ----------------
+        public static Mesh Catcher(Color main, Color accent)
+        {
+            string key = "catcher" + ColorUtility.ToHtmlStringRGB(main) + ColorUtility.ToHtmlStringRGB(accent);
+            float Sdf(Vector3 p, out float web, out float cuff)
+            {
+                float body = Ellipsoid(p - new Vector3(0, 0.08f, 0), new Vector3(0.42f, 0.48f, 0.2f));
+                // карман-«ловушка»
+                float pocket = Ellipsoid(p - new Vector3(0.02f, 0.12f, 0.2f), new Vector3(0.3f, 0.34f, 0.18f));
+                body = SMax(body, -pocket, 0.04f);
+                // большой палец и сетка между ним и ладонью
+                float thumb = Capsule(p, new Vector3(-0.32f, -0.1f, 0.05f), new Vector3(-0.42f, 0.38f, 0.08f), 0.09f);
+                var wq = p - new Vector3(-0.3f, 0.38f, 0.1f);
+                float webPlane = RoundBox(wq, new Vector3(0.12f, 0.16f, 0.025f), 0.02f);
+                float gx = Mathf.Abs(wq.x - Mathf.Round(wq.x / 0.07f) * 0.07f), gy = Mathf.Abs(wq.y - Mathf.Round(wq.y / 0.07f) * 0.07f);
+                web = Mathf.Max(webPlane, Mathf.Min(gx, gy) - 0.014f);
+                cuff = RoundBox(p - new Vector3(0, -0.42f, -0.02f), new Vector3(0.22f, 0.14f, 0.16f), 0.09f);
+                float d = SMin(body, thumb, 0.06f);
+                d = SMin(d, web, 0.01f);
+                return SMin(d, cuff, 0.06f);
+            }
+            return Build(key, p => Sdf(p, out _, out _),
+                p =>
+                {
+                    Sdf(p, out float web, out float cuff);
+                    if (web < 0.012f) return new Color(0.35f, 0.22f, 0.14f);
+                    if (cuff < 0.012f && p.y < -0.3f) return accent;
+                    if (p.z > 0.05f && Ellipsoid(p - new Vector3(0.02f, 0.12f, 0.2f), new Vector3(0.3f, 0.34f, 0.18f)) < 0.03f) return new Color(0.78f, 0.62f, 0.45f); // кожа кармана
+                    return Mathf.Abs(p.x) < 0.06f && p.z < 0 ? accent : main;
+                },
+                new Bounds(new Vector3(-0.03f, 0, 0.02f), new Vector3(1.1f, 1.3f, 0.6f)), 72);
+        }
+
         // ---------------- крага (пальцы вдоль +Y, тыльная сторона +Z, большой палец +X) ----------------
         static float GloveSdf(Vector3 p, out float cuff, out float finger, out float pad)
         {

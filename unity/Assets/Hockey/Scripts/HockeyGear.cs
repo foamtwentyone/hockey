@@ -22,6 +22,37 @@ namespace Hockey
             return b;
         }
 
+        static List<Vector3> BakedVerts(SkinnedMeshRenderer smr)
+        {
+            var baked = new Mesh();
+            smr.BakeMesh(baked);
+            var m = smr.transform.localToWorldMatrix;
+            var res = new List<Vector3>();
+            foreach (var v in baked.vertices) res.Add(m.MultiplyPoint3x4(v));
+            Object.Destroy(baked);
+            return res;
+        }
+
+        /// Центр и радиус кулака по вершинам руки рядом с костью кисти.
+        static bool Fist(SkinnedMeshRenderer arm, Vector3 wrist, Vector3 fingerDir, float u, out Vector3 center, out float radius)
+        {
+            center = wrist; radius = u * 0.15f;
+            if (arm == null) return false;
+            var sum = Vector3.zero; int n = 0;
+            var pts = new List<Vector3>();
+            foreach (var v in BakedVerts(arm))
+            {
+                var d = v - wrist;
+                if (d.magnitude < u * 0.35f && Vector3.Dot(d, fingerDir) > -u * 0.02f) { sum += v; n++; pts.Add(v); }
+            }
+            if (n < 4) return false;
+            center = sum / n;
+            float r = 0;
+            foreach (var v in pts) r = Mathf.Max(r, (v - center).magnitude);
+            radius = r;
+            return true;
+        }
+
         static Transform Piece(Mesh mesh, Material mat, Vector3 worldPos, Quaternion worldRot, Transform bone, bool shadow = true, Vector3? scale = null)
         {
             var go = new GameObject("gear");
@@ -63,16 +94,8 @@ namespace Hockey
             }
             else
             {
-                // маска вратаря: белый шлем с полосой цвета команды и решётка перед лицом
-                Piece(GearModels.Helmet(Mats.Hex("#f6f6f2"), Mats.Hex(tc.Main), Mats.Hex("#2b2b33")), vcol, hc, helmRot, head, true, helmScale);
-                float t = 0.012f * u / 0.6f;
-                var front = hc + fr.Fwd * hs.z * 0.56f - fr.Up * hs.y * 0.12f;
-                var vbar = MeshKit.Superellipsoid(t, hs.y * 0.26f, t, 1, 1, 8);
-                var hbar = MeshKit.Superellipsoid(hs.x * 0.42f, t, t, 1, 1, 8);
-                for (int i = -3; i <= 3; i++) Piece(vbar, black, front + fr.Right * i * hs.x * 0.11f - fr.Fwd * (i * i) * hs.z * 0.012f, fr.Rot, head);
-                for (int i = -1; i <= 1; i++) Piece(hbar, black, front + fr.Up * i * hs.y * 0.14f, fr.Rot, head);
-                // подбородник
-                Piece(MeshKit.Superellipsoid(hs.x * 0.36f, hs.y * 0.08f, hs.z * 0.2f, 0.6f, 0.6f, 16), white, front - fr.Up * hs.y * 0.26f - fr.Fwd * hs.z * 0.08f, fr.Rot, head);
+                // маска вратаря: цельная модель с закрытыми щеками и решёткой, вплавленной в рамку
+                Piece(GearModels.GoalieMask(Mats.Hex("#f6f6f2"), Mats.Hex(tc.Main)), vcol, hc, fr.Rot * Quaternion.Euler(-3, 0, 0), head, true, helmScale);
             }
 
             // ---------------- номер на спине ----------------
@@ -82,9 +105,7 @@ namespace Hockey
                 var back = bb.center - fr.Fwd * (bb.extents.z + 0.012f) + fr.Up * bb.size.y * 0.12f;
                 var num = Mats.Cutout(Tex.Number(number), Color.white);
                 Piece(MeshKit.Plane(u * 0.42f, u * 0.42f), num, back, fr.Rot, chest, false);
-                if (goalie)
-                    Piece(MeshKit.Superellipsoid(bb.extents.x * 1.12f, bb.extents.y * 0.62f, bb.extents.z * 1.15f, 0.5f, 0.6f, 28), team1, bb.center + fr.Up * bb.size.y * 0.12f, fr.Rot, chest);
-                else
+                if (!goalie)
                     for (int i = 0; i < 2; i++)
                     {
                         float sd = i == 0 ? 1 : -1;
@@ -92,28 +113,33 @@ namespace Hockey
                     }
             }
 
-            // ---------------- руки ----------------
+            // ---------------- руки: краги надеваются на кулак модели ----------------
             for (int i = 0; i < 2; i++)
             {
                 string side = i == 0 ? ".l" : ".r";
                 if (!bones.TryGetValue("hand" + side, out var hand)) continue;
                 bones.TryGetValue("lowerarm" + side, out var lower);
-                var hp = hand.position;
-                var toElbow = lower != null ? (lower.position - hp).normalized : Vector3.up;
-                var rot = Quaternion.LookRotation(fr.Fwd, -toElbow);
-                if (goalie && i == 1)
-                    Piece(MeshKit.Superellipsoid(u * 0.08f, u * 0.32f, u * 0.24f, 0.25f, 0.3f, 20), white, hp + fr.Fwd * u * 0.06f, rot, hand);   // блин
-                else if (goalie)
-                    Piece(MeshKit.Superellipsoid(u * 0.26f, u * 0.26f, u * 0.1f, 0.8f, 0.8f, 24), Mats.Get("#a8693a", 0.35f), hp + fr.Fwd * u * 0.05f, fr.Rot, hand); // ловушка
+                parts.TryGetValue(i == 0 ? "ArmLeft" : "ArmRight", out var armR);
+                var wrist = hand.position;
+                var fingerDir = lower != null ? (wrist - lower.position).normalized : Vector3.down;
+                Fist(armR, wrist, fingerDir, u, out var fist, out float fr0);
+                var fwdP = Vector3.ProjectOnPlane(fr.Fwd, fingerDir);
+                if (fwdP.sqrMagnitude < 1e-4f) fwdP = Vector3.ProjectOnPlane(fr.Right, fingerDir);
+                var rot = Quaternion.LookRotation(fwdP.normalized, fingerDir);
+                if (goalie)
+                {
+                    // ловушка — на левой, блин — на правой; лицевой стороной к шайбе
+                    var face = Quaternion.LookRotation(fr.Fwd, Vector3.ProjectOnPlane(fingerDir, fr.Fwd).normalized);
+                    float gsz = fr0 * 2 * 2.1f;
+                    if (i == 0) Piece(GearModels.Catcher(Mats.Hex("#f6f6f2"), Mats.Hex(tc.Main)), Mats.Get("#ffffff", 0.45f), fist + fr.Fwd * fr0 * 0.3f, face, hand, true, new Vector3(-gsz, gsz, gsz));
+                    else Piece(GearModels.Blocker(Mats.Hex("#f6f6f2"), Mats.Hex(tc.Main)), Mats.Get("#ffffff", 0.45f), fist + fr.Fwd * fr0 * 0.2f, face, hand, true, new Vector3(gsz, gsz, gsz));
+                }
                 else
                 {
-                    // вылепленная крага: раструб с полосой, валики, пальцы, большой палец, кожаная ладонь
-                    // крупная крага целиком закрывает кулак модели
-                    // ладонная часть краги (y≈0.05 в её единицах) ложится на центр кулака модели
-                    float gs = u * 0.6f;
-                    var fingerDir = -toElbow;
+                    // ладонная часть краги (y≈0.05, ширина ≈0.78 в её единицах) охватывает кулак с запасом
+                    float gs = Mathf.Max(u * 0.28f, fr0 * 2 * 1.2f / 0.78f);
                     var glove = GearModels.Glove(Mats.Hex(tc.Main), Mats.Hex(tc.Dark), Mats.Hex("#c9a27a"));
-                    Piece(glove, Mats.Get("#ffffff", 0.55f), hp + fingerDir * (u * 0.14f - gs * 0.05f), rot, hand, true, new Vector3(i == 0 ? -gs : gs, gs, gs));
+                    Piece(glove, Mats.Get("#ffffff", 0.55f), fist - fingerDir * gs * 0.05f, rot, hand, true, new Vector3(i == 0 ? -gs : gs, gs, gs));
                 }
             }
 
@@ -131,12 +157,16 @@ namespace Hockey
                 Piece(MeshKit.Superellipsoid(u * 0.012f, u * 0.035f, u * 0.29f, 0.3f, 0.25f, 14), steel, new Vector3(bootC.x, groundY + u * 0.035f, bootC.z), fr.Rot, foot);
                 if (goalie && bones.TryGetValue("lowerleg" + side, out var shin))
                 {
-                    var kp = shin.position;
-                    float h = Mathf.Max(u * 0.4f, kp.y - groundY + u * 0.08f);
-                    var padC = new Vector3(kp.x, groundY + h * 0.55f, kp.z) + fr.Fwd * u * 0.1f;
-                    Piece(MeshKit.Superellipsoid(u * 0.21f, h * 0.55f, u * 0.17f, 0.35f, 0.45f, 24), white, padC, fr.Rot, shin);
-                    for (int b = -1; b <= 1; b += 2)
-                        Piece(MeshKit.Superellipsoid(u * 0.215f, u * 0.03f, u * 0.175f, 0.3f, 0.45f, 16), team1, padC + fr.Up * b * h * 0.22f, fr.Rot, shin);
+                    // щиток: от льда до колена и чуть выше, по ширине ноги
+                    float kneeY = shin.position.y + u * 0.08f;
+                    var lb = new Bounds(new Vector3(fp.x, groundY, fp.z), Vector3.zero);
+                    if (parts.TryGetValue(i == 0 ? "LegLeft" : "LegRight", out var legR))
+                        foreach (var v in BakedVerts(legR)) if (v.y < kneeY) lb.Encapsulate(v);
+                    float h = Mathf.Max(u * 0.45f, kneeY - groundY + u * 0.12f);
+                    float w = Mathf.Max(lb.size.x, lb.size.z) * 1.35f;
+                    var padC = new Vector3(lb.center.x, groundY + h * 0.5f, lb.center.z) + fr.Fwd * w * 0.25f;
+                    Piece(GearModels.LegPad(Mats.Hex("#f6f6f2"), Mats.Hex(tc.Main)), Mats.Get("#ffffff", 0.45f), padC, fr.Rot, shin, true,
+                        new Vector3((i == 0 ? -1 : 1) * w / 0.7f, h / 1.15f, w / 0.7f * 0.8f));
                 }
             }
             return helmet;

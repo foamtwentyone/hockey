@@ -189,17 +189,24 @@ namespace Hockey
             var tape = Mats.Get("#" + ColorUtility.ToHtmlStringRGB(tapeColor), 0.25f);
             float shaft = len - 0.25f + 0.22f;
             // рукоять: карбон с полосками цвета команды, сверху — набалдашник из обмотки
-            P(MeshKit.Superellipsoid(0.027f, shaft / 2, 0.021f, 0.25f, 0.35f, 20), carbon, new Vector3(0, 0.22f - shaft / 2, 0));
+            float sw = Goalie ? 0.036f : 0.027f, sd = Goalie ? 0.028f : 0.021f;
+            P(MeshKit.Superellipsoid(sw, shaft / 2, sd, 0.25f, 0.35f, 20), carbon, new Vector3(0, 0.22f - shaft / 2, 0));
+            if (Goalie)
+            {
+                // широкая «лопата» вратарской клюшки над крюком
+                P(MeshKit.Superellipsoid(0.065f, 0.24f, 0.03f, 0.25f, 0.3f, 20), carbon, new Vector3(0, -len + 0.25f + 0.26f, 0.02f));
+                P(MeshKit.Superellipsoid(0.067f, 0.035f, 0.032f, 0.25f, 0.3f, 16), stripe, new Vector3(0, -len + 0.25f + 0.38f, 0.02f));
+            }
             P(MeshKit.Superellipsoid(0.03f, 0.05f, 0.024f, 0.25f, 0.35f, 16), stripe, new Vector3(0, -0.15f, 0));
             P(MeshKit.Superellipsoid(0.03f, 0.03f, 0.024f, 0.25f, 0.35f, 16), stripe, new Vector3(0, -0.3f, 0));
             P(MeshKit.Superellipsoid(0.034f, 0.08f, 0.028f, 0.5f, 0.5f, 16), tape, new Vector3(0, 0.19f, 0));
             // изогнутый крюк с обмоткой
-            float bl = Goalie ? 0.5f : 0.37f;
+            float bl = Goalie ? 0.56f : 0.37f;
             var blade = new GameObject("blade").transform;
             blade.SetParent(stick, false);
             blade.localPosition = new Vector3(0, -len + 0.25f, 0);
             StickBlade = blade;
-            var bladeMesh = MeshKit.Blade(bl, Goalie ? 0.13f : 0.085f, 0.022f, Goalie ? 0.02f : 0.045f);
+            var bladeMesh = MeshKit.Blade(bl, Goalie ? 0.14f : 0.085f, Goalie ? 0.03f : 0.022f, Goalie ? 0.02f : 0.045f);
             P(bladeMesh, carbon, blade.localPosition + new Vector3(0, -0.02f, -0.04f));
             P(MeshKit.Superellipsoid(0.016f, (Goalie ? 0.13f : 0.085f) * 0.56f, bl * 0.25f, 0.3f, 0.4f, 16), tape, blade.localPosition + new Vector3(0.006f, -0.02f, bl * 0.42f));
         }
