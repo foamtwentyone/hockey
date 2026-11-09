@@ -61,16 +61,42 @@ namespace Hockey
 
         /// Компактная сетка из Resources/Gear/<name>_mesh.bytes (подготовлена конвертером):
         /// позиции, нормали и категория цвета (0 — основной цвет, 1 — тёмная подкладка, 2 — визор).
-        static Mesh LoadBytesMesh(string name, Color tint)
+        static Mesh LoadBytesMesh(string name, Color tint, int team = -1)
         {
-            string key = name + ColorUtility.ToHtmlStringRGB(tint);
+            string key = name + ColorUtility.ToHtmlStringRGB(tint) + team;
             if (bytesCache.TryGetValue(key, out var cached)) return cached;
             Mesh mesh = null;
             var ta = Resources.Load<TextAsset>("Gear/" + name + "_mesh");
             if (ta != null)
             {
                 using var br = new System.IO.BinaryReader(new System.IO.MemoryStream(ta.bytes));
-                if (new string(br.ReadChars(4)) == "PKM1")
+                var magic = new string(br.ReadChars(4));
+                if (magic == "PKM2")
+                {
+                    // цвета из текстуры; белое умножается на tint, красное у синей команды становится синим
+                    int vc = br.ReadInt32(), tc = br.ReadInt32();
+                    var V = new Vector3[vc]; var N = new Vector3[vc]; var C = new Color[vc];
+                    Color.RGBToHSV(Mats.Hex(TeamColors.All[1].Main), out float blueH, out _, out _);
+                    for (int i = 0; i < vc; i++)
+                    {
+                        V[i] = new Vector3(br.ReadSingle(), br.ReadSingle(), br.ReadSingle());
+                        N[i] = new Vector3(br.ReadSingle(), br.ReadSingle(), br.ReadSingle());
+                        var c = new Color32(br.ReadByte(), br.ReadByte(), br.ReadByte(), br.ReadByte());
+                        Color cc = c;
+                        Color.RGBToHSV(cc, out float h, out float sat, out float val);
+                        bool red = (h < 0.05f || h > 0.93f) && sat > 0.35f && val > 0.25f;
+                        if (red && team == 1) cc = Color.HSVToRGB(blueH, sat, val);
+                        else if (!red && sat < 0.2f && val > 0.6f) cc *= tint;   // светлые части — в цвет команды
+                        C[i] = cc;
+                    }
+                    var T = new int[tc * 3];
+                    for (int i = 0; i < T.Length; i++) T[i] = br.ReadInt32();
+                    mesh = new Mesh { name = name };
+                    if (vc > 65000) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+                    mesh.vertices = V; mesh.normals = N; mesh.colors = C; mesh.triangles = T;
+                    mesh.RecalculateBounds();
+                }
+                else if (magic == "PKM1")
                 {
                     int vc = br.ReadInt32(), tc = br.ReadInt32();
                     var V = new Vector3[vc]; var N = new Vector3[vc]; var C = new Color[vc];
@@ -104,9 +130,9 @@ namespace Hockey
 
         /// Ставит внешнюю модель name (если она есть) на место вылепленной: та же точка, поворот и габарит.
         /// Иначе — вылепленную. tint — цвет команды (умножается на текстуру модели).
-        static Transform Gear(string name, Mesh sculpt, Material mat, Vector3 pos, Quaternion rot, Transform bone, Vector3 scale, Color tint, bool shadow = true)
+        static Transform Gear(string name, Mesh sculpt, Material mat, Vector3 pos, Quaternion rot, Transform bone, Vector3 scale, Color tint, bool shadow = true, int team = -1)
         {
-            var bm = LoadBytesMesh(name, tint);
+            var bm = LoadBytesMesh(name, tint, team);
             if (bm != null)
             {
                 // сетка из конвертера: подгоняем габарит под вылепленную модель
@@ -209,7 +235,7 @@ namespace Hockey
             else
             {
                 // маска вратаря: цельная модель с закрытыми щеками и решёткой, вплавленной в рамку
-                Gear("goalie_mask", GearModels.GoalieMask(Mats.Hex("#e6e3dc"), Mats.Hex(tc.Main)), vcol, hc, fr.Rot * Quaternion.Euler(-3, 0, 0), head, helmScale, Color.white);
+                Gear("goalie_mask", GearModels.GoalieMask(Mats.Hex("#e6e3dc"), Mats.Hex(tc.Main)), vcol, hc, fr.Rot * Quaternion.Euler(-3, 0, 0), head, helmScale, Color.white, true, team);
             }
 
             // ---------------- номер на спине ----------------
@@ -245,8 +271,8 @@ namespace Hockey
                     // ловушка — на левой, блин — на правой; лицевой стороной к шайбе
                     var face = Quaternion.LookRotation(fr.Fwd, Vector3.ProjectOnPlane(fingerDir, fr.Fwd).normalized);
                     float gsz = Mathf.Max(u * 0.55f, fr0 * 2 * 2.8f);
-                    if (i == 0) Gear("catcher", GearModels.Catcher(Mats.Hex("#e6e3dc"), Mats.Hex(tc.Main)), Mats.Get("#ffffff", 0.1f), fist + fr.Fwd * fr0 * 0.3f, face, hand, new Vector3(-gsz, gsz, gsz), Color.white);
-                    else Gear("blocker", GearModels.Blocker(Mats.Hex("#e6e3dc"), Mats.Hex(tc.Main)), Mats.Get("#ffffff", 0.1f), fist + fr.Fwd * fr0 * 0.2f, face, hand, new Vector3(gsz, gsz, gsz), Color.white);
+                    if (i == 0) Gear("catcher", GearModels.Catcher(Mats.Hex("#e6e3dc"), Mats.Hex(tc.Main)), Mats.Get("#ffffff", 0.1f), fist + fr.Fwd * fr0 * 0.3f, face, hand, new Vector3(-gsz, gsz, gsz), Color.white, true, team);
+                    else Gear("blocker", GearModels.Blocker(Mats.Hex("#e6e3dc"), Mats.Hex(tc.Main)), Mats.Get("#ffffff", 0.1f), fist + fr.Fwd * fr0 * 0.2f, face, hand, new Vector3(gsz, gsz, gsz), Color.white, true, team);
                 }
                 else
                 {
@@ -280,7 +306,7 @@ namespace Hockey
                     float w = Mathf.Max(lb.size.x, lb.size.z) * 1.35f;
                     var padC = new Vector3(lb.center.x, groundY + h * 0.5f, lb.center.z) + fr.Fwd * w * 0.25f;
                     Gear("pad", GearModels.LegPad(Mats.Hex("#e6e3dc"), Mats.Hex(tc.Main)), Mats.Get("#ffffff", 0.1f), padC, fr.Rot, shin,
-                        new Vector3((i == 0 ? -1 : 1) * w / 0.7f, h / 1.15f, w / 0.7f * 0.8f), Color.white);
+                        new Vector3((i == 0 ? -1 : 1) * w / 0.7f, h / 1.15f, w / 0.7f * 0.8f), Color.white, true, team);
                 }
             }
             return helmet;
