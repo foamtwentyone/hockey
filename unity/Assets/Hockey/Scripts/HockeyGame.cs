@@ -28,12 +28,14 @@ namespace Hockey
             public float Yaw, Pitch = 0.32f, LastManual = -10; public bool Init;
             public Vector3 Pos, Look; public Rect Rect;
             public string Toast; public Color ToastColor; public float ToastT;
+            public bool HudInit; public float ChargeA, LastCharge;
         }
 
         // ---------- состояние ----------
         Mode mode = Mode.None;
         Sim sim;
         readonly ViewState simView = new ViewState(), netView = new ViewState();
+        readonly ViewState prevView = new ViewState(), curView = new ViewState(), smoothView = new ViewState();
         ViewState view;
         List<RosterEntry> roster = new List<RosterEntry>();
         readonly Dictionary<string, int> slots = new Dictionary<string, int>();
@@ -478,7 +480,14 @@ namespace Hockey
             for (int i = 0; i < snaps.Count - 1; i++)
                 if (snaps[i].SimTime <= t && snaps[i + 1].SimTime >= t) { a = snaps[i]; b = snaps[i + 1]; break; }
             float k = (float)((t - a.SimTime) / System.Math.Max(1e-4, b.SimTime - a.SimTime));
-            var o = interp;
+            LerpView(a, b, k, interp);
+            return interp;
+        }
+
+        /// Промежуточное состояние между двумя снимками: физика идёт шагами по 1/60 с, а кадры чаще и неровно,
+        /// поэтому без этого персонажи двигаются рывками и «двоятся».
+        static void LerpView(ViewState a, ViewState b, float k, ViewState o)
+        {
             o.Resize(b.Players.Length);
             for (int i = 0; i < b.Players.Length; i++)
             {
@@ -499,7 +508,6 @@ namespace Hockey
             o.PuckOwner = b.PuckOwner; o.PuckMega = b.PuckMega; o.Items = b.Items;
             o.Score0 = b.Score0; o.Score1 = b.Score1; o.Time = b.Time; o.Phase = b.Phase; o.PhaseT = b.PhaseT;
             o.Overtime = b.Overtime; o.LastGoal = b.LastGoal; o.SimTime = b.SimTime;
-            return o;
         }
 
         // ================================================================ ввод
@@ -537,7 +545,6 @@ namespace Hockey
             double now = Time.realtimeSinceStartupAsDouble;
 
             if (inMatch && GameInput.PausePressed() && !endShown) { paused = !paused; uiPage = UiPage.Main; }
-            if (inMatch && GameInput.KeyDown(KeyCode.H)) Settings.Hints = !Settings.Hints;
             if (inMatch && GameInput.KeyDown(KeyCode.M)) audioFx.Muted = !audioFx.Muted;
             UpdateCursor();
 
@@ -552,6 +559,7 @@ namespace Hockey
             }
 
             view = null;
+            bool stepThisFrame = false;
             if ((mode == Mode.Local || mode == Mode.Host) && sim != null && inMatch)
             {
                 // ввод (и поворот камеры) читаем раз за кадр, применяем на каждом шаге физики
@@ -562,8 +570,11 @@ namespace Hockey
                 {
                     acc += Mathf.Min(0.25f, Time.unscaledDeltaTime);
                     var inputs = new Dictionary<string, PlayerInput>();
+                    bool stepped = false;
                     while (acc >= Step)
                     {
+                        if (acc - Step < Step) sim.FillView(prevView);   // состояние перед последним шагом кадра
+                        stepped = true;
                         inputs.Clear();
                         if (host != null) foreach (var k in host.ClientKeys) if (host.TryGetInput(k, out var ri)) inputs[k] = ri;
                         foreach (var kv in frameInputs) inputs[kv.Key] = kv.Value;
@@ -583,9 +594,14 @@ namespace Hockey
                         }
                         sim.Events.Clear();
                     }
+                    stepThisFrame = stepped;
                 }
+                else stepThisFrame = false;
                 sim.FillView(simView);
-                view = simView;
+                if (curView.Players.Length != simView.Players.Length) { sim.FillView(prevView); sim.FillView(curView); }
+                else if (stepThisFrame) sim.FillView(curView);
+                LerpView(prevView, curView, Mathf.Clamp01(acc / Step), smoothView);
+                view = smoothView;
             }
             else if (mode == Mode.Client && inMatch)
             {

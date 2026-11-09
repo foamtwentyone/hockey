@@ -17,6 +17,10 @@ namespace Hockey
         Font uiFont, logoFont;
         GUIStyle sLogo, sRibbon, sRibbonText;
         Texture2D white, circleTex;
+        GUIStyle sHudRed, sHudBlue, sHudMid, sTrack, sHudNum, sHudTime, sHudName, sMeterText;
+        readonly Dictionary<string, GUIStyle> fills = new Dictionary<string, GUIStyle>();
+        readonly int[] shownScore = { 0, 0 };
+        readonly float[] scorePop = { 0, 0 };
         GUIStyle sPanel, sCard, sCardOn, sTitle, sH1, sH2, sLabel, sSmall, sCenter, sField, sTag, sKey, sBig, sScore, sCode, sSliderBg, sThumb, sPill;
         readonly Dictionary<string, GUIStyle> btn = new Dictionary<string, GUIStyle>();
         readonly Dictionary<string, Texture2D> solid = new Dictionary<string, Texture2D>();
@@ -135,6 +139,54 @@ namespace Hockey
             sRibbon.normal.background = TexArt.RoundRect(48, 16, Mats.Hex("#ff6a4e"), Mats.Hex("#e0344a"), Mats.Hex("#7a1531"), 3, 5);
             sRibbonText = new GUIStyle(sLabel) { font = uiFont, fontSize = 22, alignment = TextAnchor.MiddleCenter, wordWrap = false };
             sRibbonText.normal.textColor = Color.white;
+            // HUD: пухлые «леденцовые» плашки в стиле меню
+            sHudRed = new GUIStyle { border = new RectOffset(24, 24, 24, 30) };
+            sHudRed.normal.background = TexArt.RoundRect(64, 22, Mats.Hex("#ff8a72"), Mats.Hex("#e23c45"), Mats.Hex("#7a1531"), 4, 6);
+            sHudBlue = new GUIStyle(sHudRed);
+            sHudBlue.normal.background = TexArt.RoundRect(64, 22, Mats.Hex("#7cb8ff"), Mats.Hex("#3a5fd8"), Mats.Hex("#16235e"), 4, 6);
+            sHudMid = new GUIStyle(sHudRed);
+            sHudMid.normal.background = TexArt.RoundRect(64, 22, Mats.Hex("#3a3f8f"), Mats.Hex("#1b1f52"), Mats.Hex("#ffd23f"), 4, 6);
+            sTrack = new GUIStyle { border = new RectOffset(16, 16, 16, 20) };
+            sTrack.normal.background = TexArt.RoundRect(44, 14, new Color(0.1f, 0.12f, 0.32f, 0.9f), new Color(0.05f, 0.06f, 0.2f, 0.9f), new Color(1, 1, 1, 0.85f), 3, 4);
+            sHudNum = new GUIStyle(GUI.skin.label) { font = logoFont, fontSize = 50, alignment = TextAnchor.MiddleCenter, wordWrap = false, clipping = TextClipping.Overflow };
+            sHudTime = new GUIStyle(sHudNum) { fontSize = 42 };
+            sHudName = new GUIStyle(GUI.skin.label) { font = uiFont, fontSize = 17, alignment = TextAnchor.MiddleCenter, wordWrap = false, clipping = TextClipping.Overflow };
+            sMeterText = new GUIStyle(sHudName) { fontSize = 15 };
+        }
+
+        /// Заливка-«леденец» нужного цвета (кэшируется).
+        GUIStyle Fill(string top, string bottom)
+        {
+            string k = top + bottom;
+            if (fills.TryGetValue(k, out var st)) return st;
+            st = new GUIStyle { border = new RectOffset(13, 13, 13, 13) };
+            st.normal.background = TexArt.RoundRect(36, 12, Mats.Hex(top), Mats.Hex(bottom), Color.Lerp(Mats.Hex(top), Color.white, 0.55f), 2);
+            fills[k] = st;
+            return st;
+        }
+
+        /// Шкала: тёмная капсула с белой каймой, внутри цветная заливка с бликом.
+        void Meter(Rect r, float v, string top, string bottom, string label, float alpha = 1)
+        {
+            var old = GUI.color;
+            GUI.color = new Color(1, 1, 1, alpha);
+            GUI.Label(r, "", sTrack);
+            var inner = new Rect(r.x + 5, r.y + 5, r.width - 10, r.height - 14);
+            float w = Mathf.Clamp01(v) * inner.width;
+            if (w > 1)
+            {
+                GUI.BeginGroup(new Rect(inner.x, inner.y, w, inner.height));
+                GUI.Label(new Rect(0, 0, Mathf.Max(inner.width * Mathf.Clamp01(v), inner.height), inner.height), "", Fill(top, bottom));
+                GUI.color = new Color(1, 1, 1, 0.35f * alpha);
+                GUI.DrawTexture(new Rect(8, 3, Mathf.Max(0, w - 16), Mathf.Max(2, inner.height * 0.18f)), white);
+                GUI.EndGroup();
+            }
+            // деления
+            GUI.color = new Color(0.05f, 0.06f, 0.2f, 0.45f * alpha);
+            for (int i = 1; i < 4; i++) GUI.DrawTexture(new Rect(inner.x + inner.width * i / 4 - 1, inner.y + 3, 2, inner.height - 6), white);
+            GUI.color = new Color(1, 1, 1, alpha);
+            if (!string.IsNullOrEmpty(label)) Shadowed(new Rect(inner.x, inner.y - 1, inner.width, inner.height), label, sMeterText, new Color(1, 1, 1, alpha), new Color(0.05f, 0.06f, 0.2f, 0.8f * alpha), 1.5f);
+            GUI.color = old;
         }
 
         bool Button(string text, GUIStyle style, params GUILayoutOption[] opts)
@@ -577,7 +629,6 @@ namespace Hockey
             Settings.AutoCamera = Toggle("Камера сама за спину", Settings.AutoCamera);
             GUILayout.Space(8);
             GUILayout.Label("Интерфейс", sH2);
-            Settings.Hints = Toggle("Подсказки кнопок", Settings.Hints);
             Settings.Names = Toggle("Имена над игроками", Settings.Names);
             Settings.ScreenShake = Toggle("Тряска экрана", Settings.ScreenShake);
             Settings.UiScale = Slider("Размер интерфейса", Settings.UiScale, 0.7f, 1.4f, $"{Settings.UiScale * 100:0}%");
@@ -791,52 +842,42 @@ namespace Hockey
                 float myPow = p.BrawlPower, theirs = opp >= 0 ? st.Players[opp].BrawlPower : 0;
                 float tot = Mathf.Max(1, myPow + theirs);
                 float bw = Mathf.Min(420, area.width * 0.7f), bx = area.x + (area.width - bw) / 2, by = VH * 0.55f + 92;
-                GUI.Label(new Rect(bx - 8, by - 8, bw + 16, 40), "", sTag);
-                Box(new Rect(bx, by, bw, 24), "#4a8ff0");
-                Box(new Rect(bx, by, bw * myPow / tot, 24), "#ffd23f");
+                Meter(new Rect(bx - 8, by - 8, bw + 16, 44), myPow / tot, "#ffe46a", "#ffa21f", "СИЛА УДАРОВ");
                 return;
-            }
-            if (!Settings.Hints) return;
-            var items = new List<(string key, string act)>();
-            bool mine = st.PuckOwner == v.Follow;
-            bool oppHas = st.PuckOwner >= 0 && st.PuckOwner < roster.Count && roster[st.PuckOwner].Team != roster[v.Follow].Team;
-            if (mine) { items.Add((KeyFor(v, 0), "бросок (держи)")); items.Add((KeyFor(v, 1), "пас")); }
-            else if (oppHas) { items.Add((KeyFor(v, 2), p.Spd > 4.5f ? "нырок за шайбой" : "прыжок")); items.Add((KeyFor(v, 3), "толчок")); items.Add((KeyFor(v, 5), "удар")); }
-            else { items.Add((KeyFor(v, 2), p.Spd > 4.5f ? "нырок" : "прыжок")); items.Add((KeyFor(v, 0), "бросок с лёта")); }
-            items.Add((KeyFor(v, 4), "рывок"));
-            float total = 0;
-            var widths = new List<float>();
-            foreach (var it in items)
-            {
-                float kw = sKey.CalcSize(new GUIContent(it.key)).x, aw = sSmall.CalcSize(new GUIContent(it.act)).x;
-                widths.Add(kw); total += kw + aw + 34;
-            }
-            float x = area.x + (area.width - total) / 2, y = area.yMax - 120;
-            GUI.Label(new Rect(x - 12, y - 8, total + 4, 46), "", sTag);
-            for (int i = 0; i < items.Count; i++)
-            {
-                GUI.Label(new Rect(x, y, widths[i], 30), items[i].key, sKey);
-                x += widths[i] + 6;
-                var aw = sSmall.CalcSize(new GUIContent(items[i].act)).x;
-                GUI.Label(new Rect(x, y + 3, aw + 4, 28), $"<color=#ffffff>{items[i].act}</color>", sSmall);
-                x += aw + 28;
             }
         }
 
         void DrawHud(ViewState st)
         {
-            // табло-«пилюля»
-            float sbW = 560, sbX = (VW - sbW) / 2, sbY = 16;
-            GUI.Label(new Rect(sbX - 6, sbY - 4, sbW + 12, 72), "", sTag);
-            Box(new Rect(sbX + 8, sbY + 6, 200, 52), "#ef5a4c", 0.95f);
-            Box(new Rect(sbX + sbW - 208, sbY + 6, 200, 52), "#4a8ff0", 0.95f);
-            GUI.Label(new Rect(sbX + 14, sbY + 6, 130, 52), "КРАСНЫЕ", new GUIStyle(sBig) { fontSize = 19 });
-            GUI.Label(new Rect(sbX + 146, sbY + 6, 60, 52), st.Score0.ToString(), sScore);
-            GUI.Label(new Rect(sbX + sbW - 206, sbY + 6, 60, 52), st.Score1.ToString(), sScore);
-            GUI.Label(new Rect(sbX + sbW - 144, sbY + 6, 130, 52), "СИНИЕ", new GUIStyle(sBig) { fontSize = 19 });
+            // табло: две пухлые плашки команд и жёлто-синий значок времени посередине
+            for (int t = 0; t < 2; t++)
+            {
+                int sc = t == 0 ? st.Score0 : st.Score1;
+                if (sc != shownScore[t]) { if (sc > shownScore[t]) scorePop[t] = 1; shownScore[t] = sc; }
+                if (Event.current.type == EventType.Repaint) scorePop[t] = Mathf.Max(0, scorePop[t] - Time.unscaledDeltaTime * 1.4f);
+            }
+            float pw = 236, ph = 66, cw = 150, top = 14;
+            float cx0 = VW / 2;
+            var redR = new Rect(cx0 - cw / 2 - pw + 22, top + 4, pw, ph);
+            var blueR = new Rect(cx0 + cw / 2 - 22, top + 4, pw, ph);
+            GUI.Label(redR, "", sHudRed);
+            GUI.Label(blueR, "", sHudBlue);
+            Shadowed(new Rect(redR.x + 14, redR.y + 4, 120, ph - 14), "КРАСНЫЕ", sHudName, Color.white, Mats.Hex("#7a1531"), 2);
+            Shadowed(new Rect(blueR.xMax - 134, blueR.y + 4, 120, ph - 14), "СИНИЕ", sHudName, Color.white, Mats.Hex("#16235e"), 2);
+            for (int t = 0; t < 2; t++)
+            {
+                float sp2 = 1 + Mathf.Sin(scorePop[t] * Mathf.PI) * 0.6f * scorePop[t];
+                var ns = new GUIStyle(sHudNum) { fontSize = (int)(50 * sp2) };
+                var r = t == 0 ? new Rect(redR.xMax - 92, redR.y - 2, 70, ph - 6) : new Rect(blueR.x + 22, blueR.y - 2, 70, ph - 6);
+                Shadowed(r, (t == 0 ? st.Score0 : st.Score1).ToString(), ns, scorePop[t] > 0 ? Mats.Hex("#ffd23f") : Color.white, Mats.Hex(t == 0 ? "#a01c33" : "#1d3596"), 3);
+            }
+            var midR = new Rect(cx0 - cw / 2, top - 2, cw, ph + 18);
+            GUI.Label(midR, "", sHudMid);
             int tt = Mathf.Max(0, Mathf.CeilToInt(st.Time));
-            GUI.Label(new Rect(sbX + 208, sbY + 2, sbW - 416, 52), st.Overtime ? "ОТ" : $"{tt / 60}:{tt % 60:00}", sScore);
-            if (st.Overtime) GUI.Label(new Rect(sbX + 208, sbY + 40, sbW - 416, 24), "<color=#ffd23f>до гола</color>", new GUIStyle(sSmall) { alignment = TextAnchor.MiddleCenter, fontSize = 13 });
+            bool hurry = !st.Overtime && st.Phase == Phase.Play && tt <= 10;
+            var tsty = new GUIStyle(sHudTime) { fontSize = (int)(42 * (hurry ? 1 + Mathf.Abs(Mathf.Sin(time * 6)) * 0.12f : 1)) };
+            Shadowed(new Rect(midR.x, midR.y + 2, cw, ph - 4), st.Overtime ? "ОТ" : $"{tt / 60}:{tt % 60:00}", tsty, hurry ? Mats.Hex("#ff6a5c") : Mats.Hex("#ffd23f"), Mats.Hex("#0d1030"), 3);
+            Shadowed(new Rect(midR.x, midR.y + ph - 10, cw, 22), st.Overtime ? "ДО ГОЛА" : st.Phase == Phase.Faceoff ? "ВБРАСЫВАНИЕ" : "ВРЕМЯ", new GUIStyle(sMeterText) { fontSize = 12 }, Mats.Hex("#c8d0ff"), Mats.Hex("#0d1030"), 1);
 
             // баннер
             string big = "", small = "";
@@ -886,20 +927,29 @@ namespace Hockey
                 if (v.Follow < 0 || v.Follow >= st.Players.Length) continue;
                 var p = st.Players[v.Follow];
                 var area = new Rect(v.Rect.x * VW, 0, v.Rect.width * VW, VH);
-                // полоски силы броска и выносливости
-                float bw = Mathf.Min(320, area.width * 0.6f), bx = area.x + (area.width - bw) / 2, by = VH - 70;
-                GUI.Label(new Rect(bx - 8, by - 8, bw + 16, 50), "", sTag);
-                Box(new Rect(bx, by, bw * p.Charge, 14), p.Charge > 0.7f ? "#ff6a3d" : "#ffd23f", p.Charge > 0 ? 1 : 0.3f);
-                Box(new Rect(bx, by + 21, bw * p.Stamina, 9), p.Has(Buff.Turbo) ? Fx.ItemColors[0] : "#5cf28a");
+                // шкалы: сила броска (появляется, пока замахиваешься) и рывок
+                float bw = Mathf.Min(300, area.width * 0.55f), bx = area.x + (area.width - bw) / 2, by = VH - 62;
+                if (!v.HudInit) { v.ChargeA = 0; v.HudInit = true; }
+                if (Event.current.type == EventType.Repaint) v.ChargeA = Mathf.MoveTowards(v.ChargeA, p.Charge > 0.02f ? 1 : 0, Time.unscaledDeltaTime * (p.Charge > 0.02f ? 8 : 2.5f));
+                if (p.Charge > 0.02f) v.LastCharge = p.Charge;
+                if (v.ChargeA > 0.01f)
+                {
+                    bool hot = v.LastCharge > 0.7f;
+                    float shake2 = hot ? Mathf.Sin(time * 50) * 1.5f : 0;
+                    Meter(new Rect(bx - 10 + shake2, by - 50 + (1 - v.ChargeA) * 14, bw + 20, 42), v.LastCharge, hot ? "#ffb04a" : "#ffe46a", hot ? "#ff3d4a" : "#ffa21f", hot ? "МОЩНО!" : "БРОСОК", v.ChargeA);
+                }
+                bool turbo = p.Has(Buff.Turbo);
+                Meter(new Rect(bx, by, bw, 36), turbo ? 1 : p.Stamina, turbo ? "#7ff7ff" : "#8dfba8", turbo ? "#1fb8d8" : "#22b866", turbo ? "ТУРБО" : "", p.Stamina < 0.999f || turbo ? 1 : 0.55f);
                 DrawHints(v, st, area);
                 // активные бонусы
                 float ix = area.x + area.width / 2 - 200, iy = 96;
                 for (int b = 0; b < 5; b++)
                 {
                     if (!p.Has((Buff)b)) continue;
-                    GUI.color = Mats.Hex(Fx.ItemColors[b]);
-                    GUI.Label(new Rect(ix, iy, 130, 32), Fx.ItemNames[b], sPill);
-                    GUI.color = Color.white;
+                    var ic = Mats.Hex(Fx.ItemColors[b]);
+                    var br = new Rect(ix, iy + Mathf.Sin(time * 5 + b) * 2, 130, 34);
+                    GUI.Label(br, "", Fill("#" + ColorUtility.ToHtmlStringRGB(Color.Lerp(ic, Color.white, 0.35f)), "#" + ColorUtility.ToHtmlStringRGB(Color.Lerp(ic, Color.black, 0.2f))));
+                    Shadowed(new Rect(br.x, br.y - 1, br.width, br.height), Fx.ItemNames[b], sMeterText, Color.white, new Color(0.05f, 0.06f, 0.2f, 0.85f), 1.5f);
                     ix += 136;
                 }
                 // всплывающее сообщение о бонусе
@@ -919,7 +969,6 @@ namespace Hockey
 
             if (mode == Mode.Host) GUI.Label(new Rect(VW - 360, 16, 344, 30), $"Хост · игроков по сети: {lobby.Count - 1}", new GUIStyle(sSmall) { alignment = TextAnchor.UpperRight });
             else if (mode == Mode.Client && client != null) GUI.Label(new Rect(VW - 360, 16, 344, 30), $"Пинг: {(client.PingMs >= 0 ? client.PingMs + " мс" : "…")}", new GUIStyle(sSmall) { alignment = TextAnchor.UpperRight });
-            GUI.Label(new Rect(VW - 560, VH - 32, 546, 26), "Esc — пауза · H — подсказки · M — звук", new GUIStyle(sSmall) { alignment = TextAnchor.LowerRight, fontSize = 13 });
         }
 
         void DrawMinimap(ViewState st)

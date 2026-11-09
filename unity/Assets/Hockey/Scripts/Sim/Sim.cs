@@ -861,26 +861,59 @@ namespace Hockey
             int outDir = -s;
             float gx = s * Rink.GoalX, gz = 0;
             var pk = Puck;
-            float tx, tz;
+            float tx, tz, maxSpd = 4.6f;
+            float pspd = Hyp(pk.Vx, pk.Vz);
+            Player carrier = pk.Owner >= 0 ? Players[pk.Owner] : null;
             if (s * pk.X > Rink.GoalX - 0.2f)
             {
+                // шайба за воротами: прижимаемся к штанге с её стороны
                 tx = gx + outDir * 0.55f;
                 tz = (pk.Z >= 0 ? 1 : -1) * (Rink.GoalW / 2 - 0.25f);
             }
+            else if (pk.Owner < 0 && pk.Vx * s > 3 && pspd > 6)
+            {
+                // бросок по воротам: считаем, где шайба пересечёт линию вратаря, и скользим туда
+                float lineX = g.X;
+                float tHit = (lineX - pk.X) / pk.Vx;
+                float hitZ = tHit > 0 ? pk.Z + pk.Vz * tHit : pk.Z;
+                tx = g.X;
+                tz = Clamp(hitZ, -Rink.GoalW / 2 - 0.5f, Rink.GoalW / 2 + 0.5f);
+                maxSpd = 6.2f;
+            }
             else
             {
-                float dx = pk.X - gx, dz = pk.Z - gz;
+                // стоим на линии «шайба — центр ворот», перекрывая угол; выходим дальше, когда шайба далеко
+                float px = pk.X, pz = pk.Z;
+                if (carrier != null && carrier.Team != g.Team)
+                {   // упреждение: куда шайба поедет через мгновение
+                    px += carrier.Vx * 0.2f; pz += carrier.Vz * 0.2f;
+                }
+                float dx = px - gx, dz = pz - gz;
                 float d = Hyp(dx, dz); if (d < 1e-4f) d = 1;
-                float r = Clamp(0.55f + d * 0.05f, 0.6f, 1.5f);
+                float r = Clamp(0.5f + d * 0.07f, 0.6f, 1.9f);
+                if (d < 4) r = Clamp(d * 0.3f, 0.6f, r);   // соперник у ворот: откатываемся в створ
                 tx = gx + dx / d * r; tz = gz + dz / d * r;
                 if (outDir * (tx - gx) < 0.45f) tx = gx + outDir * 0.45f;
                 tz = Clamp(tz, -Rink.GoalW / 2 - 0.3f, Rink.GoalW / 2 + 0.3f);
+                // ничейная медленная шайба рядом с воротами: выкатываемся и накрываем её
+                if (pk.Owner < 0 && pspd < 5 && d < 3.2f && pk.Y < 0.3f && g.NoPick <= 0 && Phase == Phase.Play)
+                {
+                    float myD = Hyp(pk.X - g.X, pk.Z - g.Z), oppD = 99;
+                    foreach (var q in Players) if (q.Team != g.Team && !q.Goalie) oppD = MathF.Min(oppD, Hyp(pk.X - q.X, pk.Z - q.Z));
+                    if (myD < oppD * 0.8f) { tx = pk.X; tz = pk.Z; maxSpd = 5.5f; }
+                }
+                // выход на ворота: соперник с шайбой совсем близко — выбиваем клюшкой
+                if (carrier != null && carrier.Team != g.Team && g.Swing <= 0 && Phase == Phase.Play && !g.Has(Buff.Frozen))
+                {
+                    float cd = Hyp(pk.X - g.X, pk.Z - g.Z);
+                    if (cd < 1.5f && Rand() < dt * 1.1f * (0.5f + diff.SaveP)) GoaliePoke(g);
+                }
             }
             float mx = tx - g.X, mz = tz - g.Z;
             float md = Hyp(mx, mz);
-            float want = MathF.Min(g.Has(Buff.Frozen) ? 1.4f : 4.6f, md * 7);
+            float want = MathF.Min(g.Has(Buff.Frozen) ? 1.4f : maxSpd, md * 7);
             float vx = md > 1e-3f ? mx / md * want : 0, vz = md > 1e-3f ? mz / md * want : 0;
-            float k = MathF.Min(1, dt * 12);
+            float k = MathF.Min(1, dt * (maxSpd > 5 ? 20 : 12));
             g.Vx += (vx - g.Vx) * k; g.Vz += (vz - g.Vz) * k;
             g.X += g.Vx * dt; g.Z += g.Vz * dt;
             float desired = MathF.Atan2(pk.X - g.X, pk.Z - g.Z);
@@ -892,6 +925,24 @@ namespace Hockey
                 pk.HoldT -= dt;
                 if (pk.HoldT <= 0 && Phase == Phase.Play) GoaliePass(g);
             }
+        }
+
+        /// Вратарь выбивает шайбу у соперника клюшкой в сторону от ворот.
+        void GoaliePoke(Player g)
+        {
+            var pk = Puck;
+            int outDir = Rink.TeamDir[g.Team];
+            var c = Players[pk.Owner];
+            c.NoPick = 0.5f;
+            pk.Owner = -1;
+            float side = pk.Z >= g.Z ? 1 : -1;
+            float a = Rnd(0.5f, 1.1f);
+            pk.Vx = outDir * MathF.Cos(a) * 9; pk.Vz = side * MathF.Sin(a) * 9; pk.Vy = 0;
+            pk.Y = 0.02f;
+            pk.SaveCheck.Clear();
+            g.Swing = 0.35f; g.Save = 0.45f;
+            Touch(g);
+            Ev(EvType.Save, 0, g.Idx);
         }
 
         void GoaliePass(Player g)
@@ -1095,7 +1146,12 @@ namespace Hockey
                 if (!towards || d > 1.15f || pk.Y > 1.55f) continue;
                 if (pk.SaveCheck.ContainsKey(g.Idx)) continue;
                 float lateral = MathF.Abs(dz);
-                float prob = diff.SaveP + 0.1f - (spd - 14) / 70 - lateral * 0.22f - MathF.Max(0, pk.Y - 0.9f) * 0.3f;
+                // занял позицию заранее (шайба летит в корпус) — шанс выше
+                // бросок в угол ворот тяжелее взять, даже если вратарь на месте
+                float tg = (s * Rink.GoalX - pk.X) / (MathF.Abs(pk.Vx) > 0.1f ? pk.Vx : 0.1f);
+                float zg = MathF.Abs(pk.Z + pk.Vz * MathF.Max(0, tg));
+                float corner = MathF.Max(0, zg - 0.7f) * 0.32f + MathF.Max(0, pk.Y - 0.7f) * 0.15f;
+                float prob = diff.SaveP + 0.04f + (lateral < 0.35f ? 0.05f : 0) - corner - (spd - 14) / 70 - lateral * 0.22f - MathF.Max(0, pk.Y - 0.9f) * 0.3f;
                 if (pk.Mega) prob -= 0.35f;
                 if (g.Has(Buff.Frozen)) prob -= 0.25f;
                 int lt = pk.LastTouch[0];

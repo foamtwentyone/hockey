@@ -98,10 +98,11 @@ Shader "Hockey/Post"
                 if (_Speed > 0.001)
                 {
                     float2 dir = uv - 0.5;
-                    half w = saturate(length(dir) * 2 - 0.35);
+                    // мелкий шаг выборок: размытие сплошное, без «двоения» картинки
+                    half w = saturate(length(dir) * 2.2 - 0.6);
                     half3 acc = c;
-                    for (int k = 1; k < 6; k++) acc += tex2D(_MainTex, uv - dir * k * 0.012 * _Speed * w).rgb;
-                    c = acc / 6;
+                    for (int k = 1; k < 8; k++) acc += tex2D(_MainTex, uv - dir * k * 0.0022 * _Speed * w).rgb;
+                    c = acc / 8;
                 }
                 c += tex2D(_BloomTex, uv).rgb * _Bloom;
                 c *= _Exposure;
