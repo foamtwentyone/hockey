@@ -928,7 +928,7 @@ namespace Hockey
             bool hurry = !st.Overtime && st.Phase == Phase.Play && tt <= 10;
             var tsty = new GUIStyle(sHudTime) { fontSize = (int)(44 * (hurry ? 1 + Mathf.Abs(Mathf.Sin(time * 6)) * 0.12f : 1)) };
             Shadowed(new Rect(puckR.x, puckR.y + puckH * 0.41f - 30, puckW, 54), st.Overtime ? "ОТ" : $"{tt / 60}:{tt % 60:00}", tsty, hurry ? Mats.Hex("#ff6a5c") : Color.white, Mats.Hex("#000000"), 2);
-            string sub = st.Overtime ? "ДО ГОЛА" : goalNow ? "ГОЛ!" : st.Phase == Phase.Faceoff ? "ВБРАСЫВАНИЕ" : "ПЕРИОД";
+            string sub = st.Overtime ? "ДО ГОЛА" : goalNow ? "ГОЛ!" : st.Phase == Phase.Faceoff ? "ВБРАСЫВАНИЕ" : "МАТЧ";
             Shadowed(new Rect(puckR.x, puckR.y + puckH * 0.76f, puckW, puckH * 0.18f), sub, new GUIStyle(sMeterText) { fontSize = 12 }, Mats.Hex("#ffd23f"), Mats.Hex("#000000"), 1);
 
             // баннер
@@ -964,7 +964,7 @@ namespace Hockey
                 else
                 {   // круг вбрасывания за отсчётом
                     GUI.color = WithA(Mats.Hex("#ff4f5e"), 0.85f);
-                    float rr = 120 * pop;
+                    float rr = 88 * pop;
                     GUI.DrawTexture(new Rect(centerB.x - rr, centerB.y - rr, rr * 2, rr * 2), hudRing);
                 }
                 GUI.color = Color.white;
