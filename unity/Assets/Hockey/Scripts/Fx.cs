@@ -11,7 +11,13 @@ namespace Hockey
         public static readonly string[] ItemNames = { "Турбо", "Мега-бросок", "Великан", "Магнит", "Заморозка" };
         public static readonly string[] ItemHints = { "быстрее катаешься", "следующий бросок — ракета", "большой и непробиваемый", "шайба липнет к клюшке", "соперники вмёрзли в лёд" };
 
-        readonly ParticleSystem confetti, chips, sparks;
+        readonly ParticleSystem confetti, chips, sparks, puffs, streaks;
+        public Camera FacingCam;   // к ней поворачиваются «ПОВ!»-звёзды
+        class Burst { public Transform T; public float Age, Life, Size; public bool Ring; public Material Mat; public Color Col; }
+        readonly List<Burst> bursts = new List<Burst>();
+        readonly List<(float t, Vector3 pos, Color col)> fireworks = new List<(float, Vector3, Color)>();
+        readonly Dictionary<int, Transform> clouds = new Dictionary<int, Transform>();
+        float time;
         readonly Transform root;
         readonly List<GameObject>[] itemPool = { new List<GameObject>(), new List<GameObject>(), new List<GameObject>(), new List<GameObject>(), new List<GameObject>() };
 
@@ -22,6 +28,165 @@ namespace Hockey
             confetti = Make("Confetti", 1500, 0.6f, true);
             chips = Make("IceChips", 800, 1.4f, false);
             sparks = Make("Sparks", 600, -0.1f, true);
+            puffs = Make("Puffs", 500, -0.05f, false);
+            var pr = puffs.GetComponent<ParticleSystemRenderer>();
+            pr.renderMode = ParticleSystemRenderMode.Mesh;
+            pr.mesh = MeshKit.Sphere(0.5f, 12, 0.25f);
+            var psz = puffs.sizeOverLifetime;
+            psz.size = new ParticleSystem.MinMaxCurve(1, new AnimationCurve(new Keyframe(0, 0.4f), new Keyframe(0.3f, 1f), new Keyframe(1, 0)));
+            streaks = Make("Streaks", 300, 0, false);
+            var sr = streaks.GetComponent<ParticleSystemRenderer>();
+            sr.renderMode = ParticleSystemRenderMode.Stretch;
+            sr.velocityScale = 0.08f; sr.lengthScale = 1.5f;
+            sr.sharedMaterial = Mats.Fade("#ffffff", 0.5f, true);
+        }
+
+        // ---------------- новые эффекты ----------------
+        /// Мультяшные клубы пыли/снега (объёмные шарики).
+        public void Puff(Vector3 pos, int n, Color c, float spread = 0.6f, float speed = 1.5f, float size = 0.5f)
+        {
+            var ep = new ParticleSystem.EmitParams();
+            for (int i = 0; i < n; i++)
+            {
+                ep.position = pos + Random.insideUnitSphere * spread;
+                var d = Random.insideUnitSphere; d.y = Mathf.Abs(d.y) * 0.6f + 0.2f;
+                ep.velocity = d * speed;
+                ep.startColor = Color.Lerp(c, Color.white, Random.value * 0.3f);
+                ep.startSize = size * Random.Range(0.6f, 1.3f);
+                ep.startLifetime = Random.Range(0.45f, 0.9f);
+                puffs.Emit(ep, 1);
+            }
+        }
+
+        /// Линии ветра вокруг быстрого игрока.
+        public void Streak(Vector3 pos, Vector3 vel)
+        {
+            var ep = new ParticleSystem.EmitParams
+            {
+                position = pos + Random.insideUnitSphere * 0.9f + Vector3.up * 0.8f,
+                velocity = -vel * 0.6f + Vector3.up * 0.1f,
+                startColor = new Color(1, 1, 1, 0.8f),
+                startSize = 0.05f,
+                startLifetime = 0.35f,
+            };
+            streaks.Emit(ep, 1);
+        }
+
+        static readonly Dictionary<string, Material> burstMats = new Dictionary<string, Material>();
+        Material BurstMat(Color c, bool ring)
+        {
+            string key = ColorUtility.ToHtmlStringRGB(c) + ring;
+            if (!burstMats.TryGetValue(key, out var m))
+            {
+                m = new Material(Mats.Fade("#" + ColorUtility.ToHtmlStringRGB(c), 0.9f, true));
+                burstMats[key] = m;
+            }
+            return m;
+        }
+
+        Burst Spawn(Mesh mesh, Color c, Vector3 pos, float size, float life, bool ring)
+        {
+            var go = new GameObject(ring ? "Shockwave" : "Pow");
+            go.transform.SetParent(root, false);
+            go.transform.position = pos;
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            var mr = go.AddComponent<MeshRenderer>();
+            var mat = new Material(BurstMat(c, ring));
+            mr.sharedMaterial = mat;
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            var b = new Burst { T = go.transform, Life = life, Size = size, Ring = ring, Mat = mat, Col = c };
+            bursts.Add(b);
+            return b;
+        }
+
+        /// Ударная волна по льду.
+        public void Shockwave(Vector3 pos, Color c, float size = 2.5f) => Spawn(MeshKit.FlatRing(0.8f, 1f, 48), c, new Vector3(pos.x, 0.03f, pos.z), size, 0.45f, true);
+
+        /// Комикс-вспышка «ПОВ!»: жёлтая звезда с белой серединой.
+        public void Pow(Vector3 pos, float size = 0.9f)
+        {
+            Spawn(MeshKit.Star(1f, 0.5f, 8), Mats.Hex("#ffd23f"), pos, size, 0.35f, false);
+            Spawn(MeshKit.Star(0.6f, 0.55f, 8), Color.white, pos + Vector3.up * 0.01f, size, 0.3f, false);
+        }
+
+        public void Fireworks(Vector3 center, int count)
+        {
+            for (int i = 0; i < count; i++)
+                fireworks.Add((time + 0.25f + i * 0.28f, center + new Vector3(Random.Range(-12f, 12f), Random.Range(7f, 12f), Random.Range(-8f, 8f)), ConfettiColors[Random.Range(0, ConfettiColors.Length)]));
+        }
+
+        /// Облако драки над дерущимися: пыль, мелькающие кулаки и звёзды.
+        public void BrawlCloud(int id, Vector3 center, bool active, float dt)
+        {
+            if (!active) { if (clouds.TryGetValue(id, out var old)) { Object.Destroy(old.gameObject); clouds.Remove(id); } return; }
+            if (!clouds.TryGetValue(id, out var cloud))
+            {
+                cloud = new GameObject("BrawlCloud").transform;
+                cloud.SetParent(root, false);
+                var mat = Mats.Get("#f3f1ec", 0.05f);
+                for (int i = 0; i < 9; i++)
+                {
+                    var p = new GameObject("puff");
+                    p.transform.SetParent(cloud, false);
+                    p.AddComponent<MeshFilter>().sharedMesh = MeshKit.Sphere(0.5f, 14, 0.3f);
+                    p.AddComponent<MeshRenderer>().sharedMaterial = mat;
+                }
+                var fist = Mats.Get("#ef5a4c", 0.3f); var fist2 = Mats.Get("#4a8ff0", 0.3f);
+                for (int i = 0; i < 4; i++)
+                {
+                    var f = new GameObject("fist");
+                    f.transform.SetParent(cloud, false);
+                    f.AddComponent<MeshFilter>().sharedMesh = MeshKit.Sphere(0.16f, 10, 0.1f);
+                    f.AddComponent<MeshRenderer>().sharedMaterial = i % 2 == 0 ? fist : fist2;
+                }
+                clouds[id] = cloud;
+            }
+            cloud.position = center + Vector3.up * 0.9f;
+            for (int i = 0; i < cloud.childCount; i++)
+            {
+                var c = cloud.GetChild(i);
+                float a = time * (i < 9 ? 6 : 13) + i * 1.9f;
+                if (i < 9)
+                {
+                    c.localPosition = new Vector3(Mathf.Sin(a) * 0.55f, Mathf.Sin(a * 1.7f) * 0.35f, Mathf.Cos(a * 1.3f) * 0.55f);
+                    float sc = 1.1f + Mathf.Sin(a * 2.3f) * 0.25f;
+                    c.localScale = new Vector3(sc, sc, sc);
+                }
+                else
+                {
+                    float pop = Mathf.Max(0, Mathf.Sin(a));
+                    c.localPosition = new Vector3(Mathf.Sin(a * 0.7f + i) * (0.6f + pop * 0.6f), Mathf.Cos(a * 0.9f) * 0.5f, Mathf.Cos(a * 0.7f + i) * (0.6f + pop * 0.6f));
+                    c.gameObject.SetActive(pop > 0.2f);
+                }
+            }
+            if (Random.value < dt * 5) Pow(center + Vector3.up * 1f + Random.insideUnitSphere * 0.8f, 0.55f);
+            if (Random.value < dt * 10) Puff(center + Vector3.up * 0.3f, 1, Color.white, 0.6f, 2f, 0.4f);
+        }
+
+        public void Update(float dt)
+        {
+            time += dt;
+            for (int i = bursts.Count - 1; i >= 0; i--)
+            {
+                var b = bursts[i];
+                b.Age += dt;
+                float k = b.Age / b.Life;
+                if (k >= 1) { Object.Destroy(b.T.gameObject); Object.Destroy(b.Mat); bursts.RemoveAt(i); continue; }
+                float sc = b.Ring ? Mathf.Lerp(0.3f, 1, Mathf.Sqrt(k)) * b.Size : b.Size * (k < 0.3f ? Mathf.Lerp(0.2f, 1.15f, k / 0.3f) : Mathf.Lerp(1.15f, 0.9f, (k - 0.3f) / 0.7f));
+                b.T.localScale = new Vector3(sc, sc, sc);
+                if (b.Ring) b.T.rotation = Quaternion.identity;
+                else if (FacingCam != null) b.T.rotation = Quaternion.LookRotation(b.T.position - FacingCam.transform.position) * Quaternion.Euler(0, 0, b.Age * 200);
+                var c = b.Col; c.a = Mathf.Clamp01((1 - k) * 1.6f) * (b.Ring ? 0.7f : 1);
+                b.Mat.color = c;
+            }
+            for (int i = fireworks.Count - 1; i >= 0; i--)
+            {
+                if (fireworks[i].t > time) continue;
+                var f = fireworks[i];
+                fireworks.RemoveAt(i);
+                Sparks(f.pos, f.col, 70, 7);
+                Sparks(f.pos, Color.white, 20, 4);
+            }
         }
 
         ParticleSystem Make(string name, int max, float gravity, bool spin)

@@ -28,8 +28,10 @@ namespace Hockey
         static readonly string[] BaseNames = { "2H_Melee_Idle", "Running_A", "Jump_Idle", "Dodge_Forward", "Death_A", "Lie_StandUp", "Cheer", "Block_Hit", "Hit_A" };
         static readonly string[] GoalieBase = { "Blocking", "Running_Strafe_Right", "Jump_Idle", "Dodge_Forward", "Death_A", "Lie_StandUp", "Cheer", "Dodge_Left", "Hit_A" };
         // верхний слой
-        const int Hold = 0, Windup = 1, Swing = 2, PassAnim = 3;
-        static readonly string[] UpperNames = { "2H_Melee_Idle", "2H_Melee_Attack_Chop", "2H_Melee_Attack_Slice", "Throw" };
+        const int Hold = 0, Windup = 1, Swing = 2, PassAnim = 3, PunchAnim = 4;
+        static readonly string[] UpperNames = { "2H_Melee_Idle", "2H_Melee_Attack_Chop", "2H_Melee_Attack_Slice", "Throw", "Unarmed_Melee_Attack_Punch_A" };
+        public static readonly string[] TapeColors = { "#ffffff", "#25252d", "#ffd23f", "#ff7ad9", "#5cf28a", "#4fe3ff" };
+        float punchT = 99; bool wasPunch;
 
         float runPhase, cheerT, fallT, standT = 99, diveT, swingT = 99, saveT = 99, hitT = 99;
         bool wasStun, wasDive, wasSwing, wasSave;
@@ -64,12 +66,12 @@ namespace Hockey
             return null;
         }
 
-        // ---------- перекраска палитры в цвет команды ----------
-        static Material TeamMaterial(string texName, int team, bool knight)
+        // ---------- перекраска палитры: форма в цвет команды, кожа — в выбранный тон ----------
+        static Material TeamMaterial(int team, int skin)
         {
-            string key = texName + team;
+            string key = "rogue" + team + "|" + skin;
             if (matCache.TryGetValue(key, out var m)) return m;
-            var src = Resources.Load<Texture2D>("KayKit/" + texName);
+            var src = Resources.Load<Texture2D>("KayKit/rogue_texture");
             Texture2D tex = src;
             if (src != null && src.isReadable)
             {
@@ -77,30 +79,30 @@ namespace Hockey
                 var px = src.GetPixels();
                 int w = src.width, h = src.height;
                 float targetHue = team == 0 ? 0.0f : 0.6f;
+                Color skinBase = px[(h - 8) * w + 8];
+                Color skinTarget = Mats.Hex(CharacterRig.Skins[Mathf.Abs(skin) % CharacterRig.Skins.Length]);
                 for (int y = 0; y < h; y++)
-                {
-                    // нижний ряд палитры — общие цвета мелких деталей, не трогаем
-                    if (y < h / 4) continue;
                     for (int x = 0; x < w; x++)
                     {
                         var c = px[y * w + x];
-                        Color.RGBToHSV(c, out float hh, out float s, out float v);
-                        bool recolor;
-                        if (knight) recolor = team == 1 && (hh < 0.04f || hh > 0.94f) && s > 0.45f && v > 0.25f;
-                        else
+                        // кожа: левая верхняя ячейка атласа и две правые нижние
+                        bool skinCell = (x < w / 8 && y >= h * 3 / 4) || (x >= w * 3 / 4 && y < h / 4);
+                        if (skinCell && skin > 0)
                         {
-                            // зелёная одежда разбойника; ячейку с жёлто-зелёным градиентом пропускаем
-                            bool skipCell = x >= w / 4 && x < w * 3 / 8 && y >= h / 4 && y < h / 2;
-                            recolor = !skipCell && hh > 0.27f && hh < 0.52f && s > 0.2f;
+                            float k = c.grayscale / Mathf.Max(0.05f, skinBase.grayscale);
+                            var nc = skinTarget * k; nc.a = c.a;
+                            px[y * w + x] = nc;
+                            continue;
                         }
-                        if (!recolor) continue;
-                        // лёгкая коррекция яркости, чтобы красный и синий были сочными
+                        if (y < h / 4) continue; // нижний ряд — общие цвета деталей
+                        Color.RGBToHSV(c, out float hh, out float s, out float v);
+                        bool skipCell = x >= w / 4 && x < w * 3 / 8 && y >= h / 4 && y < h / 2;
+                        if (skipCell || !(hh > 0.27f && hh < 0.52f && s > 0.2f)) continue;
                         float nv = Mathf.Clamp01(v * (team == 0 ? 1.08f : 1.05f) + 0.04f);
-                        var nc = Color.HSVToRGB(targetHue + (team == 0 ? 0.005f : 0), Mathf.Clamp01(s * 1.05f), nv);
-                        nc.a = c.a;
-                        px[y * w + x] = nc;
+                        var tc = Color.HSVToRGB(targetHue + (team == 0 ? 0.005f : 0), Mathf.Clamp01(s * 1.05f), nv);
+                        tc.a = c.a;
+                        px[y * w + x] = tc;
                     }
-                }
                 tex.SetPixels(px);
                 tex.Apply(false);
             }
@@ -110,9 +112,9 @@ namespace Hockey
         }
 
         /// Создаёт персонажа KayKit или возвращает null, если моделей нет.
-        public static KayKitCharacter Create(int team, int variant, bool goalie, Transform parent, Material stickWood, Material stickTape)
+        public static KayKitCharacter Create(int team, int skin, int tape, int number, bool goalie, Transform parent)
         {
-            string model = goalie ? "Knight" : (variant % 2 == 0 ? "Rogue" : "RogueHooded");
+            const string model = "Rogue";
             var prefab = Load(model);
             if (prefab == null) return null;
             var k = new KayKitCharacter { Goalie = goalie };
@@ -120,20 +122,24 @@ namespace Hockey
             go.name = model;
             k.Model = go.transform;
 
-            var mat = TeamMaterial(goalie ? "knight_texture" : "rogue_texture", team, goalie);
+            var mat = TeamMaterial(team, skin);
+            var parts = new Dictionary<string, SkinnedMeshRenderer>();
             foreach (var r in go.GetComponentsInChildren<Renderer>(true))
             {
                 string n = r.gameObject.name;
-                bool body = n.EndsWith("ArmLeft") || n.EndsWith("ArmRight") || n.EndsWith("Body") || n.Contains("_Head") || n.EndsWith("LegLeft") || n.EndsWith("LegRight") || n.EndsWith("Helmet");
+                bool body = n.EndsWith("ArmLeft") || n.EndsWith("ArmRight") || n.EndsWith("Body") || n.EndsWith("_Head") || n.EndsWith("LegLeft") || n.EndsWith("LegRight");
                 if (!body) { r.enabled = false; r.gameObject.SetActive(false); continue; }
+                if (r is SkinnedMeshRenderer sk) parts[n.Substring(n.IndexOf('_') + 1)] = sk;
                 r.sharedMaterial = mat;
                 r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
                 r.receiveShadows = true;
                 if (r is SkinnedMeshRenderer smr) smr.updateWhenOffscreen = true;
             }
 
+            var bones = new Dictionary<string, Transform>();
             foreach (var t in go.GetComponentsInChildren<Transform>(true))
             {
+                if (!bones.ContainsKey(t.name)) bones[t.name] = t;
                 if (t.name == "handslot.r") k.HandR = t;
                 else if (t.name == "head") k.Head = t;
             }
@@ -152,12 +158,14 @@ namespace Hockey
                 if (headY > 0.01f) go.transform.localScale = Vector3.one * (1.12f / headY);
             }
 
-            if (k.HandR != null) k.BuildStick(stickWood, stickTape);
+            k.graph.Evaluate(0);
+            HockeyGear.Dress(go.transform, bones, parts, team, number, goalie);
+            if (k.HandR != null) k.BuildStick(team, Mats.Hex(TapeColors[Mathf.Abs(tape) % TapeColors.Length]));
             go.AddComponent<KayKitGraphOwner>().Graph = k.graph;
             return k;
         }
 
-        void BuildStick(Material wood, Material tape)
+        void BuildStick(int team, Color tapeColor)
         {
             var stick = new GameObject("HockeyStick").transform;
             stick.SetParent(HandR, false);
@@ -166,24 +174,32 @@ namespace Hockey
             stick.localScale = new Vector3(1 / Mathf.Max(1e-4f, s.x), 1 / Mathf.Max(1e-4f, s.y), 1 / Mathf.Max(1e-4f, s.z));
             float len = Goalie ? 1.1f : 1.25f;
             Stick = stick; stickLen = len;
-            void P(Mesh m, Material mt, Vector3 pos, Vector3 scale)
+            void P(Mesh m, Material mt, Vector3 pos)
             {
                 var p = new GameObject("p");
                 p.transform.SetParent(stick, false);
                 p.transform.localPosition = pos;
-                p.transform.localScale = scale;
                 p.AddComponent<MeshFilter>().sharedMesh = m;
                 var mr = p.AddComponent<MeshRenderer>(); mr.sharedMaterial = mt;
             }
-            // рукоять смотрит вдоль оси слота оружия, крюк — внизу
-            P(MeshKit.RoundedBox(0.055f, len, 0.045f, 0.018f, 2, 0.05f), wood, new Vector3(0, -len / 2 + 0.22f, 0), Vector3.one);
-            P(MeshKit.RoundedBox(0.062f, 0.16f, 0.052f, 0.02f, 2, 0), tape, new Vector3(0, 0.2f, 0), Vector3.one);
-            float bl = Goalie ? 0.5f : 0.36f;
+            var carbon = Mats.Get("#2b2f3d", 0.85f);
+            var stripe = Mats.Get(TeamColors.All[team].Main, 0.8f);
+            var tape = Mats.Get("#" + ColorUtility.ToHtmlStringRGB(tapeColor), 0.25f);
+            float shaft = len - 0.25f + 0.22f;
+            // рукоять: карбон с полосками цвета команды, сверху — набалдашник из обмотки
+            P(MeshKit.Superellipsoid(0.027f, shaft / 2, 0.021f, 0.25f, 0.35f, 20), carbon, new Vector3(0, 0.22f - shaft / 2, 0));
+            P(MeshKit.Superellipsoid(0.03f, 0.05f, 0.024f, 0.25f, 0.35f, 16), stripe, new Vector3(0, -0.15f, 0));
+            P(MeshKit.Superellipsoid(0.03f, 0.03f, 0.024f, 0.25f, 0.35f, 16), stripe, new Vector3(0, -0.3f, 0));
+            P(MeshKit.Superellipsoid(0.034f, 0.08f, 0.028f, 0.5f, 0.5f, 16), tape, new Vector3(0, 0.19f, 0));
+            // изогнутый крюк с обмоткой
+            float bl = Goalie ? 0.5f : 0.37f;
             var blade = new GameObject("blade").transform;
             blade.SetParent(stick, false);
             blade.localPosition = new Vector3(0, -len + 0.25f, 0);
             StickBlade = blade;
-            P(MeshKit.RoundedBox(0.04f, Goalie ? 0.13f : 0.09f, bl, 0.02f, 2, 0), tape, new Vector3(0, -0.03f, bl / 2 - 0.04f) + blade.localPosition, Vector3.one);
+            var bladeMesh = MeshKit.Blade(bl, Goalie ? 0.13f : 0.085f, 0.022f, Goalie ? 0.02f : 0.045f);
+            P(bladeMesh, carbon, blade.localPosition + new Vector3(0, -0.02f, -0.04f));
+            P(MeshKit.Superellipsoid(0.016f, (Goalie ? 0.13f : 0.085f) * 0.56f, bl * 0.25f, 0.3f, 0.4f, 16), tape, blade.localPosition + new Vector3(0.006f, -0.02f, bl * 0.42f));
         }
 
         void BuildGraph(Animator animator, string model, bool goalie)
@@ -282,12 +298,21 @@ namespace Hockey
             if (!s.Stun && wasStun) standT = 0;
             if (s.Dive && !wasDive) diveT = 0;
             if (swing && !wasSwing) swingT = 0;
+            if (s.Punch && !wasPunch) punchT = 0;
+            wasPunch = s.Punch; punchT += dt;
             if (s.Save > 0.3f && !wasSave) saveT = 0;
+            if (s.Stagger && hitT > 0.5f) hitT = 0;
             wasStun = s.Stun; wasDive = s.Dive; wasSwing = swing; wasSave = s.Save > 0.3f;
             fallT += dt; standT += dt; diveT += dt; swingT += dt; saveT += dt; hitT += dt; cheerT += dt;
 
             float upper = 1;
-            if (s.Stun)
+            if (s.Stagger && !s.Stun)
+            {
+                targetB[Hit] = 1;
+                SetTime(baseClips, Hit, hitT * 1.4f, false);
+                upper = 0.3f;
+            }
+            else if (s.Stun)
             {
                 targetB[fallT < 0.25f ? Hit : Fall] = 1;
                 SetTime(baseClips, Hit, fallT * 1.5f, false);
@@ -337,8 +362,14 @@ namespace Hockey
                 upper = Goalie ? 0.0f : 1;
             }
 
-            // руки с клюшкой: держим, замах при зарядке, удар при броске/пасе
-            if (s.Charge > 0.02f)
+            // руки с клюшкой: держим, замах при зарядке, удар при броске/пасе, кулак при толчке
+            if (punchT < 0.4f)
+            {
+                targetU[PunchAnim] = 1;
+                upper = 1;
+                SetTime(upperClips, PunchAnim, punchT * 1.6f, false);
+            }
+            else if (s.Charge > 0.02f)
             {
                 targetU[Windup] = 1;
                 SetTime(upperClips, Windup, Len(upperClips[Windup]) * Mathf.Lerp(0.1f, 0.4f, s.Charge), false);

@@ -23,32 +23,33 @@ namespace Hockey
         public float MoveX, MoveY;     // вправо / вперёд относительно камеры
         public float LookX, LookY;     // поворот камеры за кадр, градусы (мышь)
         public float LookRateX, LookRateY; // поворот камеры, -1..1 (правый стик)
-        public bool Shoot, Pass, Check, Sprint, Jump;
+        public bool Shoot, Pass, Check, Sprint, Jump, Fight;
         public bool AnyMove => MoveX * MoveX + MoveY * MoveY > 0.01f;
     }
 
     public static class GameInput
     {
-        public struct Map { public KeyCode[] Up, Down, Left, Right, Shoot, Pass, Check, Sprint, Jump; }
+        public struct Map { public KeyCode[] Up, Down, Left, Right, Shoot, Pass, Check, Sprint, Jump, Fight; }
 
         public static readonly Map Solo = new Map
         {
             Up = new[] { KeyCode.W, KeyCode.UpArrow }, Down = new[] { KeyCode.S, KeyCode.DownArrow },
             Left = new[] { KeyCode.A, KeyCode.LeftArrow }, Right = new[] { KeyCode.D, KeyCode.RightArrow },
             Shoot = new[] { KeyCode.F, KeyCode.K }, Pass = new[] { KeyCode.Q, KeyCode.J }, Check = new[] { KeyCode.E, KeyCode.L },
-            Sprint = new[] { KeyCode.LeftShift, KeyCode.RightShift }, Jump = new[] { KeyCode.Space },
+            Sprint = new[] { KeyCode.LeftShift, KeyCode.RightShift }, Jump = new[] { KeyCode.Space }, Fight = new[] { KeyCode.R },
         };
         public static readonly Map P1 = new Map
         {
             Up = new[] { KeyCode.W }, Down = new[] { KeyCode.S }, Left = new[] { KeyCode.A }, Right = new[] { KeyCode.D },
             Shoot = new[] { KeyCode.F }, Pass = new[] { KeyCode.Q }, Check = new[] { KeyCode.E }, Sprint = new[] { KeyCode.LeftShift }, Jump = new[] { KeyCode.Space },
+            Fight = new[] { KeyCode.R },
         };
         public static readonly Map P2 = new Map
         {
             Up = new[] { KeyCode.UpArrow }, Down = new[] { KeyCode.DownArrow }, Left = new[] { KeyCode.LeftArrow }, Right = new[] { KeyCode.RightArrow },
             Shoot = new[] { KeyCode.Keypad0, KeyCode.Return }, Pass = new[] { KeyCode.Keypad1, KeyCode.RightShift },
             Check = new[] { KeyCode.Keypad2, KeyCode.RightControl }, Jump = new[] { KeyCode.Keypad3, KeyCode.Slash },
-            Sprint = new[] { KeyCode.Keypad4, KeyCode.Period },
+            Sprint = new[] { KeyCode.Keypad4, KeyCode.Period }, Fight = new[] { KeyCode.Keypad5, KeyCode.Comma },
         };
 
         public static bool Key(KeyCode k)
@@ -87,6 +88,9 @@ namespace Hockey
                 case KeyCode.Q: return UnityEngine.InputSystem.Key.Q;
                 case KeyCode.E: return UnityEngine.InputSystem.Key.E;
                 case KeyCode.F: return UnityEngine.InputSystem.Key.F;
+                case KeyCode.R: return UnityEngine.InputSystem.Key.R;
+                case KeyCode.Comma: return UnityEngine.InputSystem.Key.Comma;
+                case KeyCode.Keypad5: return UnityEngine.InputSystem.Key.Numpad5;
                 case KeyCode.J: return UnityEngine.InputSystem.Key.J;
                 case KeyCode.K: return UnityEngine.InputSystem.Key.K;
                 case KeyCode.L: return UnityEngine.InputSystem.Key.L;
@@ -127,7 +131,7 @@ namespace Hockey
                 var m = map.Value;
                 inp.MoveY = (Any(m.Up) ? 1 : 0) - (Any(m.Down) ? 1 : 0);
                 inp.MoveX = (Any(m.Right) ? 1 : 0) - (Any(m.Left) ? 1 : 0);
-                inp.Shoot = Any(m.Shoot); inp.Pass = Any(m.Pass); inp.Check = Any(m.Check); inp.Sprint = Any(m.Sprint); inp.Jump = Any(m.Jump);
+                inp.Shoot = Any(m.Shoot); inp.Pass = Any(m.Pass); inp.Check = Any(m.Check); inp.Sprint = Any(m.Sprint); inp.Jump = Any(m.Jump); inp.Fight = Any(m.Fight);
             }
             if (src.Mouse)
             {
@@ -168,12 +172,13 @@ namespace Hockey
             inp.Jump |= gp.buttonSouth.isPressed;
             inp.Pass |= gp.buttonWest.isPressed;
             inp.Check |= gp.buttonEast.isPressed;
+            inp.Fight |= gp.buttonNorth.isPressed;
             inp.Sprint |= gp.leftTrigger.ReadValue() > 0.3f || gp.leftShoulder.isPressed || gp.rightShoulder.isPressed;
 #else
             // Старый Input Manager: кнопки геймпада без настройки осей (стики — только с пакетом Input System).
             string j = "joystick " + (index + 1) + " button ";
             bool B(int n) { try { return Input.GetKey(j + n); } catch { return false; } }
-            inp.Jump |= B(0); inp.Check |= B(1); inp.Pass |= B(2); inp.Shoot |= B(3) || B(5); inp.Sprint |= B(4);
+            inp.Jump |= B(0); inp.Check |= B(1); inp.Pass |= B(2); inp.Fight |= B(3); inp.Shoot |= B(5); inp.Sprint |= B(4);
 #endif
         }
 

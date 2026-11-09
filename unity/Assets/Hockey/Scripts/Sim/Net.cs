@@ -13,7 +13,7 @@ namespace Hockey
     {
         public const int GamePort = 7777;
         public const int DiscoveryPort = 7778;
-        public const int Protocol = 2;
+        public const int Protocol = 3;
         public static readonly byte[] Magic = { (byte)'D', (byte)'V', (byte)'H', (byte)'K' };
     }
 
@@ -27,7 +27,7 @@ namespace Hockey
     public class LobbyEntry
     {
         public string Key, Name;
-        public int Team;
+        public int Team, Number = -1, Skin = -1, Hair = -1;
     }
 
     /// Состояние сессии: лобби, настройки и (во время матча) состав команд.
@@ -103,7 +103,8 @@ namespace Hockey
                 w.Write(Q(p.X, 100)); w.Write(Q(p.Z, 100)); w.Write(Q(p.H, 1000)); w.Write(Q(p.Spd, 100));
                 w.Write((byte)(p.Charge * 255)); w.Write((byte)(Math.Min(1, p.Swing) * 255)); w.Write((byte)(Math.Min(1, p.Save) * 255));
                 w.Write((byte)(p.Stamina * 255));
-                w.Write((byte)((p.Stun ? 1 : 0) | (p.Back ? 2 : 0) | (p.Dive ? 4 : 0)));
+                w.Write((byte)((p.Stun ? 1 : 0) | (p.Back ? 2 : 0) | (p.Dive ? 4 : 0) | (p.Punch ? 8 : 0) | (p.Brawl ? 16 : 0) | (p.Stagger ? 32 : 0)));
+                w.Write((byte)Math.Min(255, p.BrawlPower));
                 w.Write((byte)p.Goals); w.Write((byte)p.Assists);
                 w.Write(Q(p.Y, 100)); w.Write(p.Buffs);
             }
@@ -131,6 +132,8 @@ namespace Hockey
                 p.X = r.ReadInt16() / 100f; p.Z = r.ReadInt16() / 100f; p.H = r.ReadInt16() / 1000f; p.Spd = r.ReadInt16() / 100f;
                 p.Charge = r.ReadByte() / 255f; p.Swing = r.ReadByte() / 255f; p.Save = r.ReadByte() / 255f; p.Stamina = r.ReadByte() / 255f;
                 int f = r.ReadByte(); p.Stun = (f & 1) != 0; p.Back = (f & 2) != 0; p.Dive = (f & 4) != 0;
+                p.Punch = (f & 8) != 0; p.Brawl = (f & 16) != 0; p.Stagger = (f & 32) != 0;
+                p.BrawlPower = r.ReadByte();
                 p.Goals = r.ReadByte(); p.Assists = r.ReadByte();
                 p.Y = r.ReadInt16() / 100f; p.Buffs = r.ReadByte();
             }
@@ -217,7 +220,7 @@ namespace Hockey
         public int PlayerCount;
         public bool InMatch;
 
-        public event Action<string, string> OnJoin;   // key, name
+        public event Action<string, string, int, int, int> OnJoin;   // key, name, номер, кожа, цвет обмотки
         public event Action<string> OnLeave;          // key
         public event Action<string, int> OnSetTeam;   // key, team
         public Func<SessionInfo> GetSession;
@@ -274,6 +277,8 @@ namespace Hockey
                     {
                         int proto = r.ReadInt32();
                         string name = r.ReadString();
+                        int num = -1, skin = -1, hair = -1;
+                        if (r.BaseStream.Position + 3 <= r.BaseStream.Length) { num = r.ReadByte(); skin = r.ReadByte(); hair = r.ReadByte(); }
                         if (name.Length > 14) name = name.Substring(0, 14);
                         if (proto != NetConst.Protocol)
                         {
@@ -283,7 +288,7 @@ namespace Hockey
                         {
                             c = new Client { Key = "r" + (++seq), Ep = from, LastSeen = now };
                             byEp[ek] = c;
-                            OnJoin?.Invoke(c.Key, string.IsNullOrWhiteSpace(name) ? "Игрок" : name);
+                            OnJoin?.Invoke(c.Key, string.IsNullOrWhiteSpace(name) ? "Игрок" : name, num, skin, hair);
                         }
                         c.LastSeen = now;
                         var w = peer.Begin(Msg.Welcome); w.Write(c.Key); peer.SendTo(from);
@@ -359,9 +364,12 @@ namespace Hockey
         public event Action<SessionInfo> OnSession;
         public event Action<ViewState, int, List<GameEvent>> OnSnapshot;
 
-        public ClientNet(string address, string playerName, double time)
+        readonly byte pNum, pSkin, pHair;
+
+        public ClientNet(string address, string playerName, double time, int number = 0, int skin = 0, int hair = 0)
         {
             name = playerName;
+            pNum = (byte)Math.Clamp(number, 0, 99); pSkin = (byte)Math.Clamp(skin, 0, 255); pHair = (byte)Math.Clamp(hair, 0, 255);
             StartedAt = time; lastHeard = time;
             host = Resolve(address);
             peer = new UdpPeer(-1);
@@ -390,7 +398,7 @@ namespace Hockey
             if (!Connected && now - lastHello > 0.5)
             {
                 lastHello = now;
-                var w = peer.Begin(Msg.Hello); w.Write(NetConst.Protocol); w.Write(name); peer.SendTo(host);
+                var w = peer.Begin(Msg.Hello); w.Write(NetConst.Protocol); w.Write(name); w.Write(pNum); w.Write(pSkin); w.Write(pHair); peer.SendTo(host);
             }
             if (Connected && now - lastInput > 1.0 / 30)
             {

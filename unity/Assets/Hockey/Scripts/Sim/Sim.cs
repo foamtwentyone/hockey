@@ -51,10 +51,10 @@ namespace Hockey
     public struct PlayerInput
     {
         public float MoveX, MoveZ;
-        public bool Shoot, Pass, Check, Sprint, Jump;
+        public bool Shoot, Pass, Check, Sprint, Jump, Fight;
         public static readonly PlayerInput None = default;
 
-        public byte Bits => (byte)((Shoot ? 1 : 0) | (Pass ? 2 : 0) | (Check ? 4 : 0) | (Sprint ? 8 : 0) | (Jump ? 16 : 0));
+        public byte Bits => (byte)((Shoot ? 1 : 0) | (Pass ? 2 : 0) | (Check ? 4 : 0) | (Sprint ? 8 : 0) | (Jump ? 16 : 0) | (Fight ? 32 : 0));
         public static PlayerInput FromBits(float mx, float mz, byte bits)
         {
             float l = MathF.Sqrt(mx * mx + mz * mz);
@@ -63,7 +63,7 @@ namespace Hockey
             return new PlayerInput
             {
                 MoveX = mx, MoveZ = mz,
-                Shoot = (bits & 1) != 0, Pass = (bits & 2) != 0, Check = (bits & 4) != 0, Sprint = (bits & 8) != 0, Jump = (bits & 16) != 0,
+                Shoot = (bits & 1) != 0, Pass = (bits & 2) != 0, Check = (bits & 4) != 0, Sprint = (bits & 8) != 0, Jump = (bits & 16) != 0, Fight = (bits & 32) != 0,
             };
         }
         public PlayerInput Scaled(float k) { var c = this; c.MoveX *= k; c.MoveZ *= k; return c; }
@@ -78,7 +78,7 @@ namespace Hockey
     }
 
     public enum EvType : byte { Shot, Pass, Receive, Swish, Whoosh, Board, BoardPuck, Post, Hit, Body, Save, Deflect, Steal, Whistle, Goal, Horn, Overtime, End,
-        Jump, Dive, Land, Stop, PowerUp, Freeze, MegaShot, ItemSpawn }
+        Jump, Dive, Land, Stop, PowerUp, Freeze, MegaShot, ItemSpawn, Punch, BrawlStart, BrawlEnd }
 
     public struct GameEvent
     {
@@ -93,8 +93,9 @@ namespace Hockey
     public class HumanSlot
     {
         public string Key, Name;
-        public int Team;
-        public HumanSlot(string key, string name, int team) { Key = key; Name = name; Team = team; }
+        public int Team, Number = -1, Skin = -1, Hair = -1;   // -1 — случайно
+        public HumanSlot(string key, string name, int team, int number = -1, int skin = -1, int hair = -1)
+        { Key = key; Name = name; Team = team; Number = number; Skin = skin; Hair = hair; }
     }
 
     public class RosterEntry
@@ -121,7 +122,8 @@ namespace Hockey
     public class PlayerView
     {
         public float X, Z, H, Spd, Charge, Swing, Save, Stamina, Y;
-        public bool Stun, Back, Dive;
+        public bool Stun, Back, Dive, Punch, Brawl, Stagger;
+        public int BrawlPower;
         public byte Buffs;          // биты Buff
         public int Goals, Assists;
         public bool Has(Buff b) => (Buffs & (1 << (int)b)) != 0;
@@ -160,6 +162,8 @@ namespace Hockey
         public float X, Z, Vx, Vz, H;
         public float Charge, Stun, Checking, CheckCd, NoPick, Swing, Save, Stamina = 1;
         public float Y, Vy, Dive, Recover, StopFx;
+        public float Punch, PunchCd, Stagger, Brawl, BrawlX, BrawlZ, LastHitT = -9;
+        public int BrawlWith = -1, BrawlPower, LastHitBy = -1;
         public readonly float[] Buffs = new float[5];
         public bool Has(Buff b) => Buffs[(int)b] > 0;
         public float Radius => Has(Buff.Giant) ? 0.62f : 0.45f;
@@ -245,7 +249,11 @@ namespace Hockey
                 for (int i = 0; i < count; i++)
                 {
                     var h = i < hs.Count ? hs[i] : null;
-                    Add(t, h?.Key, h != null ? h.Name : NextBotName(), Num(t), false);
+                    int num = h != null && h.Number > 0 && !used[t].Contains(h.Number) ? h.Number : Num(t);
+                    used[t].Add(num);
+                    Add(t, h?.Key, h != null ? h.Name : NextBotName(), num, false);
+                    if (h != null && h.Skin >= 0) Players[Players.Count - 1].Skin = h.Skin;
+                    if (h != null && h.Hair >= 0) Players[Players.Count - 1].Hair = h.Hair;
                 }
                 Add(t, null, "Вратарь", t == 0 ? 1 : 30, true);
             }
@@ -298,6 +306,7 @@ namespace Hockey
                     if (p.Team != t) continue;
                     p.Vx = p.Vz = 0; p.Charge = p.Stun = p.Checking = p.Swing = p.Save = 0;
                     p.Y = p.Vy = p.Dive = p.Recover = 0; p.Buffs[(int)Buff.Frozen] = 0;
+                    p.Punch = p.Stagger = p.Brawl = 0; p.BrawlWith = -1;
                     p.H = Rink.TeamDir[t] > 0 ? MathF.PI / 2 : -MathF.PI / 2;
                     if (p.Goalie) { p.X = -Rink.TeamDir[t] * (Rink.GoalX - 0.9f); p.Z = 0; continue; }
                     int s = i % Spots.GetLength(0);
@@ -444,6 +453,12 @@ namespace Hockey
                 p.Stun -= dt; inp = PlayerInput.None; p.Charge = 0;
                 if (p.Stun <= 0) p.Recover = 0.25f;
             }
+            p.Punch = MathF.Max(0, p.Punch - dt);
+            p.PunchCd = MathF.Max(0, p.PunchCd - dt);
+            p.Stagger = MathF.Max(0, p.Stagger - dt);
+            if (p.Brawl > 0) { UpdateBrawl(p, inp, dt); p.Prev = inp; return; }
+            if (p.Stagger > 0) { inp.MoveX *= 0.2f; inp.MoveZ *= 0.2f; inp.Shoot = inp.Pass = inp.Jump = inp.Fight = false; }
+            if (live && inp.Fight && !p.Prev.Fight) TryPunch(p);
             bool diving = p.Dive > 0;
             if (diving)
             {
@@ -564,6 +579,72 @@ namespace Hockey
                 }
             }
             CollideGoalFrames(p);
+        }
+
+        // ---------------- толчки кулаком и драки ----------------
+        void TryPunch(Player p)
+        {
+            if (p.PunchCd > 0 || p.Stun > 0 || p.Dive > 0 || p.Y > 0.1f || p.Has(Buff.Frozen) || p.Recover > 0) return;
+            p.Punch = 0.35f; p.PunchCd = 0.55f; p.Charge = 0;
+            float fx = MathF.Sin(p.H), fz = MathF.Cos(p.H);
+            Player target = null; float best = 1.7f;
+            foreach (var q in Players)
+            {
+                if (q.Team == p.Team || q.Goalie || q.Stun > 0 || q.Brawl > 0 || q.Y > 0.3f) continue;
+                float dx = q.X - p.X, dz = q.Z - p.Z, d = Hyp(dx, dz);
+                if (d < best && d > 1e-3f && (dx * fx + dz * fz) / d > 0.2f) { best = d; target = q; }
+            }
+            if (target == null) { Ev(EvType.Swish, 0, p.Idx); return; }
+            bool retaliation = p.LastHitBy == target.Idx && SimTime - p.LastHitT < 1.6f;
+            target.LastHitBy = p.Idx; target.LastHitT = SimTime;
+            if (retaliation || Rand() < 0.18f) { StartBrawl(p, target); return; }
+            // просто удар: отбрасывает и сбивает с ритма, может выбить шайбу
+            float dxn = target.X - p.X, dzn = target.Z - p.Z, dn = MathF.Max(1e-3f, Hyp(dxn, dzn));
+            float k = target.Has(Buff.Giant) ? 0.3f : p.Has(Buff.Giant) ? 1.7f : 1;
+            target.Vx += dxn / dn * 4.5f * k; target.Vz += dzn / dn * 4.5f * k;
+            target.Stagger = 0.45f * k; target.Charge = 0;
+            if (Puck.Owner == target.Idx && Rand() < 0.6f)
+            {
+                Puck.Owner = -1; Puck.Vx = target.Vx * 0.6f + Rnd(-2, 2); Puck.Vz = target.Vz * 0.6f + Rnd(-2, 2);
+                target.NoPick = 0.5f;
+            }
+            Ev(EvType.Punch, p.Idx, target.Idx);
+        }
+
+        /// Для автотеста: принудительно начать драку.
+        public void ForceBrawl(int a, int b) => StartBrawl(Players[a], Players[b]);
+
+        void StartBrawl(Player a, Player b)
+        {
+            float cx = (a.X + b.X) / 2, cz = (a.Z + b.Z) / 2;
+            foreach (var q in new[] { a, b })
+            {
+                q.Brawl = 2.4f; q.BrawlX = cx; q.BrawlZ = cz; q.BrawlPower = 0;
+                q.Vx = q.Vz = 0; q.Charge = 0; q.Dive = 0; q.Punch = 0;
+                if (Puck.Owner == q.Idx) { Puck.Owner = -1; Puck.Vx = Rnd(-3, 3); Puck.Vz = Rnd(-3, 3); }
+                q.NoPick = 2.6f;
+            }
+            a.BrawlWith = b.Idx; b.BrawlWith = a.Idx;
+            Ev(EvType.BrawlStart, 0, a.Idx);
+        }
+
+        void UpdateBrawl(Player p, PlayerInput inp, float dt)
+        {
+            p.Brawl -= dt;
+            p.Vx = p.Vz = 0; p.Charge = 0;
+            // клубок дерущихся слегка катается по льду
+            float a = SimTime * 7 + p.Idx;
+            p.X = p.BrawlX + MathF.Sin(a) * 0.25f; p.Z = p.BrawlZ + MathF.Cos(a * 1.3f) * 0.25f;
+            bool mash = p.Human != null ? (inp.Fight && !p.Prev.Fight) || (inp.Check && !p.Prev.Check) : Rand() < (4.5f + 3.5f * diff.React) * dt;
+            if (mash) p.BrawlPower++;
+            if (p.Brawl > 0 || p.BrawlWith < 0) return;
+            var o = Players[p.BrawlWith];
+            float sp = p.BrawlPower + Rnd(0, 2.5f), so = o.BrawlPower + Rnd(0, 2.5f);
+            var winner = sp >= so ? p : o; var loser = winner == p ? o : p;
+            foreach (var q in new[] { p, o }) { q.Brawl = 0; q.BrawlWith = -1; q.NoPick = 0.3f; }
+            loser.Stun = 1.8f;
+            loser.Vx = (loser.X - winner.X) * 6; loser.Vz = (loser.Z - winner.Z) * 6;
+            Ev(EvType.BrawlEnd, loser.Idx, winner.Idx);
         }
 
         void CollideGoalFrames(Player o)
@@ -1146,6 +1227,13 @@ namespace Hockey
         PlayerInput BotInput(Player p, float dt)
         {
             var inp = BotInputCore(p, dt);
+            if (p.PunchCd <= 0 && p.Y < 0.05f)
+            {
+                // ответ обидчику или удар по владельцу шайбы рядом
+                bool revenge = p.LastHitBy >= 0 && SimTime - p.LastHitT < 1.2f && Hyp(Players[p.LastHitBy].X - p.X, Players[p.LastHitBy].Z - p.Z) < 1.6f;
+                if (revenge && Rand() < 2.5f * dt * diff.React) inp.Fight = true;
+                else if (carrier != null && carrier.Team != p.Team && !carrier.Goalie && Hyp(carrier.X - p.X, carrier.Z - p.Z) < 1.5f && Rand() < 0.6f * dt * diff.CheckP) inp.Fight = true;
+            }
             if (p.Y <= 0.02f && Rand() < 3 * dt * diff.React)
             {
                 // перепрыгнуть летящий силовой приём
@@ -1276,6 +1364,7 @@ namespace Hockey
                 o.Back = false;
                 o.Goals = p.Goals; o.Assists = p.Assists;
                 o.Y = p.Y; o.Dive = p.Dive > 0;
+                o.Punch = p.Punch > 0; o.Brawl = p.Brawl > 0; o.Stagger = p.Stagger > 0; o.BrawlPower = p.BrawlPower;
                 byte bits = 0;
                 for (int b = 0; b < p.Buffs.Length; b++) if (p.Buffs[b] > 0) bits |= (byte)(1 << b);
                 o.Buffs = bits;

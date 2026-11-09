@@ -117,6 +117,166 @@ namespace Hockey
             return mesh;
         }
 
+        static float SPow(float v, float e) => Mathf.Sign(v) * Mathf.Pow(Mathf.Abs(v), e);
+
+        /// Гладкий суперэллипсоид (от «подушки» до шара). e — «квадратность» (1 — эллипсоид, 0.3 — почти кубик).
+        /// latFrom/latTo — диапазон широты в радианах (-π/2..π/2), lonSkip — вырезать сектор спереди (+Z) на этот полуугол.
+        public static Mesh Superellipsoid(float rx, float ry, float rz, float e1 = 0.7f, float e2 = 0.7f, int seg = 28,
+            float latFrom = -Mathf.PI / 2, float latTo = Mathf.PI / 2, float lonSkip = 0, float shade = 0.18f)
+        {
+            string key = $"se{rx:F3}|{ry:F3}|{rz:F3}|{e1:F2}|{e2:F2}|{seg}|{latFrom:F2}|{latTo:F2}|{lonSkip:F2}|{shade:F2}";
+            if (cache.TryGetValue(key, out var mesh)) return mesh;
+            int rings = seg / 2, cols = seg;
+            bool closedLon = lonSkip <= 0;
+            var V = new List<Vector3>(); var C = new List<Color>(); var T = new List<int>();
+            for (int i = 0; i <= rings; i++)
+            {
+                float u = Mathf.Lerp(latFrom, latTo, (float)i / rings);
+                for (int j = 0; j <= cols; j++)
+                {
+                    float v = closedLon ? -Mathf.PI + j * Mathf.PI * 2 / cols : Mathf.Lerp(lonSkip, Mathf.PI * 2 - lonSkip, (float)j / cols);
+                    // v=0 соответствует +Z (вперёд)
+                    float cu = Mathf.Cos(u), su = Mathf.Sin(u);
+                    var p = new Vector3(rx * SPow(cu, e1) * SPow(Mathf.Sin(v), e2), ry * SPow(su, e1), rz * SPow(cu, e1) * SPow(Mathf.Cos(v), e2));
+                    V.Add(p);
+                    float g = 1 - shade * (1 - Mathf.SmoothStep(0, 1, su * 0.5f + 0.5f));
+                    C.Add(new Color(g, g, g, 1));
+                }
+            }
+            int w = cols + 1;
+            for (int i = 0; i < rings; i++)
+                for (int j = 0; j < cols; j++)
+                {
+                    int a0 = i * w + j, b = a0 + 1, c = a0 + w + 1, d = a0 + w;
+                    // наружу смотрит направление от центра
+                    var center = (V[a0] + V[c]) * 0.5f;
+                    var n = Vector3.Cross(V[b] - V[a0], V[c] - V[a0]);
+                    if (n.sqrMagnitude < 1e-12f) n = Vector3.Cross(V[c] - V[a0], V[d] - V[a0]);
+                    if (Vector3.Dot(n, center) < 0) { T.Add(a0); T.Add(c); T.Add(b); T.Add(a0); T.Add(d); T.Add(c); }
+                    else { T.Add(a0); T.Add(b); T.Add(c); T.Add(a0); T.Add(c); T.Add(d); }
+                }
+            mesh = new Mesh { name = key };
+            mesh.SetVertices(V); mesh.SetColors(C); mesh.SetTriangles(T, 0);
+            mesh.RecalculateNormals();
+            // шов по долготе: усредняем нормали первой и последней колонки
+            if (closedLon)
+            {
+                var N = mesh.normals;
+                for (int i = 0; i <= rings; i++) { var avg = (N[i * w] + N[i * w + cols]).normalized; N[i * w] = N[i * w + cols] = avg; }
+                mesh.normals = N;
+            }
+            mesh.RecalculateBounds();
+            cache[key] = mesh;
+            return mesh;
+        }
+
+        /// Тело вращения по профилю (r, y) снизу вверх — гладкое, с усреднёнными нормалями.
+        public static Mesh Lathe(Vector2[] profile, int seg, System.Func<float, float, float> radiusMod = null, string key = null)
+        {
+            if (key != null && cache.TryGetValue(key, out var cached)) return cached;
+            var V = new List<Vector3>(); var T = new List<int>();
+            int n = profile.Length, w = seg + 1;
+            for (int i = 0; i < n; i++)
+                for (int j = 0; j <= seg; j++)
+                {
+                    float a = j * Mathf.PI * 2 / seg;
+                    float r = profile[i].x * (radiusMod != null ? radiusMod(a, profile[i].y) : 1);
+                    V.Add(new Vector3(Mathf.Cos(a) * r, profile[i].y, Mathf.Sin(a) * r));
+                }
+            for (int i = 0; i < n - 1; i++)
+                for (int j = 0; j < seg; j++)
+                {
+                    int a0 = i * w + j, b = a0 + 1, c = a0 + w + 1, d = a0 + w;
+                    // при обходе снизу вверх против часовой стрелки нормаль смотрит наружу
+                    T.Add(a0); T.Add(c); T.Add(b); T.Add(a0); T.Add(d); T.Add(c);
+                }
+            var m = new Mesh { name = key ?? "lathe" };
+            m.SetVertices(V); m.SetTriangles(T, 0);
+            m.RecalculateNormals();
+            var N = m.normals;
+            for (int i = 0; i < n; i++) { var avg = (N[i * w] + N[i * w + seg]).normalized; N[i * w] = N[i * w + seg] = avg; }
+            m.normals = N;
+            var C = new Color[V.Count]; for (int i = 0; i < C.Length; i++) C[i] = Color.white; m.colors = C;
+            m.RecalculateBounds();
+            if (key != null) cache[key] = m;
+            return m;
+        }
+
+        /// Изогнутый крюк клюшки: лофт скруглённого прямоугольника вдоль дуги (длина по +Z, изгиб в сторону +X).
+        public static Mesh Blade(float len, float height, float thick, float curve, int seg = 14)
+        {
+            string key = $"blade{len:F2}|{height:F2}|{thick:F3}|{curve:F2}";
+            if (cache.TryGetValue(key, out var mesh)) return mesh;
+            const int P = 12;
+            var prof = new Vector2[P];
+            for (int k = 0; k < P; k++)
+            {
+                float a = k * Mathf.PI * 2 / P;
+                prof[k] = new Vector2(SPow(Mathf.Cos(a), 0.35f) * thick / 2, SPow(Mathf.Sin(a), 0.35f) * height / 2);
+            }
+            var V = new List<Vector3>(); var T = new List<int>();
+            for (int i = 0; i <= seg; i++)
+            {
+                float t = (float)i / seg;
+                var c = new Vector3(curve * t * t, 0, t * len);
+                var tan = new Vector3(2 * curve * t, 0, len).normalized;
+                var side = Vector3.Cross(Vector3.up, tan).normalized;
+                float taper = Mathf.Lerp(1, 0.85f, t) * (t > 0.9f ? Mathf.Lerp(1, 0.75f, (t - 0.9f) / 0.1f) : 1);
+                for (int k = 0; k <= P; k++) { var q = prof[k % P]; V.Add(c + side * q.x + Vector3.up * q.y * taper); }
+            }
+            int w = P + 1;
+            for (int i = 0; i < seg; i++)
+                for (int k = 0; k < P; k++)
+                {
+                    int a0 = i * w + k, b = a0 + 1, cc = a0 + w + 1, d = a0 + w;
+                    T.Add(a0); T.Add(b); T.Add(cc); T.Add(a0); T.Add(cc); T.Add(d);
+                }
+            // торцы
+            int c0 = V.Count; V.Add(Vector3.zero); for (int k = 0; k < P; k++) { T.Add(c0); T.Add(k + 1); T.Add(k); }
+            var end = new Vector3(curve, 0, len); int c1 = V.Count; V.Add(end);
+            for (int k = 0; k < P; k++) { T.Add(c1); T.Add(seg * w + k); T.Add(seg * w + k + 1); }
+            mesh = new Mesh { name = key };
+            mesh.SetVertices(V); mesh.SetTriangles(T, 0);
+            // ориентацию граней выравниваем по направлению от оси
+            var tris = mesh.triangles;
+            for (int i = 0; i < tris.Length; i += 3)
+            {
+                var pa = V[tris[i]]; var pb = V[tris[i + 1]]; var pc = V[tris[i + 2]];
+                var mid = (pa + pb + pc) / 3;
+                float t = Mathf.Clamp01(mid.z / len);
+                var axis = new Vector3(curve * t * t, 0, t * len);
+                var outward = mid - axis;
+                if (i >= seg * P * 6) outward = i < seg * P * 6 + P * 3 ? Vector3.back : Vector3.forward;
+                if (Vector3.Dot(Vector3.Cross(pb - pa, pc - pa), outward) < 0) { int tmp = tris[i + 1]; tris[i + 1] = tris[i + 2]; tris[i + 2] = tmp; }
+            }
+            mesh.triangles = tris;
+            mesh.RecalculateNormals();
+            var C = new Color[V.Count]; for (int i = 0; i < C.Length; i++) C[i] = Color.white; mesh.colors = C;
+            mesh.RecalculateBounds();
+            cache[key] = mesh;
+            return mesh;
+        }
+
+        /// Плоская звёздочка (для «ПОВ!»-вспышек и звёзд над головой).
+        public static Mesh Star(float r, float inner = 0.45f, int points = 5)
+        {
+            string key = $"star{r:F2}|{inner:F2}|{points}";
+            if (cache.TryGetValue(key, out var mesh)) return mesh;
+            var mb = new MeshBuilder();
+            int c = mb.Vert(Vector3.zero, Vector3.back, new Vector2(0.5f, 0.5f));
+            int n = points * 2;
+            for (int i = 0; i <= n; i++)
+            {
+                float a = i * Mathf.PI * 2 / n + Mathf.PI / 2;
+                float rr = i % 2 == 0 ? r : r * inner;
+                mb.Vert(new Vector3(Mathf.Cos(a) * rr, Mathf.Sin(a) * rr, 0), Vector3.back, Vector2.zero);
+            }
+            for (int i = 0; i < n; i++) { mb.Tri(c, c + 1 + i, c + 2 + i, Vector3.back); mb.Tri(c, c + 2 + i, c + 1 + i, Vector3.forward); }
+            mesh = mb.ToMesh(key);
+            cache[key] = mesh;
+            return mesh;
+        }
+
         /// Вывернутая наизнанку копия меша (для купола неба).
         public static Mesh Flip(Mesh src)
         {

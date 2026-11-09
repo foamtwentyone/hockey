@@ -53,6 +53,8 @@ namespace Hockey
         string message = "";
         string playerName, address;
         bool splitCoop;
+        int profNum = 17, profSkin, profTape;   // профиль игрока из «Раздевалки»
+        float flash;                            // белая вспышка экрана на гол
         PlayerInput clientInput;
 
         // ---------- рендер ----------
@@ -69,6 +71,7 @@ namespace Hockey
         readonly List<View> views = new List<View>();
         Camera menuCam;
         float shake, time;
+        Vector3 menuCamPos, menuLook;
         bool inMatch => screen == UiScreen.Match;
 
         // ================================================================ запуск
@@ -91,6 +94,9 @@ namespace Hockey
             cfg.Duration = PlayerPrefs.GetInt("hockey.duration", 180);
             cfg.Difficulty = PlayerPrefs.GetInt("hockey.diff", 1);
             cfg.Arcade = PlayerPrefs.GetInt("hockey.arcade", 1) == 1;
+            profNum = PlayerPrefs.GetInt("hockey.num", 17);
+            profSkin = PlayerPrefs.GetInt("hockey.skin", 0);
+            profTape = PlayerPrefs.GetInt("hockey.tape", 0);
 
             arena = new Arena(transform);
             audioFx = new GameAudio(gameObject);
@@ -129,8 +135,22 @@ namespace Hockey
             var body = new GameObject("body");
             body.transform.SetParent(go.transform, false);
             body.transform.localPosition = new Vector3(0, 0.04f, 0);
-            body.AddComponent<MeshFilter>().sharedMesh = MeshKit.Cylinder(0.14f, 0.08f, 22);
+            // выточенная шайба: фаска по краям и рифлёный обод
+            var profile = new[]
+            {
+                new Vector2(0.0f, 0.004f), new Vector2(0.1f, 0.0f), new Vector2(0.125f, 0.004f), new Vector2(0.134f, 0.016f),
+                new Vector2(0.135f, 0.028f), new Vector2(0.135f, 0.052f), new Vector2(0.134f, 0.064f), new Vector2(0.125f, 0.076f),
+                new Vector2(0.1f, 0.08f), new Vector2(0.03f, 0.077f), new Vector2(0.0f, 0.078f),
+            };
+            body.AddComponent<MeshFilter>().sharedMesh = MeshKit.Lathe(profile, 40, (a, y) => y > 0.026f && y < 0.054f ? 1 + 0.025f * Mathf.Sign(Mathf.Sin(a * 30)) : 1, "puck");
+            body.transform.localPosition = Vector3.zero;
             body.AddComponent<MeshRenderer>().sharedMaterial = Mats.Get("#1a1a22", 0.9f);
+            var logo = new GameObject("logo");
+            logo.transform.SetParent(go.transform, false);
+            logo.transform.localPosition = new Vector3(0, 0.081f, 0);
+            logo.transform.localRotation = Quaternion.Euler(90, 0, 0);
+            logo.AddComponent<MeshFilter>().sharedMesh = MeshKit.Star(0.06f, 0.45f);
+            logo.AddComponent<MeshRenderer>().sharedMaterial = Mats.Get("#ffd23f", 0.6f);
             var fire = new GameObject("fire");
             fire.transform.SetParent(go.transform, false);
             fire.transform.localPosition = new Vector3(0, 0.1f, 0);
@@ -163,7 +183,7 @@ namespace Hockey
         {
             var specs = new (int team, int skin, int hair, int num, bool goalie, Vector3 pos, float yaw)[]
             {
-                (0, 0, 2, 17, false, new Vector3(-1.3f, 0, 0.4f), 200),
+                (0, profSkin, profTape, profNum, false, new Vector3(-1.3f, 0, 0.4f), 200),
                 (1, 3, 1, 9, false, new Vector3(1.4f, 0, 0.2f), 160),
                 (0, 4, 3, 1, true, new Vector3(0.05f, 0, 1.6f), 180),
             };
@@ -174,6 +194,18 @@ namespace Hockey
                 c.Root.localRotation = Quaternion.Euler(0, s.yaw, 0);
                 showcase.Add(c);
             }
+        }
+
+        /// Пересобирает «своего» персонажа на витрине после изменений в раздевалке.
+        void RebuildPreview()
+        {
+            if (showcase.Count == 0) return;
+            var old = showcase[0];
+            var pos = old.Root.localPosition; var rot = old.Root.localRotation; bool act = old.Root.gameObject.activeSelf;
+            Destroy(old.Root.gameObject);
+            var c = CharacterRig.Build(0, profSkin, profTape, profNum, false, transform);
+            c.Root.localPosition = pos; c.Root.localRotation = rot; c.Root.gameObject.SetActive(act);
+            showcase[0] = c;
         }
 
         void OnDestroy() { CloseNet(); finder?.Dispose(); }
@@ -187,6 +219,9 @@ namespace Hockey
             PlayerPrefs.SetInt("hockey.duration", cfg.Duration);
             PlayerPrefs.SetInt("hockey.diff", cfg.Difficulty);
             PlayerPrefs.SetInt("hockey.arcade", cfg.Arcade ? 1 : 0);
+            PlayerPrefs.SetInt("hockey.num", profNum);
+            PlayerPrefs.SetInt("hockey.skin", profSkin);
+            PlayerPrefs.SetInt("hockey.tape", profTape);
             PlayerPrefs.Save();
         }
 
@@ -199,7 +234,7 @@ namespace Hockey
             SavePrefs();
             mode = Mode.Local;
             sources.Clear(); myKeys.Clear();
-            lobby = new List<LobbyEntry> { new LobbyEntry { Key = "local0", Name = MyName, Team = 0 } };
+            lobby = new List<LobbyEntry> { new LobbyEntry { Key = "local0", Name = MyName, Team = 0, Number = profNum, Skin = profSkin, Hair = profTape } };
             if (!split)
                 sources.Add(new InputSource { Key = "local0", Scheme = Scheme.Solo, Pad = 0, Mouse = true });
             else
@@ -215,7 +250,7 @@ namespace Hockey
         void NewMatch()
         {
             var humans = new List<HumanSlot>();
-            foreach (var l in lobby) humans.Add(new HumanSlot(l.Key, l.Name, l.Team));
+            foreach (var l in lobby) humans.Add(new HumanSlot(l.Key, l.Name, l.Team, l.Number, l.Skin, l.Hair));
             sim = new Sim(new MatchConfig { Skaters = cfg.Skaters, Duration = cfg.Duration, Difficulty = cfg.Difficulty, Arcade = cfg.Arcade }, humans);
             acc = 0; steps = 0;
             matchId++;
@@ -338,7 +373,7 @@ namespace Hockey
             sources.Clear(); myKeys.Clear();
             sources.Add(new InputSource { Key = "local0", Scheme = Scheme.Solo, Pad = 0, Mouse = true });
             myKeys.Add("local0");
-            lobby = new List<LobbyEntry> { new LobbyEntry { Key = "local0", Name = MyName, Team = 0 } };
+            lobby = new List<LobbyEntry> { new LobbyEntry { Key = "local0", Name = MyName, Team = 0, Number = profNum, Skin = profSkin, Hair = profTape } };
             session.InMatch = false; session.Seq++;
             host.InMatch = false;
             host.GetSession = () =>
@@ -347,10 +382,10 @@ namespace Hockey
                 host.PlayerCount = lobby.Count;
                 return session;
             };
-            host.OnJoin += (key, name) =>
+            host.OnJoin += (key, name, num, skin, tape) =>
             {
                 int t0 = lobby.FindAll(l => l.Team == 0).Count, t1 = lobby.Count - t0;
-                var entry = new LobbyEntry { Key = key, Name = name, Team = t0 <= t1 ? 0 : 1 };
+                var entry = new LobbyEntry { Key = key, Name = name, Team = t0 <= t1 ? 0 : 1, Number = num > 0 ? num : -1, Skin = skin, Hair = tape };
                 lobby.Add(entry);
                 if (sim != null && inMatch)
                 {
@@ -388,7 +423,7 @@ namespace Hockey
         {
             CloseNet();
             SavePrefs();
-            try { client = new ClientNet(addr, MyName, Time.realtimeSinceStartupAsDouble); }
+            try { client = new ClientNet(addr, MyName, Time.realtimeSinceStartupAsDouble, profNum, profSkin, profTape); }
             catch (System.Exception e) { message = e.Message; return; }
             mode = Mode.Client;
             screen = UiScreen.Lobby;
@@ -480,7 +515,7 @@ namespace Hockey
             {
                 MoveX = fx * raw.MoveY + fz * raw.MoveX,
                 MoveZ = fz * raw.MoveY - fx * raw.MoveX,
-                Shoot = raw.Shoot, Pass = raw.Pass, Check = raw.Check, Sprint = raw.Sprint, Jump = raw.Jump,
+                Shoot = raw.Shoot, Pass = raw.Pass, Check = raw.Check, Sprint = raw.Sprint, Jump = raw.Jump, Fight = raw.Fight,
             };
         }
 
@@ -566,6 +601,8 @@ namespace Hockey
             else if (!inMatch) MenuScene(dt);
             arena.Update(dt, time);
             audioFx.Update(dt);
+            fx.Update(dt);
+            flash = Mathf.Max(0, flash - dt * 1.6f);
         }
 
         void UpdateCursor()
@@ -589,6 +626,26 @@ namespace Hockey
                     if (Settings.ScreenShake) shake = Mathf.Max(shake, 0.25f);
                     fx.Sparks(who + Vector3.up * 1.6f, Mats.Hex("#ffd23f"), 18);
                     fx.Chips(who, Vector3.up, 14, 5);
+                    fx.Pow(who + Vector3.up * 1.3f, 1f);
+                    fx.Shockwave(who, Color.white, 2.6f);
+                    fx.Puff(who, 6, Color.white, 0.5f, 2f, 0.45f);
+                    break;
+                case EvType.Punch:
+                    if (Settings.ScreenShake) shake = Mathf.Max(shake, 0.12f);
+                    fx.Pow(who + Vector3.up * 1.4f, 0.7f);
+                    fx.Sparks(who + Vector3.up * 1.4f, Color.white, 8, 3);
+                    break;
+                case EvType.BrawlStart:
+                    fx.Puff(who + Vector3.up * 0.5f, 18, Color.white, 0.8f, 3f, 0.6f);
+                    fx.Pow(who + Vector3.up * 1.4f, 1.2f);
+                    break;
+                case EvType.BrawlEnd:
+                    if (Settings.ScreenShake) shake = Mathf.Max(shake, 0.3f);
+                    var loser = PlayerPos(st, (int)e.Value);
+                    fx.Pow(loser + Vector3.up * 1.2f, 1.4f);
+                    fx.Shockwave(loser, Mats.Hex("#ffd23f"), 3.2f);
+                    fx.Puff(loser, 14, Color.white, 0.8f, 3f, 0.55f);
+                    fx.Confetti(who + Vector3.up * 1.5f, 40);
                     break;
                 case EvType.Goal:
                     {
@@ -598,11 +655,18 @@ namespace Hockey
                         float gx = team == 0 ? Rink.GoalX : -Rink.GoalX;
                         fx.Confetti(new Vector3(gx, 1.2f, 0), 260, Mats.Hex(TeamColors.All[team].Main));
                         fx.ConfettiRain(new Vector3(gx * 0.6f, 0, 0), 300);
+                        fx.Fireworks(new Vector3(gx * 0.5f, 0, 0), 8);
+                        fx.Shockwave(new Vector3(gx, 0, 0), Mats.Hex("#ffd23f"), 7f);
+                        flash = 0.7f;
                         break;
                     }
                 case EvType.Stop: fx.Chips(who + Vector3.up * 0.05f, Vector3.up, 16, 5); break;
-                case EvType.Land: fx.Chips(who, Vector3.up, 10, 3); break;
-                case EvType.Dive: fx.Chips(who, Vector3.up, 8, 3); break;
+                case EvType.Land:
+                    fx.Chips(who, Vector3.up, 10, 3);
+                    fx.Puff(who, 5, Color.white, 0.4f, 1.6f, 0.35f);
+                    if (e.Value > 6) fx.Shockwave(who, Color.white, 1.8f);
+                    break;
+                case EvType.Dive: fx.Chips(who, Vector3.up, 8, 3); fx.Puff(who, 4, Color.white, 0.3f, 1.5f, 0.3f); break;
                 case EvType.PowerUp:
                     {
                         int t = Mathf.Clamp((int)e.Value, 0, 4);
@@ -616,7 +680,7 @@ namespace Hockey
                         if (roster[i].Team != (int)e.Value) fx.Sparks(PlayerPos(st, i, 1), Mats.Hex("#bff3ff"), 20, 3);
                     break;
                 case EvType.MegaShot: fx.Sparks(new Vector3(st.PuckX, 0.3f, st.PuckZ), Mats.Hex("#ff6a2e"), 30, 6); break;
-                case EvType.Save: fx.Sparks(who + Vector3.up * 0.8f, Color.white, 12, 3); break;
+                case EvType.Save: fx.Sparks(who + Vector3.up * 0.8f, Color.white, 12, 3); fx.Shockwave(who, Mats.Hex("#5fe1ff"), 2.4f); fx.Pow(who + Vector3.up * 1.2f, 0.6f); break;
                 case EvType.Post: fx.Sparks(new Vector3(st.PuckX, 0.6f, st.PuckZ), Color.white, 14, 4); break;
             }
         }
@@ -632,9 +696,17 @@ namespace Hockey
             }
             if (Mathf.Repeat(time, 6) < dt) fx.Confetti(new Vector3(0, 0.5f, 0.5f), 80);
             float sway = Mathf.Sin(time * 0.25f) * 0.6f;
-            menuCam.transform.position = new Vector3(-2.6f + sway, 1.7f, -6.4f);
-            menuCam.transform.LookAt(new Vector3(-1.5f + sway * 0.5f, 1.0f, 0.6f));
+            // в раздевалке камера подъезжает к своему игроку
+            bool locker = uiPage == UiPage.Locker;
+            var camT = locker ? new Vector3(-0.3f + sway * 0.2f, 1.45f, -2.6f) : new Vector3(-2.6f + sway, 1.7f, -6.4f);
+            var lookT = locker ? new Vector3(-0.6f, 1.0f, 0.4f) : new Vector3(-1.5f + sway * 0.5f, 1.0f, 0.6f);
+            float ck = 1 - Mathf.Exp(-dt * 4);
+            menuCamPos = menuCamPos == Vector3.zero ? camT : Vector3.Lerp(menuCamPos, camT, ck);
+            menuLook = menuLook == Vector3.zero ? lookT : Vector3.Lerp(menuLook, lookT, ck);
+            menuCam.transform.position = menuCamPos;
+            menuCam.transform.LookAt(menuLook);
             menuCam.fieldOfView = 40;
+            fx.FacingCam = menuCam;
             arena.DrawScore(0, 0, 0);
         }
 
@@ -653,7 +725,20 @@ namespace Hockey
                 if (!s.Stun && s.Y < 0.05f && (s.Spd > 8.5f || s.Dive) && Random.value < dt * (s.Dive ? 30 : 6))
                     fx.Chips(new Vector3(s.X, 0.05f, s.Z), -new Vector3(Mathf.Sin(s.H), 0, Mathf.Cos(s.H)), 3, 3);
                 if (s.Has(Buff.Turbo) && Random.value < dt * 20) fx.Sparks(new Vector3(s.X, 0.3f, s.Z), Mats.Hex(Fx.ItemColors[0]), 1, 1);
+                if ((s.Spd > 9.5f || s.Has(Buff.Turbo)) && !s.Brawl && Random.value < dt * 25)
+                    fx.Streak(new Vector3(s.X, 0, s.Z), new Vector3(Mathf.Sin(s.H), 0, Mathf.Cos(s.H)) * s.Spd);
             }
+            // облака драк: пары дерущихся рядом друг с другом
+            for (int i = 0; i < st.Players.Length; i++)
+            {
+                bool active = false; Vector3 mid = Vector3.zero;
+                if (st.Players[i].Brawl)
+                    for (int j = i + 1; j < st.Players.Length; j++)
+                        if (st.Players[j].Brawl && Mathf.Abs(st.Players[j].X - st.Players[i].X) + Mathf.Abs(st.Players[j].Z - st.Players[i].Z) < 2.5f)
+                        { active = true; mid = (PlayerPos(st, i) + PlayerPos(st, j)) / 2; break; }
+                fx.BrawlCloud(i, mid, active, dt);
+            }
+            if (views.Count > 0) fx.FacingCam = views[0].Cam;
             puck.localPosition = puckPos;
             puckFire.gameObject.SetActive(st.PuckMega);
             if (st.PuckMega) puckFire.localScale = Vector3.one * (1 + Mathf.Sin(time * 30) * 0.15f);

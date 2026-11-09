@@ -109,7 +109,9 @@ namespace Hockey
             uiPage = UiPage.Play; yield return Wait(0.5f); yield return Shot("02_menu_play");
             uiPage = UiPage.Settings; yield return Wait(0.5f); yield return Shot("03_settings");
             uiPage = UiPage.Controls; yield return Wait(0.5f); yield return Shot("04_controls");
-            uiPage = UiPage.Main;
+            uiPage = UiPage.Locker; yield return Wait(1.2f); yield return Shot("04b_locker");
+            uiPage = UiPage.Credits; yield return Wait(0.5f); yield return Shot("04c_credits");
+            uiPage = UiPage.Main; yield return Wait(1.2f);
 
             // одиночный матч в режиме «Аркада»
             cfg.Skaters = 3; cfg.Duration = 180; cfg.Difficulty = 1; cfg.Arcade = true;
@@ -200,6 +202,12 @@ namespace Hockey
                     yield return Wait(0.4f);
                     yield return Shot("17_goalie");
                 }
+                // лицо и шлем крупно
+                var head = p + Vector3.up * 1.35f;
+                cam.transform.position = head + fwd * 1.5f + Vector3.up * 0.1f + Vector3.Cross(Vector3.up, fwd) * 0.5f;
+                cam.transform.LookAt(head);
+                yield return Wait(0.4f);
+                yield return Shot("17b_face");
                 cam.transform.position = new Vector3(0, 46, -0.01f);
                 cam.transform.rotation = Quaternion.Euler(90, 0, 0);
                 yield return Wait(0.4f);
@@ -210,6 +218,26 @@ namespace Hockey
                 yield return Shot("19_arena");
                 views.AddRange(keep);
                 autoFreeze = false;
+            }
+
+            // драка: ставим соперника рядом и сцепляем
+            if (me != null)
+            {
+                var opp = sim.Players.Find(q => q.Team != me.Team && !q.Goalie);
+                if (opp != null)
+                {
+                    opp.X = me.X + 1f; opp.Z = me.Z; opp.Vx = opp.Vz = 0;
+                    sim.ForceBrawl(me.Idx, opp.Idx);
+                    autoInput = new PlayerInput { Fight = true };
+                    yield return Wait(0.4f);
+                    autoInput = default;
+                    yield return Wait(0.3f);
+                    yield return Shot("19b_brawl");
+                    for (int i = 0; i < 6; i++) { autoInput = new PlayerInput { Fight = i % 2 == 0 }; yield return Wait(0.15f); }
+                    yield return Wait(2.2f);
+                    yield return Shot("19c_after_brawl");
+                    Log($"После драки: я оглушён={me.Stun > 0}, соперник оглушён={opp.Stun > 0}");
+                }
             }
 
             // пусть боты поиграют

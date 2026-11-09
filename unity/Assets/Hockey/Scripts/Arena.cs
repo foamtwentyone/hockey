@@ -59,10 +59,12 @@ namespace Hockey
             RenderSettings.fogColor = Mats.Hex("#2a2f6b");
             RenderSettings.fogStartDistance = 60; RenderSettings.fogEndDistance = 140;
             RenderSettings.skybox = null;
-            QualitySettings.shadowDistance = 70;
+            QualitySettings.shadowDistance = 45;
             QualitySettings.shadows = ShadowQuality.All;
-            QualitySettings.shadowResolution = ShadowResolution.High;
-            QualitySettings.shadowCascades = 2;
+            QualitySettings.shadowResolution = ShadowResolution.VeryHigh;
+            QualitySettings.shadowCascades = 4;
+            QualitySettings.shadowCascade4Split = new Vector3(0.07f, 0.2f, 0.47f);
+            QualitySettings.shadowProjection = ShadowProjection.StableFit;
 
             Sun = new GameObject("Sun").AddComponent<Light>();
             Sun.transform.SetParent(Root, false);
@@ -70,8 +72,9 @@ namespace Hockey
             Sun.color = Mats.Hex("#fff3e2");
             Sun.intensity = 1.05f;
             Sun.shadows = LightShadows.Soft;
-            Sun.shadowStrength = 0.65f;
-            Sun.shadowBias = 0.04f; Sun.shadowNormalBias = 0.35f;
+            Sun.shadowStrength = 0.72f;
+            Sun.shadowBias = 0.02f; Sun.shadowNormalBias = 0.15f;
+            Sun.shadowResolution = LightShadowResolution.VeryHigh;
             Sun.transform.rotation = Quaternion.LookRotation(new Vector3(10, -30, -14));
         }
 
@@ -263,6 +266,9 @@ namespace Hockey
         {
             QualitySettings.shadows = level == 0 ? ShadowQuality.Disable : ShadowQuality.All;
             QualitySettings.shadowResolution = level >= 2 ? ShadowResolution.VeryHigh : ShadowResolution.Medium;
+            QualitySettings.shadowCascades = level >= 2 ? 4 : level == 1 ? 2 : 1;
+            QualitySettings.shadowDistance = level >= 2 ? 45 : 35;
+            Sun.shadowResolution = level >= 2 ? LightShadowResolution.VeryHigh : LightShadowResolution.Medium;
             QualitySettings.antiAliasing = level == 0 ? 0 : level == 1 ? 2 : 4;
             Sun.shadows = level == 0 ? LightShadows.None : LightShadows.Soft;
             probe.enabled = level > 0;

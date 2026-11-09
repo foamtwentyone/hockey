@@ -41,7 +41,10 @@ namespace Hockey
         public Transform Root, Scale, Tilt, Hips, Torso, Head, StickPivot, Ice;
         public Transform[] Legs = new Transform[2], Arms = new Transform[2];
         public Transform MegaGlow;
-        public KayKitCharacter KK;   // настоящая модель KayKit (если есть), иначе — процедурная
+        public KayKitCharacter KK;
+        public Transform Dizzy, Blob;
+        static Material blobMat;
+        public TrailRenderer[] Trails;   // настоящая модель KayKit (если есть), иначе — процедурная
         public bool Goalie;
         public int Team;
 
@@ -100,7 +103,7 @@ namespace Hockey
             c.Tilt = Group("tilt", c.Scale, Vector3.zero);
 
             // основной путь: модели KayKit «Adventurers» в цветах команды
-            var kk = KayKitCharacter.Create(team, number + skin, goalie, c.Tilt, woodM, tape);
+            var kk = KayKitCharacter.Create(team, skin, hair, number, goalie, c.Tilt);
             if (kk != null)
             {
                 c.KK = kk;
@@ -111,6 +114,40 @@ namespace Hockey
                 var glow0 = Part(MeshKit.Sphere(0.16f, 12, 0), Mats.Fade("#ff6a2e", 0.55f, true), Vector3.zero, glowParent, false, new Vector3(1.2f, 0.9f, 2.6f));
                 glow0.gameObject.SetActive(false);
                 c.MegaGlow = glow0;
+                // мягкая контактная тень под ногами (прижимает к льду, сжимается в прыжке)
+                if (blobMat == null)
+                {
+                    blobMat = new Material(Mats.Fade("#151a40", 0.55f)) { mainTexture = TexArt.Soft(64) };
+                    blobMat.renderQueue = 2990;
+                }
+                c.Blob = Part(MeshKit.Plane(1.5f, 1.5f), blobMat, new Vector3(0, 0.008f, 0), c.Root, false, null, new Vector3(90, 0, 0));
+                // звёздочки над головой у оглушённого
+                c.Dizzy = Group("dizzy", c.Tilt, new Vector3(0, 2.0f, 0));
+                for (int i = 0; i < 3; i++)
+                {
+                    var st = Part(MeshKit.Star(0.11f), Mats.Emissive("#ffd23f", 0.9f), Vector3.zero, c.Dizzy, false);
+                    float a = i * Mathf.PI * 2 / 3;
+                    st.localPosition = new Vector3(Mathf.Cos(a) * 0.38f, 0, Mathf.Sin(a) * 0.38f);
+                }
+                c.Dizzy.gameObject.SetActive(false);
+                // следы коньков на льду
+                c.Trails = new TrailRenderer[2];
+                for (int i = 0; i < 2; i++)
+                {
+                    var tgo = new GameObject("skateTrail");
+                    tgo.transform.SetParent(c.Root, false);
+                    tgo.transform.localPosition = new Vector3(i == 0 ? 0.13f : -0.13f, 0.012f, 0);
+                    tgo.transform.localRotation = Quaternion.Euler(90, 0, 0);
+                    var tr = tgo.AddComponent<TrailRenderer>();
+                    tr.alignment = LineAlignment.TransformZ;
+                    tr.time = 1.4f; tr.minVertexDistance = 0.15f; tr.widthMultiplier = 0.07f;
+                    tr.widthCurve = new AnimationCurve(new Keyframe(0, 0.4f), new Keyframe(1, 1));
+                    tr.sharedMaterial = Mats.Fade("#ffffff", 0.45f);
+                    tr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                    tr.receiveShadows = false;
+                    tr.emitting = false;
+                    c.Trails[i] = tr;
+                }
                 c.phase = Random.value * 6;
                 c.squash.X = 1; c.giant.X = 1;
                 return c;
@@ -325,6 +362,18 @@ namespace Hockey
 
             if (KK != null)
             {
+                bool brawl = s.Brawl;
+                float bs = Mathf.Lerp(1, 0.45f, Mathf.Clamp01(s.Y / 2f)) * giant.X * (Goalie ? 1.15f : 1);
+                Blob.localScale = new Vector3(bs, bs, bs);
+                Blob.localPosition = new Vector3(0, 0.008f - s.Y, 0);
+                Blob.gameObject.SetActive(!brawl);
+                if (Scale.gameObject.activeSelf == brawl) Scale.gameObject.SetActive(!brawl); // в драке видно только облако
+                bool dizzy = (s.Stun || s.Stagger) && !brawl;
+                Dizzy.gameObject.SetActive(dizzy);
+                if (dizzy) Dizzy.localRotation = Quaternion.Euler(0, time * 240, 0);
+                bool trail = !air && spd > 1.5f && !brawl && !s.Stun;
+                foreach (var t in Trails) t.emitting = trail;
+                if (brawl) return;
                 // у модели KayKit падение и нырок — свои анимации; пружины добавляют наклоны по инерции
                 Tilt.localRotation = Quaternion.Euler(leanF.X * 0.45f * Mathf.Rad2Deg, 0, -leanS.X * 0.7f * Mathf.Rad2Deg);
                 Tilt.localPosition = Vector3.zero;

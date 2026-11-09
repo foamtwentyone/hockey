@@ -8,7 +8,7 @@ namespace Hockey
     public partial class HockeyGame
     {
         enum UiScreen { Menu, Lobby, Match }
-        enum UiPage { Main, Play, Split, Online, Settings, Controls }
+        enum UiPage { Main, Play, Split, Online, Settings, Controls, Locker, Credits, Quit }
 
         UiScreen screen = UiScreen.Menu;
         UiPage uiPage = UiPage.Main;
@@ -20,6 +20,18 @@ namespace Hockey
         readonly Dictionary<string, Texture2D> solid = new Dictionary<string, Texture2D>();
         Vector2 scroll;
         UiPage settingsReturn = UiPage.Main;
+        UiPage lastPage = UiPage.Main; float pageT;
+        string hoverNow, hoverLast;
+        static readonly string[] Tips =
+        {
+            "Пробел в движении — нырок «рыбкой» за шайбой. Пробел на месте — прыжок через силовой приём!",
+            "R — удар кулаком. Ответь обидчику — и начнётся драка: жми R чаще соперника!",
+            "Держи бросок дольше — шайба полетит сильнее. Бросок без шайбы рядом с ней — в одно касание!",
+            "Стик против движения — эффектная остановка со снежной крошкой.",
+            "В «Аркаде» собирай бонусы: Великан непробиваем, а Заморозка вмораживает соперников в лёд.",
+            "В раздевалке можно выбрать номер, цвет кожи и обмотку клюшки.",
+            "Вдвоём на одном экране: первый — WASD, второй — стрелки. Геймпады подключаются сами.",
+        };
 
         // ---------------------------------------------------------------- стили
         Texture2D Solid(string hex, float a = 1)
@@ -114,6 +126,7 @@ namespace Hockey
         bool Button(string text, GUIStyle style, params GUILayoutOption[] opts)
         {
             bool r = GUILayout.Button(text, style, opts);
+            if (Event.current.type == EventType.Repaint && GUILayoutUtility.GetLastRect().Contains(Event.current.mousePosition)) hoverNow = text;
             if (r) audioFx.Ui(true);
             return r;
         }
@@ -178,6 +191,7 @@ namespace Hockey
             VW = Screen.width / uiScale; VH = Screen.height / uiScale;
             GUI.matrix = Matrix4x4.Scale(new Vector3(uiScale, uiScale, 1));
 
+            if (Event.current.type == EventType.Layout) hoverNow = null;
             switch (screen)
             {
                 case UiScreen.Menu: DrawMenu(); break;
@@ -187,6 +201,12 @@ namespace Hockey
                     if (endShown) DrawEnd();
                     else if (paused) { if (uiPage == UiPage.Settings) DrawSettingsPanel(); else if (uiPage == UiPage.Controls) DrawControlsPanel(); else DrawPause(); }
                     break;
+            }
+            if (flash > 0) { GUI.color = new Color(1, 1, 1, flash * 0.6f); GUI.DrawTexture(new Rect(0, 0, VW, VH), white); GUI.color = Color.white; }
+            if (Event.current.type == EventType.Repaint)
+            {
+                if (hoverNow != null && hoverNow != hoverLast) audioFx.Ui(false);
+                hoverLast = hoverNow;
             }
         }
 
@@ -209,8 +229,17 @@ namespace Hockey
             }
             GUI.color = Color.white;
             DrawTitle(60, 40);
+            if (uiPage != lastPage) { lastPage = uiPage; pageT = time; scroll = Vector2.zero; }
+            float k = Mathf.Clamp01((time - pageT) * 4.5f);
+            float ease = 1 - (1 - k) * (1 - k) * (1 - k);
+            var baseM = GUI.matrix;
+            GUI.matrix = baseM * Matrix4x4.Translate(new Vector3((1 - ease) * -90, 0, 0));
+            GUI.color = new Color(1, 1, 1, ease);
             switch (uiPage)
             {
+                case UiPage.Locker: DrawLocker(); break;
+                case UiPage.Credits: DrawCredits(); break;
+                case UiPage.Quit: DrawQuit(); break;
                 case UiPage.Main: DrawMainButtons(); break;
                 case UiPage.Play: DrawPlayPage(false); break;
                 case UiPage.Split: DrawPlayPage(true); break;
@@ -218,7 +247,16 @@ namespace Hockey
                 case UiPage.Settings: DrawSettingsPanel(); break;
                 case UiPage.Controls: DrawControlsPanel(); break;
             }
-            GUI.Label(new Rect(VW - 420, VH - 40, 400, 30), "v2.0 · сделано на Unity", new GUIStyle(sSmall) { alignment = TextAnchor.LowerRight });
+            GUI.matrix = baseM;
+            GUI.color = Color.white;
+            // бегущая строка с подсказками
+            int tip = (int)(time / 6) % Tips.Length;
+            float ta = Mathf.Clamp01(Mathf.Min(Mathf.Repeat(time, 6), 6 - Mathf.Repeat(time, 6)) * 2);
+            var tipStyle = new GUIStyle(sSmall) { alignment = TextAnchor.MiddleCenter, fontSize = 17 };
+            GUI.color = new Color(1, 1, 1, ta);
+            GUI.Label(new Rect(VW * 0.35f, VH - 54, VW * 0.62f, 30), "Совет: " + Tips[tip], sTag);
+            GUI.color = Color.white;
+            GUI.Label(new Rect(VW - 420, VH - 24, 400, 22), "v3.0 · Unity · модели KayKit (CC0)", new GUIStyle(sSmall) { alignment = TextAnchor.LowerRight, fontSize = 13 });
         }
 
         void DrawMainButtons()
@@ -228,13 +266,104 @@ namespace Hockey
             GUILayout.Space(6);
             if (Button("Вдвоём на одном экране", BtnBlue, GUILayout.Height(62))) uiPage = UiPage.Split;
             if (Button("Игра по сети", BtnGreen, GUILayout.Height(62))) uiPage = UiPage.Online;
-            if (Button("Настройки", BtnGhost, GUILayout.Height(56))) { settingsReturn = UiPage.Main; uiPage = UiPage.Settings; }
-            if (Button("Управление", BtnGhost, GUILayout.Height(56))) { settingsReturn = UiPage.Main; uiPage = UiPage.Controls; }
-            if (!Application.isEditor && Button("Выход", BtnGhost, GUILayout.Height(52))) Application.Quit();
-            GUILayout.Space(16);
+            if (Button("Раздевалка", Btn("#ffd23f", "#f29a1f", 22), GUILayout.Height(56))) uiPage = UiPage.Locker;
+            GUILayout.BeginHorizontal();
+            if (Button("Настройки", BtnGhost, GUILayout.Height(52))) { settingsReturn = UiPage.Main; uiPage = UiPage.Settings; }
+            if (Button("Управление", BtnGhost, GUILayout.Height(52))) { settingsReturn = UiPage.Main; uiPage = UiPage.Controls; }
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            if (Button("Авторы", BtnGhost, GUILayout.Height(48))) uiPage = UiPage.Credits;
+            if (Button("Выход", BtnGhost, GUILayout.Height(48))) uiPage = UiPage.Quit;
+            GUILayout.EndHorizontal();
+            if (!string.IsNullOrEmpty(message)) GUILayout.Label($"<color=#ffd23f><b>{message}</b></color>", sLabel);
+            GUILayout.EndArea();
+        }
+
+        void DrawLocker()
+        {
+            GUILayout.BeginArea(new Rect(60, 200, 560, VH - 280), sPanel);
+            scroll = GUILayout.BeginScrollView(scroll);
+            GUILayout.Label("Раздевалка", sH1);
             GUILayout.Label("Твоё имя", sSmall);
             playerName = GUILayout.TextField(playerName ?? "", 14, sField);
-            if (!string.IsNullOrEmpty(message)) GUILayout.Label($"<color=#ffd23f><b>{message}</b></color>", sLabel);
+            GUILayout.Space(6);
+            GUILayout.Label("Номер на спине", sSmall);
+            GUILayout.BeginHorizontal();
+            int num = profNum;
+            if (Button("−", BtnGhost, GUILayout.Width(64))) num = num <= 1 ? 99 : num - 1;
+            GUILayout.Label(num.ToString(), new GUIStyle(sTitle) { fontSize = 48, alignment = TextAnchor.MiddleCenter }, GUILayout.Width(120), GUILayout.Height(60));
+            if (Button("+", BtnGhost, GUILayout.Width(64))) num = num >= 99 ? 1 : num + 1;
+            foreach (int quick in new[] { 7, 17, 87, 99 }) if (Button(quick.ToString(), BtnSel, GUILayout.Width(62))) num = quick;
+            GUILayout.EndHorizontal();
+            GUILayout.Label("Цвет кожи", sSmall);
+            int skin = Swatches(profSkin, CharacterRig.Skins);
+            GUILayout.Label("Обмотка клюшки", sSmall);
+            int tape = Swatches(profTape, KayKitCharacter.TapeColors);
+            if (num != profNum || skin != profSkin || tape != profTape)
+            {
+                profNum = num; profSkin = skin; profTape = tape;
+                SavePrefs();
+                RebuildPreview();
+            }
+            GUILayout.Space(10);
+            if (Button("Готово", BtnMain, GUILayout.Height(62))) { SavePrefs(); uiPage = UiPage.Main; }
+            GUILayout.EndScrollView();
+            GUILayout.EndArea();
+        }
+
+        int Swatches(int cur, string[] colors)
+        {
+            GUILayout.BeginHorizontal();
+            for (int i = 0; i < colors.Length; i++)
+            {
+                var r = GUILayoutUtility.GetRect(58, 58, GUILayout.Width(58), GUILayout.Height(58));
+                if (i == cur) { GUI.color = Color.white; GUI.DrawTexture(new Rect(r.x - 3, r.y - 3, r.width + 6, r.height + 6), circleTex); }
+                GUI.color = Mats.Hex(colors[i]);
+                GUI.DrawTexture(r, circleTex);
+                GUI.color = Color.white;
+                if (GUI.Button(r, "", GUIStyle.none)) { cur = i; audioFx.Ui(true); }
+                GUILayout.Space(6);
+            }
+            GUILayout.EndHorizontal();
+            return cur;
+        }
+
+        void DrawCredits()
+        {
+            GUILayout.BeginArea(new Rect(60, 200, 760, VH - 280), sPanel);
+            scroll = GUILayout.BeginScrollView(scroll);
+            GUILayout.Label("Авторы", sH1);
+            GUILayout.Label("<b>ШАЙБЯТКИ</b> — аркадный хоккей для весёлой компании.", sCenter);
+            GUILayout.Space(10);
+            GUILayout.Label("<color=#ffd23f><b>Игра, код, физика, эффекты и звуки</b></color>\nсделано вместе с Claude (Anthropic)", sLabel);
+            GUILayout.Space(6);
+            GUILayout.Label("<color=#ffd23f><b>Модели персонажей и анимации</b></color>\nKayKit — Adventurers Character Pack, Kay Lousberg (kaylousberg.com), лицензия CC0", sLabel);
+            GUILayout.Space(6);
+            GUILayout.Label("<color=#ffd23f><b>Экипировка, арена, текстуры, музыка</b></color>\nсоздаются кодом прямо в игре", sLabel);
+            GUILayout.Space(6);
+            GUILayout.Label("<color=#ffd23f><b>Движок</b></color>\nUnity", sLabel);
+            GUILayout.Space(14);
+            if (Button("Назад", BtnMain, GUILayout.Width(240), GUILayout.Height(58))) uiPage = UiPage.Main;
+            GUILayout.EndScrollView();
+            GUILayout.EndArea();
+        }
+
+        void DrawQuit()
+        {
+            GUILayout.BeginArea(new Rect(60, 220, 470, 260), sPanel);
+            GUILayout.Label("Уже уходишь?", sH1);
+            GUILayout.Label("Шайбятки будут скучать!", sCenter);
+            GUILayout.BeginHorizontal();
+            if (Button("Остаться", BtnMain, GUILayout.Height(60))) uiPage = UiPage.Main;
+            if (Button("Выйти", BtnGhost, GUILayout.Height(60), GUILayout.Width(150)))
+            {
+#if UNITY_EDITOR
+                UnityEditor.EditorApplication.isPlaying = false;
+#else
+                Application.Quit();
+#endif
+            }
+            GUILayout.EndHorizontal();
             GUILayout.EndArea();
         }
 
@@ -374,6 +503,7 @@ namespace Hockey
             { "Пас партнёру", "ПКМ / Q", "Q", "Num1", "X" },
             { "Прыжок / нырок за шайбой", "Пробел", "Пробел", "Num3", "A" },
             { "Силовой толчок", "E", "E", "Num2", "B" },
+            { "Удар кулаком / драка", "R", "R", "Num5", "Y" },
             { "Рывок", "Shift", "Shift", "Num4", "LT / LB" },
             { "Пауза", "Esc", "Esc", "Esc", "Start" },
         };
@@ -386,7 +516,7 @@ namespace Hockey
             GUILayout.BeginArea(new Rect(x, screen == UiScreen.Match ? 60 : 200, w, VH - (screen == UiScreen.Match ? 120 : 220)), sPanel);
             scroll = GUILayout.BeginScrollView(scroll);
             GUILayout.Label("Управление", sH1);
-            GUILayout.Label("Жми направление — игрок поедет туда относительно камеры. Пробел на месте — прыжок (перепрыгни силовой приём!), в движении — нырок «рыбкой» за шайбой. Стик против движения — эффектная остановка.", sSmall);
+            GUILayout.Label("Жми направление — игрок поедет туда относительно камеры. Пробел на месте — прыжок (перепрыгни силовой приём!), в движении — нырок «рыбкой» за шайбой. Стик против движения — эффектная остановка. R — удар кулаком: ответь обидчику, и начнётся драка — жми R чаще соперника!", sSmall);
             GUILayout.Space(8);
             string[] head = { "", "Один игрок / по сети", "Игрок 1", "Игрок 2", "Геймпад" };
             GUILayout.BeginHorizontal();
@@ -535,26 +665,42 @@ namespace Hockey
         // ---------------------------------------------------------------- HUD
         string KeyFor(View v, int action)
         {
-            // 0 бросок, 1 пас, 2 прыжок, 3 толчок, 4 рывок
+            // 0 бросок, 1 пас, 2 прыжок, 3 толчок, 4 рывок, 5 удар
             bool pad = v.Src != null && v.Src.Pad >= 0 && GameInput.AnyPad() && v.Src.Scheme != Scheme.Solo;
             var scheme = v.Src?.Scheme ?? Scheme.Solo;
-            string[] solo = { "ЛКМ", "ПКМ", "Пробел", "E", "Shift" };
-            string[] p1 = { "F", "Q", "Пробел", "E", "Shift" };
-            string[] p2 = { "Num0", "Num1", "Num3", "Num2", "Num4" };
-            string[] gp = { "RT", "X", "A", "B", "LT" };
+            string[] solo = { "ЛКМ", "ПКМ", "Пробел", "E", "Shift", "R" };
+            string[] p1 = { "F", "Q", "Пробел", "E", "Shift", "R" };
+            string[] p2 = { "Num0", "Num1", "Num3", "Num2", "Num4", "Num5" };
+            string[] gp = { "RT", "X", "A", "B", "LT", "Y" };
             if (pad) return gp[action];
             return scheme == Scheme.P1 ? p1[action] : scheme == Scheme.P2 ? p2[action] : solo[action];
         }
 
         void DrawHints(View v, ViewState st, Rect area)
         {
-            if (!Settings.Hints || v.Follow < 0 || v.Follow >= st.Players.Length || st.Phase != Phase.Play) return;
+            if (v.Follow < 0 || v.Follow >= st.Players.Length || st.Phase != Phase.Play) return;
             var p = st.Players[v.Follow];
+            if (p.Brawl)
+            {
+                // драка: крупная подсказка и шкалы силы
+                int opp = -1;
+                for (int i = 0; i < st.Players.Length; i++) if (i != v.Follow && st.Players[i].Brawl && Mathf.Abs(st.Players[i].X - p.X) + Mathf.Abs(st.Players[i].Z - p.Z) < 2.5f) opp = i;
+                float pulse = 1 + Mathf.Sin(time * 14) * 0.08f;
+                Shadowed(new Rect(area.x, VH * 0.55f, area.width, 90), $"ДРАКА! ЖМИ {KeyFor(v, 5)}!", new GUIStyle(sTitle) { fontSize = (int)(54 * pulse), alignment = TextAnchor.MiddleCenter }, Mats.Hex("#ffd23f"), Mats.Hex("#ff4f5e"), 4);
+                float myPow = p.BrawlPower, theirs = opp >= 0 ? st.Players[opp].BrawlPower : 0;
+                float tot = Mathf.Max(1, myPow + theirs);
+                float bw = Mathf.Min(420, area.width * 0.7f), bx = area.x + (area.width - bw) / 2, by = VH * 0.55f + 92;
+                GUI.Label(new Rect(bx - 8, by - 8, bw + 16, 40), "", sTag);
+                Box(new Rect(bx, by, bw, 24), "#4a8ff0");
+                Box(new Rect(bx, by, bw * myPow / tot, 24), "#ffd23f");
+                return;
+            }
+            if (!Settings.Hints) return;
             var items = new List<(string key, string act)>();
             bool mine = st.PuckOwner == v.Follow;
             bool oppHas = st.PuckOwner >= 0 && st.PuckOwner < roster.Count && roster[st.PuckOwner].Team != roster[v.Follow].Team;
             if (mine) { items.Add((KeyFor(v, 0), "бросок (держи)")); items.Add((KeyFor(v, 1), "пас")); }
-            else if (oppHas) { items.Add((KeyFor(v, 2), p.Spd > 4.5f ? "нырок за шайбой" : "прыжок")); items.Add((KeyFor(v, 3), "толчок")); }
+            else if (oppHas) { items.Add((KeyFor(v, 2), p.Spd > 4.5f ? "нырок за шайбой" : "прыжок")); items.Add((KeyFor(v, 3), "толчок")); items.Add((KeyFor(v, 5), "удар")); }
             else { items.Add((KeyFor(v, 2), p.Spd > 4.5f ? "нырок" : "прыжок")); items.Add((KeyFor(v, 0), "бросок с лёта")); }
             items.Add((KeyFor(v, 4), "рывок"));
             float total = 0;
