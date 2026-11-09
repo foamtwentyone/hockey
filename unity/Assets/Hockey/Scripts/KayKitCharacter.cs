@@ -483,16 +483,22 @@ namespace Hockey
             var right = Vector3.Cross(Vector3.up, fwd);
             float reach = (armL1.position - armL0.position).magnitude + (armL2.position - armL1.position).magnitude;
             var chest = (armL0.position + armR0.position) * 0.5f;
-            // верх рукояти: перед животом, чуть левее середины
-            // верх рукояти у левого бедра-живота (левая рука на набалдашнике), правая рука ниже по древку
-            var top = chest + Vector3.down * reach * 0.32f + fwd * reach * 0.32f - right * reach * 0.22f;
+            // как у настоящего хоккеиста: верхняя (левая) рука с набалдашником у бедра, нижняя (правая) — далеко
+            // по древку на почти выпрямленной руке, клюшка длинная и пологая, крюк далеко впереди на льду
+            var top = chest + Vector3.down * reach * 0.42f + fwd * reach * 0.3f - right * reach * 0.3f;
             float g = Stick.lossyScale.y;
             var dir = StickDir(top, (stickLen - 0.25f + GripL) * g, s, fwd, right, out var bladeFwd);
             var rot = Quaternion.LookRotation(bladeFwd, -dir);
-            var origin = top + dir * GripL * g;   // точка крепления клюшки (правая рука)
+            var origin = top + dir * GripL * g;   // точка крепления клюшки (локальный ноль древка)
+            // нижняя рука — как можно дальше по древку, но в пределах досягаемости правой руки
+            float reachR = (armR1.position - armR0.position).magnitude + (armR2.position - armR1.position).magnitude;
+            float best = 0.2f;
+            for (float t = 0.62f; t >= 0.2f; t -= 0.02f)
+                if ((top + dir * t * g - armR0.position).magnitude <= reachR * 0.97f) { best = t; break; }
+            var lowGrip = top + dir * best * g;
             var slotOff = armR2.position - HandR.position;
             Ik(armL0, armL1, armL2, top, w, -right);
-            Ik(armR0, armR1, armR2, origin + slotOff, w, right);
+            Ik(armR0, armR1, armR2, lowGrip + slotOff, w, right);
             Stick.SetPositionAndRotation(Vector3.Lerp(Stick.position, origin, w), Quaternion.Slerp(Stick.rotation, rot, w));
         }
 
@@ -500,7 +506,7 @@ namespace Hockey
         Vector3 StickDir(Vector3 pivot, float L, PlayerView s, Vector3 fwd, Vector3 right, out Vector3 bladeFwd)
         {
             float g = Stick.lossyScale.y;
-            var target = Model.position + (fwd * (Goalie ? 0.75f : 0.84f) + right * (Goalie ? 0.05f : 0.46f)) * g;
+            var target = Model.position + (fwd * (Goalie ? 0.75f : 1.05f) + right * (Goalie ? 0.05f : 0.46f)) * g;
             float drop = pivot.y - (Model.position.y + 0.04f);
             var hor = target - pivot; hor.y = 0;
             Vector3 dir;
@@ -556,7 +562,7 @@ namespace Hockey
             float g = Stick.lossyScale.y;
             float L = (stickLen - 0.25f) * g;
             var h = Stick.position;
-            var target = Model.position + (fwd * (Goalie ? 0.75f : 0.84f) + right * (Goalie ? 0.05f : 0.46f)) * g;
+            var target = Model.position + (fwd * (Goalie ? 0.75f : 1.05f) + right * (Goalie ? 0.05f : 0.46f)) * g;
             float drop = h.y - (Model.position.y + 0.04f);
             var hor = target - h; hor.y = 0;
             Vector3 dir;

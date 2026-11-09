@@ -170,7 +170,7 @@ namespace Hockey
                         float a = Mathf.Clamp01(width - d + 0.5f);
                         a = Mathf.Max(a, Mathf.Clamp01(width * 1.7f - knot + 0.5f));
                         float shade = Mathf.Clamp01(1 - Mathf.Min(d, knot * 0.6f) / (width + 0.01f));
-                        var c = Color.Lerp(new Color(0.72f, 0.75f, 0.82f), new Color(1f, 1f, 1f), 0.35f + 0.65f * shade);
+                        var c = Color.Lerp(new Color(0.9f, 0.91f, 0.94f), Color.white, 0.4f + 0.6f * shade);   // белый шнур, как на настоящих воротах
                         c.a = a;
                         px[y * s + x] = c;
                     }
