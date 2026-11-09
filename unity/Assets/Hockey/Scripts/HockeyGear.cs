@@ -139,13 +139,36 @@ namespace Hockey
                 var absS = new Vector3(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z));
                 var wantS = Vector3.Scale(sculpt.bounds.size, absS);
                 var bb = bm.bounds;
-                float kk = Mathf.Min(wantS.x / bb.size.x, Mathf.Min(wantS.y / bb.size.y, wantS.z / bb.size.z));
+                var sb = sculpt.bounds;
+                bool headGear = name == "helmet" || name == "goalie_mask";
+                bool legGear = name == "pad";
+                float kk;
+                Vector3 anchorSculpt, anchorModel;
+                if (headGear)
+                {
+                    // по ширине головы с запасом, макушка к макушке
+                    kk = wantS.x * 1.12f / bb.size.x;
+                    anchorSculpt = new Vector3(sb.center.x, sb.max.y, sb.center.z);
+                    anchorModel = new Vector3(bb.center.x, bb.max.y, bb.center.z);
+                }
+                else if (legGear)
+                {
+                    // по высоте ноги, низ на льду
+                    kk = wantS.y / bb.size.y;
+                    anchorSculpt = new Vector3(sb.center.x, sb.min.y, sb.center.z);
+                    anchorModel = new Vector3(bb.center.x, bb.min.y, bb.center.z);
+                }
+                else
+                {
+                    kk = Mathf.Min(wantS.x / bb.size.x, Mathf.Min(wantS.y / bb.size.y, wantS.z / bb.size.z));
+                    anchorSculpt = sb.center; anchorModel = bb.center;
+                }
                 var hold = new GameObject("gear_" + name + "_fit").transform;
-                hold.SetPositionAndRotation(pos + rot * Vector3.Scale(sculpt.bounds.center, scale), rot);
+                hold.SetPositionAndRotation(pos + rot * Vector3.Scale(anchorSculpt, scale), rot);
                 var g = new GameObject("gear_" + name);
                 g.transform.SetParent(hold, false);
                 g.transform.localScale = new Vector3(Mathf.Sign(scale.x), 1, 1) * kk;
-                g.transform.localPosition = -Vector3.Scale(bb.center, g.transform.localScale);
+                g.transform.localPosition = -Vector3.Scale(anchorModel, g.transform.localScale) + (headGear ? Vector3.up * wantS.y * 0.04f : Vector3.zero);
                 g.AddComponent<MeshFilter>().sharedMesh = bm;
                 var mr = g.AddComponent<MeshRenderer>();
                 mr.sharedMaterial = Mats.Outlined(Mats.Get("#ffffff", 0.15f), 0.8f);
