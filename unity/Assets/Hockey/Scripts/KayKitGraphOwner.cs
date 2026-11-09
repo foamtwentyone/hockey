@@ -6,7 +6,7 @@ namespace Hockey
 {
     public class KayKitGraphOwner : MonoBehaviour
     {
-        public PlayableGraph Graph;
+        [System.NonSerialized] public PlayableGraph Graph;
         void OnDestroy() { if (Graph.IsValid()) Graph.Destroy(); }
     }
 }

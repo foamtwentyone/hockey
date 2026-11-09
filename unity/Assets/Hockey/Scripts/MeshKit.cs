@@ -614,7 +614,7 @@ namespace Hockey
 
         public static Material Toon(Texture tex, string hex = "#ffffff", float gloss = 0.15f)
         {
-            string key = $"t{tex.GetInstanceID()}|{hex}|{gloss}";
+            string key = $"t{tex.GetHashCode()}|{hex}|{gloss}";
             if (cache.TryGetValue(key, out var m)) return m;
             m = NewToon(Hex(hex), gloss, tex);
             cache[key] = m;
