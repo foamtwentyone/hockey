@@ -35,14 +35,17 @@ namespace Hockey
                 var rot = Quaternion.LookRotation(back.normalized, fdir);
                 if (gripNow > 0.01f)
                 {
-                    // кулак обхватывает древко: центр краги — на древке, пальцы — по руке (от локтя),
-                    // древко проходит сквозь кулак поперёк, большой палец смотрит вниз по древку, к крюку
+                    // кулак обхватывает древко: центр краги — на древке, пальцы — по руке (от локтя)
                     var grip = g.Left ? gripLow : gripTop;
                     var up = Vector3.ProjectOnPlane(grip - g.Lower.position, gripDir);
                     if (up.sqrMagnitude < 1e-6f) up = Vector3.ProjectOnPlane(Vector3.up, gripDir);
                     up.Normalize();
-                    var x = g.Left ? gripDir : -gripDir;   // модель — левая крага (большой палец +X), правая зеркальна
-                    var gr = Quaternion.LookRotation(Vector3.Cross(x, up), up);
+                    // тыльная сторона краги — наружу-вперёд (как на фото хоккеиста), ладонь — к древку и телу;
+                    // открытая ладонь к зрителю выглядела как «машущая» рука
+                    var outward = g.Left ? -Model.right : Model.right;
+                    var bk = Vector3.ProjectOnPlane(Model.forward + outward * 0.45f + Vector3.up * 0.25f, up);
+                    if (bk.sqrMagnitude < 1e-6f) bk = Vector3.ProjectOnPlane(Model.forward, up);
+                    var gr = Quaternion.LookRotation(bk.normalized, up);
                     pos = Vector3.Lerp(pos, grip, gripNow);
                     rot = Quaternion.Slerp(rot, gr, gripNow);
                 }
