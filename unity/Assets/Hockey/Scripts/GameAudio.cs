@@ -1,4 +1,5 @@
-// Синтезированные звуки — без аудиофайлов.
+// Звуки: записанные CC0-сэмплы из Resources/Sounds (<ключ>_<номер>.ogg — случайный вариант с разбросом высоты),
+// поверх — синтезированные «мультяшные» слои; если сэмпла нет, играет синтез.
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -11,6 +12,9 @@ namespace Hockey
         int next;
         readonly AudioSource crowd, music;
         readonly Dictionary<string, AudioClip> clips = new Dictionary<string, AudioClip>();
+        readonly Dictionary<string, List<AudioClip>> samples = new Dictionary<string, List<AudioClip>>();
+        // ключи, где синтез звучит поверх сэмпла (мультяшный «бойнг», кукушка, фанфары)
+        static readonly HashSet<string> layered = new HashSet<string> { "save", "ko", "goal", "hit", "helmet", "mega", "freeze" };
         float crowdTarget = 0.12f, crowdHold;
         public bool Muted;
         static readonly System.Random rnd = new System.Random(1);
@@ -50,6 +54,14 @@ namespace Hockey
             clips["helmet"] = Mix(Mix(Bonk(880, 0.35f, 0.45f), Bonk(1330, 0.3f, 0.3f)), Glide(900, 1400, 0.25f, 0.15f, Wave.Sine, 0, 0));
             clips["ko"] = Mix(Bonk(180, 0.4f, 0.8f), Cuckoo());
             clips["brawlEnd"] = Mix(Bonk(240, 0.25f, 0.7f), Glide(1300, 300, 0.6f, 0.25f, Wave.Sine, 6, 30));
+
+            foreach (var c in Resources.LoadAll<AudioClip>("Sounds"))
+            {
+                int us = c.name.LastIndexOf('_');
+                string key = us > 0 ? c.name.Substring(0, us) : c.name;
+                if (!samples.TryGetValue(key, out var list)) samples[key] = list = new List<AudioClip>();
+                list.Add(c);
+            }
 
             music = host.AddComponent<AudioSource>();
             music.clip = MusicLoop();
@@ -369,20 +381,38 @@ namespace Hockey
         public void SetMusic(bool on) { musicOn = on; }
         bool musicOn = true;
 
+        /// Гул трибун: много «голосов» — полосовой шум в области речи (250–1500 Гц), у каждого своя
+        /// огибающая слогов 3–7 Гц и своё «форманта»; сумма звучит как живой зал, а не как ровное шипение.
         static AudioClip CrowdLoop()
         {
-            int n = Rate * 3;
+            int n = Rate * 6;
             var d = new float[n];
-            float lp = 0, lp2 = 0;
-            for (int i = 0; i < n; i++)
+            var r = new System.Random(7);
+            for (int voice = 0; voice < 24; voice++)
             {
-                float w = (float)rnd.NextDouble() * 2 - 1;
-                lp += (w - lp) * 0.12f;
-                lp2 += (lp - lp2) * 0.3f;
-                d[i] = (lp - lp2) * 2.2f;
+                float fc = 260 + (float)r.NextDouble() * 1100;          // центр полосы
+                float q = 1.2f + (float)r.NextDouble() * 2;
+                float w0 = 2 * Mathf.PI * fc / Rate, alpha = Mathf.Sin(w0) / (2 * q);
+                float b0 = alpha, b2 = -alpha, a0 = 1 + alpha, a1 = -2 * Mathf.Cos(w0), a2 = 1 - alpha;
+                float x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+                float syl = 3 + (float)r.NextDouble() * 4, ph = (float)r.NextDouble() * 6.28f;
+                float amp = 0.5f + (float)r.NextDouble() * 0.5f;
+                for (int i = 0; i < n; i++)
+                {
+                    float x = (float)r.NextDouble() * 2 - 1;
+                    float y = (b0 * x + b2 * x2 - a1 * y1 - a2 * y2) / a0;
+                    x2 = x1; x1 = x; y2 = y1; y1 = y;
+                    float t = i / (float)Rate;
+                    // слоги: «рваная» огибающая, периодичная по длине петли
+                    float env = Mathf.Max(0, Mathf.Sin(t * syl * 2 * Mathf.PI / 1f + ph)) * (0.6f + 0.4f * Mathf.Sin(t * 2 * Mathf.PI / 6f * (1 + voice % 3) + ph));
+                    d[i] += y * env * amp;
+                }
             }
+            float peak = 1e-4f;
+            for (int i = 0; i < n; i++) peak = Mathf.Max(peak, Mathf.Abs(d[i]));
+            for (int i = 0; i < n; i++) d[i] = d[i] / peak * 0.8f;
             // плавная склейка концов
-            int fade = Rate / 10;
+            int fade = Rate / 5;
             for (int i = 0; i < fade; i++) { float t = i / (float)fade; d[i] = d[i] * t + d[n - fade + i] * (1 - t); }
             System.Array.Resize(ref d, n - fade);
             return Make(d);
@@ -390,10 +420,21 @@ namespace Hockey
 
         void Play(string key, float vol = 1, float pitch = 1)
         {
-            if (Muted || !clips.TryGetValue(key, out var c)) return;
-            var s = pool[next++ % pool.Length];
-            s.pitch = pitch; s.volume = vol * Settings.Sfx;
-            s.PlayOneShot(c);
+            if (Muted) return;
+            bool hasSample = samples.TryGetValue(key, out var list) && list.Count > 0;
+            if (hasSample)
+            {
+                var s = pool[next++ % pool.Length];
+                s.pitch = pitch * Random.Range(0.93f, 1.07f);
+                s.volume = vol * Settings.Sfx;
+                s.PlayOneShot(list[Random.Range(0, list.Count)]);
+            }
+            if ((!hasSample || layered.Contains(key)) && clips.TryGetValue(key, out var c))
+            {
+                var s = pool[next++ % pool.Length];
+                s.pitch = pitch; s.volume = vol * Settings.Sfx * (hasSample ? 0.55f : 1);
+                s.PlayOneShot(c);
+            }
         }
 
         void Cheer(float level, float hold) { crowdTarget = Mathf.Max(crowdTarget, level); crowdHold = Mathf.Max(crowdHold, hold); }
@@ -428,13 +469,15 @@ namespace Hockey
                 case EvType.Deflect: Play("receive", 0.6f, 1.3f); break;
                 case EvType.Steal: Play("steal", 0.5f, pr); break;
                 case EvType.Whistle: Play("whistle", 0.7f); break;
-                case EvType.Goal: Play("goal", 0.9f); Cheer(0.9f, 3.5f); break;
-                case EvType.Horn: case EvType.End: case EvType.Overtime: Play("horn", 0.8f); break;
+                case EvType.Goal: Play("goal", 0.9f); Play("goalJingle", 0.7f); Cheer(0.9f, 3.5f); break;
+                case EvType.Horn: Play("horn", 0.8f); break;
+                case EvType.End: Play("horn", 0.8f); Play("vWinner", 0.9f); Cheer(0.8f, 3f); break;
+                case EvType.Overtime: Play("horn", 0.8f); Play("vOvertime", 0.9f); break;
                 case EvType.Jump: Play("jump", 0.6f, pr); break;
                 case EvType.Punch: Play("punch", 0.8f, pr); Cheer(0.2f, 0.4f); break;
                 case EvType.HelmetOff: Play("helmet", 0.9f, pr); Cheer(0.4f, 0.8f); break;
                 case EvType.Knockout: Play("ko", 1f); Cheer(0.6f, 1.5f); break;
-                case EvType.BrawlStart: Play("brawl", 0.8f); Cheer(0.45f, 2.2f); break;
+                case EvType.BrawlStart: Play("brawl", 0.8f); Play("vFight", 0.9f); Cheer(0.45f, 2.2f); break;
                 case EvType.BrawlEnd: Play("brawlEnd", 0.9f); Cheer(0.5f, 1f); break;
                 case EvType.Dive: Play("dive", 0.6f, pr); break;
                 case EvType.Land: Play("land", Mathf.Min(1, e.Value / 8), pr); break;

@@ -1,0 +1,5 @@
+Звуки в этой папке — CC0 1.0 (общественное достояние), можно использовать без указания авторства.
+Источники:
+- Kenney.nl: Impact Sounds, Interface Sounds, Digital Audio, Music Jingles, Voiceover Pack: Fighter (https://kenney.nl, CC0)
+- SubspaceAudio (Juhani Junkala), "512 Sound Effects (8-bit style)", OpenGameArt.org, CC0 — свисток
+Файлы переименованы, приведены к моно 44.1 кГц и выровнены по громкости.
