@@ -6,8 +6,8 @@ Shader "Hockey/Ice"
     {
         _MainTex ("Ice", 2D) = "white" {}
         _ReflTex ("Reflection", 2D) = "black" {}
-        _Refl ("Reflection Strength", Range(0,1)) = 0.32
-        _Gloss ("Gloss", Range(0,1)) = 0.5
+        _Refl ("Reflection Strength", Range(0,1)) = 0.25
+        _Gloss ("Gloss", Range(0,1)) = 0.18
     }
     SubShader
     {
@@ -36,8 +36,9 @@ Shader "Hockey/Ice"
             half3 refl = tex2D(_ReflTex, suv).rgb;
             half fres = 0.35 + 0.65 * pow(1 - saturate(dot(normalize(IN.viewDir), half3(0, 1, 0))), 3);
             half k = _Refl * fres;
-            o.Albedo = ice * (1 - k * 0.6);
-            o.Emission = refl * k;
+            // отражение замещает часть цвета льда, а не прибавляется к нему — лёд не выгорает
+            o.Albedo = ice * 0.92 * (1 - k);
+            o.Emission = refl * k * 0.75;
         }
         ENDCG
     }

@@ -84,6 +84,9 @@ Shader "Hockey/Post"
                 }
                 c += tex2D(_BloomTex, uv).rgb * _Bloom;
                 c *= _Exposure;
+                // мягкое «плечо»: всё ярче 0.8 плавно сжимается, без белых пятен
+                half3 over = max(c - 0.8, 0);
+                c = min(c, 0.8) + over / (1 + over * 2.5);
                 // цветокоррекция: тёплый оттенок, насыщенность, контраст
                 c *= _Tint.rgb;
                 half l = dot(c, half3(0.299, 0.587, 0.114));
