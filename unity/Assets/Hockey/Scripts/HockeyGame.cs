@@ -820,7 +820,7 @@ namespace Hockey
                 {
                     float sp = Mathf.Clamp01((s.Spd - 8.5f) / 4f) + (s.Has(Buff.Turbo) ? 0.4f : 0);
                     pfx.Speed = Mathf.Lerp(pfx.Speed, Mathf.Clamp01(sp), 1 - Mathf.Exp(-dt * 5));
-                    pfx.ExtraBloom = Mathf.Lerp(pfx.ExtraBloom, flash > 0 ? 0.8f : 0, 1 - Mathf.Exp(-dt * 6));
+                    pfx.ExtraBloom = Mathf.Lerp(pfx.ExtraBloom, flash > 0 ? 0.35f : 0, 1 - Mathf.Exp(-dt * 6));
                 }
             }
             shake = Mathf.Max(0, shake - dt * 1.5f);

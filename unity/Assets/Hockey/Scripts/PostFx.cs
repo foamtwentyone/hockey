@@ -32,10 +32,10 @@ namespace Hockey
             var m = Mat();
             if (m == null || Settings.Quality == 0) { Graphics.Blit(src, dst); return; }
             bool high = Settings.Quality >= 2;
-            m.SetFloat("_Threshold", 0.82f);
-            m.SetFloat("_Knee", 0.35f);
-            m.SetFloat("_Bloom", 0.55f + ExtraBloom);
-            m.SetFloat("_Exposure", 1.03f);
+            m.SetFloat("_Threshold", 1.15f);
+            m.SetFloat("_Knee", 0.2f);
+            m.SetFloat("_Bloom", 0.35f + ExtraBloom);
+            m.SetFloat("_Exposure", 1.0f);
             m.SetFloat("_Saturation", 1.14f);
             m.SetFloat("_Contrast", 1.06f);
             m.SetFloat("_Vignette", 0.32f);
