@@ -30,7 +30,7 @@ namespace Hockey
         void OnRenderImage(RenderTexture src, RenderTexture dst)
         {
             var m = Mat();
-            if (m == null || Settings.Quality == 0) { Graphics.Blit(src, dst); return; }
+            if (m == null || Settings.Quality == 0 || !Settings.Post) { Graphics.Blit(src, dst); return; }
             bool high = Settings.Quality >= 2;
             m.SetFloat("_Threshold", 1.6f);
             m.SetFloat("_Knee", 0.2f);

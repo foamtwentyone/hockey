@@ -41,7 +41,7 @@ namespace Hockey
             Directory.CreateDirectory(autotestDir);
             foreach (var f in Directory.GetFiles(autotestDir, "*.png")) File.Delete(f);
             Application.logMessageReceived += OnLog;
-            Log($"Автотест: Unity {Application.unityVersion}, {SystemInfo.graphicsDeviceName} ({SystemInfo.graphicsDeviceType}), экран {Screen.width}x{Screen.height}");
+            Log($"Автотест: Unity {Application.unityVersion}, {SystemInfo.graphicsDeviceName} ({SystemInfo.graphicsDeviceType}), экран {Screen.width}x{Screen.height}, цвет {QualitySettings.activeColorSpace}");
             StartCoroutine(AutotestRun());
         }
 

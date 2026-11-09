@@ -55,9 +55,7 @@ namespace Hockey
         void BuildLights()
         {
             RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = Mats.Hex("#cfdcff") * 0.9f;
-            RenderSettings.ambientEquatorColor = Mats.Hex("#b7b2d6") * 0.75f;
-            RenderSettings.ambientGroundColor = Mats.Hex("#8a86b0") * 0.6f;
+            SetBrightness(Settings.Brightness);
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
             RenderSettings.fogColor = Mats.Hex("#2a2f6b");
@@ -74,7 +72,7 @@ namespace Hockey
             Sun.transform.SetParent(Root, false);
             Sun.type = LightType.Directional;
             Sun.color = Mats.Hex("#fff3e2");
-            Sun.intensity = 1.05f;
+            Sun.intensity = 0.95f * Settings.Brightness;
             Sun.shadows = LightShadows.Soft;
             Sun.shadowStrength = 0.72f;
             Sun.shadowBias = 0.02f; Sun.shadowNormalBias = 0.15f;
@@ -321,6 +319,15 @@ namespace Hockey
             Tex.DrawText(scorePx, 64, 32, clock, 32 - Tex.TextWidth(clock, 1) / 2, 1, 1, new Color32(92, 242, 255, 255));
             scoreTex.SetPixels32(scorePx);
             scoreTex.Apply();
+        }
+
+        /// Общая яркость сцены: свет и окружающее освещение.
+        public void SetBrightness(float b)
+        {
+            RenderSettings.ambientSkyColor = Mats.Hex("#cfdcff") * 0.8f * b;
+            RenderSettings.ambientEquatorColor = Mats.Hex("#b7b2d6") * 0.68f * b;
+            RenderSettings.ambientGroundColor = Mats.Hex("#8a86b0") * 0.55f * b;
+            if (Sun != null) Sun.intensity = 0.95f * b;
         }
 
         public void SetQuality(int level)

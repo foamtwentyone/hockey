@@ -27,6 +27,8 @@ namespace Hockey.EditorTools
             EnsureMaterials();
             EnsureScene();
             PlayerSettings.runInBackground = true;
+            // одно цветовое пространство у всех (картинка настроена под Gamma)
+            if (PlayerSettings.colorSpace != ColorSpace.Gamma) PlayerSettings.colorSpace = ColorSpace.Gamma;
             if (PlayerSettings.productName == "unity" || PlayerSettings.productName == "Дворовый хоккей 3D" || PlayerSettings.productName == "Шайбятки" || PlayerSettings.productName == "Pucklings" || string.IsNullOrEmpty(PlayerSettings.productName))
                 PlayerSettings.productName = "Pucko";
         }

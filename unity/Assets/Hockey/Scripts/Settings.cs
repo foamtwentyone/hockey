@@ -17,6 +17,8 @@ namespace Hockey
         public static bool Names = true;
         public static bool ScreenShake = true;
         public static float UiScale = 1f;
+        public static float Brightness = 0.9f;
+        public static bool Post = true;
 
         public static void Load()
         {
@@ -35,6 +37,8 @@ namespace Hockey
             Names = PlayerPrefs.GetInt("s.names", 1) == 1;
             ScreenShake = PlayerPrefs.GetInt("s.shake", 1) == 1;
             UiScale = PlayerPrefs.GetFloat("s.ui", UiScale);
+            Brightness = PlayerPrefs.GetFloat("s.bright", Brightness);
+            Post = PlayerPrefs.GetInt("s.post", 1) == 1;
         }
 
         public static void Save()
@@ -54,13 +58,15 @@ namespace Hockey
             PlayerPrefs.SetInt("s.names", Names ? 1 : 0);
             PlayerPrefs.SetInt("s.shake", ScreenShake ? 1 : 0);
             PlayerPrefs.SetFloat("s.ui", UiScale);
+            PlayerPrefs.SetFloat("s.bright", Brightness);
+            PlayerPrefs.SetInt("s.post", Post ? 1 : 0);
             PlayerPrefs.Save();
         }
 
         public static void ResetDefaults()
         {
             Master = 0.8f; Sfx = 1f; Crowd = 0.8f; Music = 0.5f; Quality = 2; Fov = 62; CamDistance = 1; MouseSens = 1;
-            InvertY = false; AutoCamera = true; Hints = true; Names = true; ScreenShake = true; UiScale = 1;
+            InvertY = false; AutoCamera = true; Hints = true; Names = true; ScreenShake = true; UiScale = 1; Brightness = 0.9f; Post = true;
         }
 
         public static void ApplyDisplay()

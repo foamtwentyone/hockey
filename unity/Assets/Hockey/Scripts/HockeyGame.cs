@@ -113,6 +113,7 @@ namespace Hockey
         void ApplySettings()
         {
             arena.SetQuality(Settings.Quality);
+            arena.SetBrightness(Settings.Brightness);
             Settings.ApplyDisplay();
         }
 

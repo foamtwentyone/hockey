@@ -581,6 +581,9 @@ namespace Hockey
             Settings.Names = Toggle("Имена над игроками", Settings.Names);
             Settings.ScreenShake = Toggle("Тряска экрана", Settings.ScreenShake);
             Settings.UiScale = Slider("Размер интерфейса", Settings.UiScale, 0.7f, 1.4f, $"{Settings.UiScale * 100:0}%");
+            float br = Slider("Яркость", Settings.Brightness, 0.5f, 1.3f, $"{Settings.Brightness * 100:0}%");
+            if (Mathf.Abs(br - Settings.Brightness) > 0.001f) { Settings.Brightness = br; arena.SetBrightness(br); }
+            Settings.Post = Toggle("Постобработка", Settings.Post);
             GUILayout.EndVertical();
             GUILayout.EndHorizontal();
             GUILayout.Space(10);
