@@ -11,6 +11,10 @@ namespace Hockey
         public Transform Root;
         readonly List<Transform> crowdGroups = new List<Transform>();
         readonly List<float> crowdPhase = new List<float>();
+        readonly List<float> crowdSector = new List<float>();
+        float waveT = -10, nextWave = 12;
+        /// Запустить «волну» на трибунах.
+        public void Wave(float time) { waveT = time; }
         public float Excite;
         Texture2D scoreTex;
         Color32[] scorePx;
@@ -158,46 +162,95 @@ namespace Hockey
             // светящаяся полоса над трибунами
             Obj("Ribbon", MeshKit.RingWall(10.45f, 10.5f, 6.4f, 7.0f, true, false, false), Mats.Emissive("#5cf2ff", 0.9f), Root, Vector3.zero);
 
-            // зрители: объединённые меши, каждая группа «прыгает» со своей фазой
-            string[] shirts = { "#ef5a4c", "#4a8ff0", "#ffd23f", "#2fd17f", "#ff8a3d", "#ffffff", "#9b6bff", "#ff7ad9", "#2a2a3a" };
+            // зрители: мини-болельщики в шапках и шарфах, с флагами и плакатами.
+            // Группы — сектора по кругу арены (для «волны»), в каждом секторе две подгруппы с разной фазой.
             var palette = new List<Color>();
-            foreach (var s in shirts) palette.Add(Mats.Hex(s));
-            foreach (var s in CharacterRig.Skins) palette.Add(Mats.Hex(s));
-            var mat = Mats.Toon(Tex.Palette(palette), "#ffffff", 0.05f);
-            const int groups = 12;
-            var builders = new MeshBuilder[groups];
-            for (int i = 0; i < groups; i++) builders[i] = new MeshBuilder();
+            var palIdx = new Dictionary<string, int>();
+            int Pal(string hex) { if (!palIdx.TryGetValue(hex, out int i)) { i = palette.Count; palIdx[hex] = i; palette.Add(Mats.Hex(hex)); } return i; }
+            string[] shirts = { "#ef5a4c", "#4a8ff0", "#ffd23f", "#2fd17f", "#ff8a3d", "#ffffff", "#9b6bff", "#ff7ad9", "#2a2a3a" };
+            string[] hairs = { "#7a4a2a", "#3a271b", "#d6943f", "#f0c95e", "#a8502c", "#26232b" };
+            foreach (var h in shirts) Pal(h);
+            foreach (var h in hairs) Pal(h);
+            foreach (var h in CharacterRig.Skins) Pal(h);
+            Pal("#1d1b26"); Pal("#ffffff"); Pal("#8a5a32"); Pal("#ef5a4c"); Pal("#4a8ff0");
+            var crowdTex = new Texture2D(64, 1, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp };
+            var crowdBuilders = new Dictionary<int, MeshBuilder>();
             var rnd = new System.Random(3);
-            int n = 0;
-            Vector2 PalUV(int i) => new Vector2((i + 0.5f) / palette.Count, 0.5f);
+            const int sectors = 24;
+            MeshBuilder B(int g) { if (!crowdBuilders.TryGetValue(g, out var mb)) { mb = new MeshBuilder(); crowdBuilders[g] = mb; } return mb; }
+            Vector2 UV(int i) => new Vector2((i + 0.5f) / 64f, 0.5f);
+            void Box(MeshBuilder mb, Vector3 size, float r, Vector3 pos, Quaternion rot, int col) =>
+                MeshKit.RoundedBoxData(mb, size, r, 1, Matrix4x4.TRS(pos, rot, Vector3.one), UV(col), true, 0.15f);
             foreach (var row in rows)
             {
                 var pts = MeshKit.Perimeter(row.off, 30);
                 float total = MeshKit.Length(pts);
                 for (float s = 0.4f; s < total; s += 0.75f)
                 {
-                    if (rnd.NextDouble() < 0.18) continue;
+                    if (rnd.NextDouble() < 0.15) continue;
                     var p = MeshKit.PointAt(pts, s);
                     var rot = Quaternion.LookRotation(new Vector3(-p.Nx, 0, -p.Nz));
-                    var mb = builders[n++ % groups];
-                    int shirt = rnd.Next(shirts.Length);
-                    var body = Matrix4x4.TRS(new Vector3(p.X, row.y + 0.3f, p.Z), rot, Vector3.one);
-                    var head = Matrix4x4.TRS(new Vector3(p.X, row.y + 0.8f, p.Z), rot, Vector3.one);
-                    MeshKit.RoundedBoxData(mb, new Vector3(0.48f, 0.56f, 0.36f), 0.16f, 1, body, PalUV(shirt), true);
-                    MeshKit.RoundedBoxData(mb, new Vector3(0.42f, 0.4f, 0.38f), 0.16f, 1, head, PalUV(shirts.Length + rnd.Next(CharacterRig.Skins.Length)), true);
-                    if (rnd.NextDouble() < 0.3)
+                    float ang = Mathf.Atan2(p.Z, p.X);
+                    int sector = Mathf.Clamp((int)((ang + Mathf.PI) / (Mathf.PI * 2) * sectors), 0, sectors - 1);
+                    var mb = B(sector * 2 + rnd.Next(2));
+                    // болельщики красных — на «красной» половине, синих — на другой
+                    bool redFan = p.X < 0 ? rnd.NextDouble() < 0.75 : rnd.NextDouble() < 0.25;
+                    string team = redFan ? "#ef5a4c" : "#4a8ff0";
+                    int shirt = rnd.NextDouble() < 0.6 ? Pal(team) : Pal(shirts[rnd.Next(shirts.Length)]);
+                    int skin = Pal(CharacterRig.Skins[rnd.Next(CharacterRig.Skins.Length)]);
+                    var basePos = new Vector3(p.X, row.y, p.Z);
+                    Vector3 L(float x, float y, float z) => basePos + rot * new Vector3(x, y, z);
+                    float sc = 0.9f + (float)rnd.NextDouble() * 0.2f;
+                    Box(mb, new Vector3(0.46f, 0.5f, 0.34f) * sc, 0.16f, L(0, 0.27f * sc, 0), rot, shirt);                // тело
+                    Box(mb, new Vector3(0.5f, 0.46f, 0.44f) * sc, 0.2f, L(0, 0.75f * sc, 0), rot, skin);                  // голова
+                    int eye = Pal("#1d1b26");
+                    for (int e = -1; e <= 1; e += 2) Box(mb, new Vector3(0.06f, 0.1f, 0.03f), 0.02f, L(e * 0.1f * sc, 0.76f * sc, 0.22f * sc), rot, eye);
+                    double hatRoll = rnd.NextDouble();
+                    if (hatRoll < 0.4)
                     {
-                        // поднятые руки
-                        var arm = Matrix4x4.TRS(new Vector3(p.X, row.y + 0.9f, p.Z) + rot * new Vector3(0.3f, 0, 0), rot * Quaternion.Euler(0, 0, -15), Vector3.one);
-                        MeshKit.RoundedBoxData(mb, new Vector3(0.12f, 0.45f, 0.12f), 0.05f, 1, arm, PalUV(shirt), true);
+                        // шапка-бини в цвет команды с белым помпоном
+                        Box(mb, new Vector3(0.53f, 0.24f, 0.47f) * sc, 0.12f, L(0, 0.98f * sc, -0.01f), rot, Pal(team));
+                        Box(mb, new Vector3(0.54f, 0.07f, 0.48f) * sc, 0.03f, L(0, 0.88f * sc, -0.01f), rot, Pal("#ffffff"));
+                        Box(mb, new Vector3(0.14f, 0.14f, 0.14f) * sc, 0.07f, L(0, 1.13f * sc, -0.01f), rot, Pal("#ffffff"));
                     }
+                    else if (hatRoll < 0.55)
+                        Box(mb, new Vector3(0.52f, 0.12f, 0.46f) * sc, 0.06f, L(0, 0.97f * sc, 0), rot, Pal(shirts[rnd.Next(shirts.Length)])); // кепка
+                    else
+                        Box(mb, new Vector3(0.52f, 0.16f, 0.46f) * sc, 0.08f, L(0, 0.96f * sc, -0.02f), rot, Pal(hairs[rnd.Next(hairs.Length)])); // волосы
+                    if (rnd.NextDouble() < 0.35)
+                        Box(mb, new Vector3(0.48f, 0.1f, 0.38f) * sc, 0.05f, L(0, 0.52f * sc, 0.01f), rot, Pal(team));           // шарф
+                    double hands = rnd.NextDouble();
+                    if (hands < 0.07)
+                    {
+                        // флаг команды
+                        Box(mb, new Vector3(0.04f, 1.3f, 0.04f), 0.015f, L(0.28f, 1.1f, 0.05f), rot, Pal("#8a5a32"));
+                        Box(mb, new Vector3(0.7f, 0.45f, 0.03f), 0.02f, L(0.65f, 1.5f, 0.05f), rot, Pal(team));
+                        Box(mb, new Vector3(0.7f, 0.08f, 0.035f), 0.01f, L(0.65f, 1.5f, 0.05f), rot, Pal("#ffffff"));
+                    }
+                    else if (hands < 0.12)
+                    {
+                        // плакат над головой
+                        Box(mb, new Vector3(0.75f, 0.42f, 0.04f), 0.03f, L(0, 1.45f, 0.05f), rot, Pal("#ffffff"));
+                        Box(mb, new Vector3(0.6f, 0.1f, 0.045f), 0.02f, L(0, 1.5f, 0.05f), rot, Pal(team));
+                        Box(mb, new Vector3(0.4f, 0.06f, 0.045f), 0.02f, L(0, 1.36f, 0.05f), rot, Pal(team));
+                        for (int a = -1; a <= 1; a += 2) Box(mb, new Vector3(0.1f, 0.4f, 0.1f), 0.04f, L(a * 0.25f, 1.05f, 0.03f), rot, shirt);
+                    }
+                    else if (hands < 0.4)
+                        for (int a = -1; a <= 1; a += 2)
+                            Box(mb, new Vector3(0.11f, 0.42f, 0.11f), 0.045f, L(a * 0.29f * sc, 0.95f * sc, 0.02f), rot * Quaternion.Euler(0, 0, -a * 18), shirt); // руки вверх
                 }
             }
-            for (int i = 0; i < groups; i++)
+            var px = new Color[64];
+            for (int i = 0; i < 64; i++) px[i] = i < palette.Count ? palette[i] : Color.white;
+            crowdTex.SetPixels(px); crowdTex.Apply();
+            var mat = Mats.Toon(crowdTex, "#ffffff", 0.05f);
+            foreach (var kv in crowdBuilders)
             {
-                var go = Obj("Crowd", builders[i].ToMesh("crowd"), mat, Root, Vector3.zero, false, true);
+                var go = Obj("Crowd", kv.Value.ToMesh("crowd"), mat, Root, Vector3.zero, false, true);
                 crowdGroups.Add(go.transform);
-                crowdPhase.Add(i * 1.7f);
+                int sector = kv.Key / 2;
+                crowdPhase.Add(sector * (Mathf.PI * 2 / sectors) + (kv.Key % 2) * 2.1f);
+                crowdSector.Add(sector * (Mathf.PI * 2 / sectors));
             }
 
             // прожекторы и лучи света
@@ -288,10 +341,20 @@ namespace Hockey
         {
             if (!probeRendered && probe.enabled) { probe.RenderProbe(); probeRendered = true; }
             Excite = Mathf.Max(0, Excite - dt * 0.25f);
+            if (time > nextWave) { waveT = time; nextWave = time + 25 + Mathf.Repeat(time * 7.3f, 15); }
+            if (Excite > 0.95f && time - waveT > 6) waveT = time;
             for (int i = 0; i < crowdGroups.Count; i++)
             {
                 float speed = 2.2f + (i % 4) * 0.6f + Excite * 4;
                 float bob = Mathf.Max(0, Mathf.Sin(time * speed + crowdPhase[i])) * (0.03f + Excite * 0.35f);
+                // «волна»: гребень бежит по кругу арены за ~5 секунд
+                float wt = time - waveT;
+                if (wt >= 0 && wt < 6)
+                {
+                    float front = wt / 5f * Mathf.PI * 2 - Mathf.PI;
+                    float d = Mathf.Abs(Mathf.DeltaAngle(front * Mathf.Rad2Deg, (crowdSector[i] - Mathf.PI) * Mathf.Rad2Deg)) * Mathf.Deg2Rad;
+                    bob += Mathf.Max(0, 1 - d / 0.5f) * 0.6f;
+                }
                 crowdGroups[i].localPosition = new Vector3(0, bob, 0);
             }
             for (int i = 0; i < beams.Count; i++)
