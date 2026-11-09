@@ -103,7 +103,7 @@ namespace Hockey
                 w.Write(Q(p.X, 100)); w.Write(Q(p.Z, 100)); w.Write(Q(p.H, 1000)); w.Write(Q(p.Spd, 100));
                 w.Write((byte)(p.Charge * 255)); w.Write((byte)(Math.Min(1, p.Swing) * 255)); w.Write((byte)(Math.Min(1, p.Save) * 255));
                 w.Write((byte)(p.Stamina * 255));
-                w.Write((byte)((p.Stun ? 1 : 0) | (p.Back ? 2 : 0) | (p.Dive ? 4 : 0) | (p.Punch ? 8 : 0) | (p.Brawl ? 16 : 0) | (p.Stagger ? 32 : 0)));
+                w.Write((byte)((p.Stun ? 1 : 0) | (p.Back ? 2 : 0) | (p.Dive ? 4 : 0) | (p.Punch ? 8 : 0) | (p.Brawl ? 16 : 0) | (p.Stagger ? 32 : 0) | (p.Helmet ? 64 : 0)));
                 w.Write((byte)Math.Min(255, p.BrawlPower));
                 w.Write((byte)p.Goals); w.Write((byte)p.Assists);
                 w.Write(Q(p.Y, 100)); w.Write(p.Buffs);
@@ -132,7 +132,7 @@ namespace Hockey
                 p.X = r.ReadInt16() / 100f; p.Z = r.ReadInt16() / 100f; p.H = r.ReadInt16() / 1000f; p.Spd = r.ReadInt16() / 100f;
                 p.Charge = r.ReadByte() / 255f; p.Swing = r.ReadByte() / 255f; p.Save = r.ReadByte() / 255f; p.Stamina = r.ReadByte() / 255f;
                 int f = r.ReadByte(); p.Stun = (f & 1) != 0; p.Back = (f & 2) != 0; p.Dive = (f & 4) != 0;
-                p.Punch = (f & 8) != 0; p.Brawl = (f & 16) != 0; p.Stagger = (f & 32) != 0;
+                p.Punch = (f & 8) != 0; p.Brawl = (f & 16) != 0; p.Stagger = (f & 32) != 0; p.Helmet = (f & 64) != 0;
                 p.BrawlPower = r.ReadByte();
                 p.Goals = r.ReadByte(); p.Assists = r.ReadByte();
                 p.Y = r.ReadInt16() / 100f; p.Buffs = r.ReadByte();

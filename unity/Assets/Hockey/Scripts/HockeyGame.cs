@@ -488,6 +488,7 @@ namespace Hockey
                 po.Spd = Mathf.Lerp(pa.Spd, pb.Spd, kk); po.Charge = Mathf.Lerp(pa.Charge, pb.Charge, kk);
                 po.Stun = pb.Stun; po.Back = pb.Back; po.Dive = pb.Dive; po.Swing = pb.Swing; po.Save = pb.Save; po.Stamina = pb.Stamina;
                 po.Buffs = pb.Buffs; po.Goals = pb.Goals; po.Assists = pb.Assists;
+                po.Helmet = pb.Helmet; po.Punch = pb.Punch; po.Brawl = pb.Brawl; po.Stagger = pb.Stagger; po.BrawlPower = pb.BrawlPower;
             }
             bool ptele = Mathf.Abs(a.PuckX - b.PuckX) + Mathf.Abs(a.PuckZ - b.PuckZ) > 4;
             float pk = ptele ? 1 : k;
@@ -630,6 +631,30 @@ namespace Hockey
                     fx.Shockwave(who, Color.white, 2.6f);
                     fx.Puff(who, 6, Color.white, 0.5f, 2f, 0.45f);
                     break;
+                case EvType.HelmetOff:
+                    {
+                        if (Settings.ScreenShake) shake = Mathf.Max(shake, 0.2f);
+                        var dir = new Vector3(Mathf.Sin(e.Value), 0, Mathf.Cos(e.Value));
+                        if (e.Who >= 0 && e.Who < chars.Count && chars[e.Who].KK != null)
+                        {
+                            fx.FlyingHelmet(chars[e.Who].KK.HelmetParts, dir * 5f + Vector3.up * 6f);
+                            chars[e.Who].KK.SetHelmet(false);
+                            chars[e.Who].KK.KickHead(9);
+                            chars[e.Who].Kick(-2);
+                        }
+                        fx.Pow(who + Vector3.up * 1.7f, 0.9f);
+                        fx.Sparks(who + Vector3.up * 1.6f, Color.white, 16, 4);
+                        Toast(e.Who, "ШЛЕМ СЛЕТЕЛ!\nберегите голову", Mats.Hex("#ffd23f"));
+                        break;
+                    }
+                case EvType.Knockout:
+                    if (Settings.ScreenShake) shake = Mathf.Max(shake, 0.35f);
+                    if (e.Who >= 0 && e.Who < chars.Count && chars[e.Who].KK != null) chars[e.Who].KK.KickHead(14);
+                    fx.Pow(who + Vector3.up * 1.6f, 1.5f);
+                    fx.Sparks(who + Vector3.up * 1.6f, Mats.Hex("#ffd23f"), 30, 5);
+                    fx.Shockwave(who, Mats.Hex("#ffd23f"), 3f);
+                    Toast(e.Who, "НОКАУТ!\nотдыхает со звёздочками", Mats.Hex("#ff6a4e"));
+                    break;
                 case EvType.Punch:
                     if (Settings.ScreenShake) shake = Mathf.Max(shake, 0.12f);
                     fx.Pow(who + Vector3.up * 1.4f, 0.7f);
@@ -683,6 +708,12 @@ namespace Hockey
                 case EvType.Save: fx.Sparks(who + Vector3.up * 0.8f, Color.white, 12, 3); fx.Shockwave(who, Mats.Hex("#5fe1ff"), 2.4f); fx.Pow(who + Vector3.up * 1.2f, 0.6f); break;
                 case EvType.Post: fx.Sparks(new Vector3(st.PuckX, 0.6f, st.PuckZ), Color.white, 14, 4); break;
             }
+        }
+
+        void Toast(int who, string text, Color c)
+        {
+            foreach (var v in views)
+                if (v.Follow == who) { v.Toast = text; v.ToastColor = c; v.ToastT = 2.4f; }
         }
 
         void MenuScene(float dt)

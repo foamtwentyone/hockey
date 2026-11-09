@@ -18,6 +18,36 @@ namespace Hockey
         readonly List<(float t, Vector3 pos, Color col)> fireworks = new List<(float, Vector3, Color)>();
         readonly Dictionary<int, Transform> clouds = new Dictionary<int, Transform>();
         float time;
+        class Flyer { public Transform T; public Vector3 V, W; public float Age, Floor; }
+        readonly List<Flyer> flyers = new List<Flyer>();
+
+        /// Слетевший шлем: копия деталей летит, кувыркается и отскакивает от льда.
+        public void FlyingHelmet(List<Transform> parts, Vector3 vel)
+        {
+            if (parts == null || parts.Count == 0) return;
+            var center = Vector3.zero; int n = 0;
+            foreach (var p in parts) if (p != null) { center += p.position; n++; }
+            if (n == 0) return;
+            center /= n;
+            var root = new GameObject("FlyingHelmet").transform;
+            root.SetParent(this.root, false);
+            root.position = center;
+            float minY = 0;
+            foreach (var p in parts)
+            {
+                if (p == null) continue;
+                var mf = p.GetComponent<MeshFilter>(); var mr = p.GetComponent<MeshRenderer>();
+                if (mf == null || mr == null) continue;
+                var c = new GameObject("piece");
+                c.transform.SetPositionAndRotation(p.position, p.rotation);
+                c.transform.localScale = p.lossyScale;
+                c.AddComponent<MeshFilter>().sharedMesh = mf.sharedMesh;
+                var r = c.AddComponent<MeshRenderer>(); r.sharedMaterial = mr.sharedMaterial;
+                c.transform.SetParent(root, true);
+                minY = Mathf.Min(minY, (p.position - center).y);
+            }
+            flyers.Add(new Flyer { T = root, V = vel, W = new Vector3(Random.Range(-12f, -6f), Random.Range(-6f, 6f), Random.Range(-8f, 8f)), Floor = -minY + 0.05f });
+        }
         readonly Transform root;
         readonly List<GameObject>[] itemPool = { new List<GameObject>(), new List<GameObject>(), new List<GameObject>(), new List<GameObject>(), new List<GameObject>() };
 
@@ -178,6 +208,27 @@ namespace Hockey
                 else if (FacingCam != null) b.T.rotation = Quaternion.LookRotation(b.T.position - FacingCam.transform.position) * Quaternion.Euler(0, 0, b.Age * 200);
                 var c = b.Col; c.a = Mathf.Clamp01((1 - k) * 1.6f) * (b.Ring ? 0.7f : 1);
                 b.Mat.color = c;
+            }
+            for (int i = flyers.Count - 1; i >= 0; i--)
+            {
+                var f = flyers[i];
+                f.Age += dt;
+                if (f.Age > 9 || f.T == null) { if (f.T != null) Object.Destroy(f.T.gameObject); flyers.RemoveAt(i); continue; }
+                f.V += Vector3.down * 14 * dt;
+                var pos = f.T.position + f.V * dt;
+                if (pos.y < f.Floor)
+                {
+                    pos.y = f.Floor;
+                    if (f.V.y < -1.5f) { f.V.y = -f.V.y * 0.45f; f.W *= 0.6f; Puff(pos, 2, Color.white, 0.2f, 1f, 0.25f); }
+                    else f.V.y = 0;
+                    f.V.x *= 1 - dt * 1.5f; f.V.z *= 1 - dt * 1.5f;
+                    f.W *= 1 - dt * 2.5f;
+                }
+                // не вылетать за борта
+                if (Rink.Clamp(pos.x, pos.z, 0.3f, out var hit)) { pos.x = hit.X; pos.z = hit.Z; var nrm = new Vector3(hit.Nx, 0, hit.Nz); f.V -= 1.6f * Vector3.Dot(f.V, nrm) * nrm; }
+                f.T.position = pos;
+                f.T.rotation = Quaternion.Euler(f.W * dt * Mathf.Rad2Deg) * f.T.rotation;
+                if (f.Age > 8) f.T.localScale = Vector3.one * (9 - f.Age);
             }
             for (int i = fireworks.Count - 1; i >= 0; i--)
             {

@@ -78,7 +78,7 @@ namespace Hockey
     }
 
     public enum EvType : byte { Shot, Pass, Receive, Swish, Whoosh, Board, BoardPuck, Post, Hit, Body, Save, Deflect, Steal, Whistle, Goal, Horn, Overtime, End,
-        Jump, Dive, Land, Stop, PowerUp, Freeze, MegaShot, ItemSpawn, Punch, BrawlStart, BrawlEnd }
+        Jump, Dive, Land, Stop, PowerUp, Freeze, MegaShot, ItemSpawn, Punch, BrawlStart, BrawlEnd, HelmetOff, Knockout }
 
     public struct GameEvent
     {
@@ -122,7 +122,7 @@ namespace Hockey
     public class PlayerView
     {
         public float X, Z, H, Spd, Charge, Swing, Save, Stamina, Y;
-        public bool Stun, Back, Dive, Punch, Brawl, Stagger;
+        public bool Stun, Back, Dive, Punch, Brawl, Stagger, Helmet = true;
         public int BrawlPower;
         public byte Buffs;          // биты Buff
         public int Goals, Assists;
@@ -164,6 +164,8 @@ namespace Hockey
         public float Y, Vy, Dive, Recover, StopFx;
         public float Punch, PunchCd, Stagger, Brawl, BrawlX, BrawlZ, LastHitT = -9;
         public int BrawlWith = -1, BrawlPower, LastHitBy = -1;
+        public bool Helmet = true;
+        public float HeadCd;
         public readonly float[] Buffs = new float[5];
         public bool Has(Buff b) => Buffs[(int)b] > 0;
         public float Radius => Has(Buff.Giant) ? 0.62f : 0.45f;
@@ -307,6 +309,7 @@ namespace Hockey
                     p.Vx = p.Vz = 0; p.Charge = p.Stun = p.Checking = p.Swing = p.Save = 0;
                     p.Y = p.Vy = p.Dive = p.Recover = 0; p.Buffs[(int)Buff.Frozen] = 0;
                     p.Punch = p.Stagger = p.Brawl = 0; p.BrawlWith = -1;
+                    p.Helmet = true; p.HeadCd = 0;
                     p.H = Rink.TeamDir[t] > 0 ? MathF.PI / 2 : -MathF.PI / 2;
                     if (p.Goalie) { p.X = -Rink.TeamDir[t] * (Rink.GoalX - 0.9f); p.Z = 0; continue; }
                     int s = i % Spots.GetLength(0);
@@ -454,6 +457,7 @@ namespace Hockey
                 if (p.Stun <= 0) p.Recover = 0.25f;
             }
             p.Punch = MathF.Max(0, p.Punch - dt);
+            p.HeadCd = MathF.Max(0, p.HeadCd - dt);
             p.PunchCd = MathF.Max(0, p.PunchCd - dt);
             p.Stagger = MathF.Max(0, p.Stagger - dt);
             if (p.Brawl > 0) { UpdateBrawl(p, inp, dt); p.Prev = inp; return; }
@@ -609,6 +613,18 @@ namespace Hockey
                 target.NoPick = 0.5f;
             }
             Ev(EvType.Punch, p.Idx, target.Idx);
+        }
+
+        /// Для автотеста: запустить шайбу игроку в голову.
+        public void TestHeadShot(int idx)
+        {
+            var p = Players[idx];
+            float fx = MathF.Sin(p.H), fz = MathF.Cos(p.H);
+            Puck.Owner = -1; Puck.InNet = false;
+            Puck.X = p.X + fx * 2.5f; Puck.Z = p.Z + fz * 2.5f; Puck.Y = p.Y + 1.5f;
+            Puck.Vx = -fx * 22; Puck.Vz = -fz * 22; Puck.Vy = 1.2f;
+            Puck.LastTouch[0] = -1;
+            p.NoPick = 0; p.HeadCd = 0;
         }
 
         /// Для автотеста: принудительно начать драку.
@@ -1151,9 +1167,51 @@ namespace Hockey
             return true;
         }
 
+        /// Шайба в голову: первый раз слетает шлем, без шлема — нокаут со звёздочками.
+        bool PuckHead()
+        {
+            var pk = Puck;
+            if (pk.Y < 1.0f) return false;
+            foreach (var p in Players)
+            {
+                if (p.Goalie || p.HeadCd > 0 || p.NoPick > 0.15f || p.Brawl > 0) continue;
+                float headY = p.Y + 1.45f;
+                if (MathF.Abs(pk.Y - headY) > 0.4f) continue;
+                float dx = pk.X - p.X, dz = pk.Z - p.Z, d = Hyp(dx, dz);
+                if (d > 0.45f || d < 1e-4f) continue;
+                float rvx = pk.Vx - p.Vx, rvz = pk.Vz - p.Vz;
+                float spd = Hyp(rvx, rvz);
+                if (spd < 7 || (rvx * dx + rvz * dz) > 0) continue;   // должна лететь в голову, а не от неё
+                p.HeadCd = 0.6f;
+                float ang = MathF.Atan2(pk.Vx, pk.Vz);
+                // шайба отскакивает от головы вверх-назад
+                float nx = dx / d, nz = dz / d;
+                pk.Vx = nx * spd * 0.35f + Rnd(-1, 1); pk.Vz = nz * spd * 0.35f + Rnd(-1, 1); pk.Vy = Rnd(2, 4);
+                pk.X = p.X + nx * 0.5f; pk.Z = p.Z + nz * 0.5f;
+                pk.Mega = false;
+                if (p.Helmet)
+                {
+                    p.Helmet = false;
+                    p.Stagger = 0.6f;
+                    p.Vx += pk.Vx * 0.15f; p.Vz += pk.Vz * 0.15f;
+                    Ev(EvType.HelmetOff, ang, p.Idx);
+                }
+                else
+                {
+                    p.Stun = 3.5f; p.Charge = 0; p.Dive = 0;
+                    p.Vx = MathF.Sin(ang) * 3; p.Vz = MathF.Cos(ang) * 3;
+                    if (Puck.Owner == p.Idx) Puck.Owner = -1;
+                    Ev(EvType.Knockout, ang, p.Idx);
+                }
+                return true;
+            }
+            return false;
+        }
+
         void PuckBodies()
         {
             var pk = Puck;
+            if (PuckHead()) return;
             if (pk.Y > 1.5f) return;
             foreach (var p in Players)
             {
@@ -1365,6 +1423,7 @@ namespace Hockey
                 o.Goals = p.Goals; o.Assists = p.Assists;
                 o.Y = p.Y; o.Dive = p.Dive > 0;
                 o.Punch = p.Punch > 0; o.Brawl = p.Brawl > 0; o.Stagger = p.Stagger > 0; o.BrawlPower = p.BrawlPower;
+                o.Helmet = p.Helmet || p.Goalie;
                 byte bits = 0;
                 for (int b = 0; b < p.Buffs.Length; b++) if (p.Buffs[b] > 0) bits |= (byte)(1 << b);
                 o.Buffs = bits;

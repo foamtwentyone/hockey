@@ -34,11 +34,13 @@ namespace Hockey
             return go.transform;
         }
 
-        public static void Dress(Transform model, Dictionary<string, Transform> bones, Dictionary<string, SkinnedMeshRenderer> parts, int team, int number, bool goalie)
+        /// Надевает экипировку. Возвращает детали шлема (их можно сбить шайбой).
+        public static List<Transform> Dress(Transform model, Dictionary<string, Transform> bones, Dictionary<string, SkinnedMeshRenderer> parts, int team, int number, bool goalie)
         {
+            var helmet = new List<Transform>();
             var tc = TeamColors.All[team];
             var fr = new Frame { Fwd = model.forward, Up = Vector3.up, Right = model.right, Rot = model.rotation };
-            if (!parts.TryGetValue("Head", out var headR) || !bones.TryGetValue("head", out var head)) return;
+            if (!parts.TryGetValue("Head", out var headR) || !bones.TryGetValue("head", out var head)) return helmet;
             var hb = WorldBounds(headR);
             var hs = hb.size; var hc = hb.center;
             float u = hs.x; // базовый размер — ширина головы
@@ -51,17 +53,17 @@ namespace Hockey
             {
                 var hp = hc + fr.Up * hs.y * 0.2f - fr.Fwd * hs.z * 0.05f;
                 var rot = fr.Rot * Quaternion.Euler(-8, 0, 0);
-                Piece(MeshKit.Superellipsoid(hs.x * 0.57f, hs.y * 0.5f, hs.z * 0.6f, 0.55f, 0.75f, 32, -0.28f, Mathf.PI / 2), team1, hp, rot, head);
-                Piece(MeshKit.Superellipsoid(u * 0.07f, hs.y * 0.08f, hs.z * 0.5f, 0.5f, 0.5f, 16), dark, hp + fr.Up * hs.y * 0.47f, rot, head);
+                helmet.Add(Piece(MeshKit.Superellipsoid(hs.x * 0.57f, hs.y * 0.5f, hs.z * 0.6f, 0.55f, 0.75f, 32, -0.28f, Mathf.PI / 2), team1, hp, rot, head));
+                helmet.Add(Piece(MeshKit.Superellipsoid(u * 0.07f, hs.y * 0.08f, hs.z * 0.5f, 0.5f, 0.5f, 16), dark, hp + fr.Up * hs.y * 0.47f, rot, head));
                 for (int i = 0; i < 2; i++)
                 {
                     float sd = i == 0 ? 1 : -1;
-                    Piece(MeshKit.Superellipsoid(u * 0.08f, hs.y * 0.17f, hs.z * 0.2f, 0.6f, 0.6f, 16), team1, hc + fr.Right * sd * hs.x * 0.53f + fr.Up * hs.y * 0.02f, fr.Rot, head);
+                    helmet.Add(Piece(MeshKit.Superellipsoid(u * 0.08f, hs.y * 0.17f, hs.z * 0.2f, 0.6f, 0.6f, 16), team1, hc + fr.Right * sd * hs.x * 0.53f + fr.Up * hs.y * 0.02f, fr.Rot, head));
                 }
                 // прозрачный визор над глазами
-                Piece(MeshKit.Superellipsoid(hs.x * 0.585f, hs.y * 0.16f, hs.z * 0.63f, 0.9f, 0.8f, 28, -0.9f, 0.2f), visorM, hp - fr.Up * hs.y * 0.08f, rot, head, false);
+                helmet.Add(Piece(MeshKit.Superellipsoid(hs.x * 0.585f, hs.y * 0.16f, hs.z * 0.63f, 0.9f, 0.8f, 28, -0.9f, 0.2f), visorM, hp - fr.Up * hs.y * 0.08f, rot, head, false));
                 // ремешок
-                Piece(MeshKit.Superellipsoid(hs.x * 0.47f, hs.y * 0.03f, hs.z * 0.5f, 0.9f, 0.8f, 24, -0.6f, 0.6f), black, hc - fr.Up * hs.y * 0.36f, fr.Rot * Quaternion.Euler(-20, 0, 0), head);
+                helmet.Add(Piece(MeshKit.Superellipsoid(hs.x * 0.47f, hs.y * 0.03f, hs.z * 0.5f, 0.9f, 0.8f, 24, -0.6f, 0.6f), black, hc - fr.Up * hs.y * 0.36f, fr.Rot * Quaternion.Euler(-20, 0, 0), head));
             }
             else
             {
@@ -135,6 +137,7 @@ namespace Hockey
                         Piece(MeshKit.Superellipsoid(u * 0.215f, u * 0.03f, u * 0.175f, 0.3f, 0.45f, 16), team1, padC + fr.Up * b * h * 0.22f, fr.Rot, shin);
                 }
             }
+            return helmet;
         }
     }
 }

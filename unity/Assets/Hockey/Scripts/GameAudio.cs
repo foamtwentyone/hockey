@@ -47,6 +47,8 @@ namespace Hockey
             clips["hover"] = Glide(900, 1300, 0.045f, 0.12f, Wave.Sine, 0, 0);
             clips["punch"] = Mix(Noise(0.07f, 0.25f, 0.6f), Mix(Plop(220, 0.08f, 0.5f), Squeak(0.1f, 0.12f)));
             clips["brawl"] = Brawl(2.3f);
+            clips["helmet"] = Mix(Mix(Bonk(880, 0.35f, 0.45f), Bonk(1330, 0.3f, 0.3f)), Glide(900, 1400, 0.25f, 0.15f, Wave.Sine, 0, 0));
+            clips["ko"] = Mix(Bonk(180, 0.4f, 0.8f), Cuckoo());
             clips["brawlEnd"] = Mix(Bonk(240, 0.25f, 0.7f), Glide(1300, 300, 0.6f, 0.25f, Wave.Sine, 6, 30));
 
             music = host.AddComponent<AudioSource>();
@@ -280,6 +282,24 @@ namespace Hockey
             return Make(d);
         }
 
+        /// Мультяшная «кукушка» над нокаутированным.
+        static AudioClip Cuckoo()
+        {
+            int n = (int)(1.4f * Rate);
+            var d = new float[n];
+            float[] f = { 784, 622, 784, 622 };
+            for (int k = 0; k < 4; k++)
+            {
+                int s0 = (int)((0.35f + k * 0.25f) * Rate), len = (int)(0.18f * Rate);
+                for (int i = 0; i < len && s0 + i < n; i++)
+                {
+                    float t = i / (float)len;
+                    d[s0 + i] += Mathf.Sin(i / (float)Rate * f[k] * Mathf.PI * 2) * Mathf.Sin(t * Mathf.PI) * 0.22f;
+                }
+            }
+            return Make(d);
+        }
+
         static AudioClip Arp(float[] notes, float step, float vol)
         {
             int n = (int)((notes.Length * step + 0.25f) * Rate);
@@ -412,6 +432,8 @@ namespace Hockey
                 case EvType.Horn: case EvType.End: case EvType.Overtime: Play("horn", 0.8f); break;
                 case EvType.Jump: Play("jump", 0.6f, pr); break;
                 case EvType.Punch: Play("punch", 0.8f, pr); Cheer(0.2f, 0.4f); break;
+                case EvType.HelmetOff: Play("helmet", 0.9f, pr); Cheer(0.4f, 0.8f); break;
+                case EvType.Knockout: Play("ko", 1f); Cheer(0.6f, 1.5f); break;
                 case EvType.BrawlStart: Play("brawl", 0.8f); Cheer(0.45f, 2.2f); break;
                 case EvType.BrawlEnd: Play("brawlEnd", 0.9f); Cheer(0.5f, 1f); break;
                 case EvType.Dive: Play("dive", 0.6f, pr); break;

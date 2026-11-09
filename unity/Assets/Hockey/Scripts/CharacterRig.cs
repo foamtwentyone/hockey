@@ -123,11 +123,12 @@ namespace Hockey
                 c.Blob = Part(MeshKit.Plane(1.5f, 1.5f), blobMat, new Vector3(0, 0.008f, 0), c.Root, false, null, new Vector3(90, 0, 0));
                 // звёздочки над головой у оглушённого
                 c.Dizzy = Group("dizzy", c.Tilt, new Vector3(0, 2.0f, 0));
-                for (int i = 0; i < 3; i++)
+                for (int i = 0; i < 5; i++)
                 {
-                    var st = Part(MeshKit.Star(0.11f), Mats.Emissive("#ffd23f", 0.9f), Vector3.zero, c.Dizzy, false);
-                    float a = i * Mathf.PI * 2 / 3;
-                    st.localPosition = new Vector3(Mathf.Cos(a) * 0.38f, 0, Mathf.Sin(a) * 0.38f);
+                    var st = Part(MeshKit.Star(i % 2 == 0 ? 0.12f : 0.08f), Mats.Emissive(i % 2 == 0 ? "#ffd23f" : "#ffffff", 0.9f), Vector3.zero, c.Dizzy, false);
+                    float a = i * Mathf.PI * 2 / 5;
+                    st.localPosition = new Vector3(Mathf.Cos(a) * 0.4f, Mathf.Sin(a * 2) * 0.05f, Mathf.Sin(a) * 0.4f);
+                    st.localRotation = Quaternion.Euler(0, -a * Mathf.Rad2Deg + 90, 0);
                 }
                 c.Dizzy.gameObject.SetActive(false);
                 // следы коньков на льду
@@ -368,9 +369,17 @@ namespace Hockey
                 Blob.localPosition = new Vector3(0, 0.008f - s.Y, 0);
                 Blob.gameObject.SetActive(!brawl);
                 if (Scale.gameObject.activeSelf == brawl) Scale.gameObject.SetActive(!brawl); // в драке видно только облако
+                KK.SetHelmet(s.Helmet);
                 bool dizzy = (s.Stun || s.Stagger) && !brawl;
                 Dizzy.gameObject.SetActive(dizzy);
-                if (dizzy) Dizzy.localRotation = Quaternion.Euler(0, time * 240, 0);
+                if (dizzy)
+                {
+                    // звёздочки кружатся над головой — даже когда игрок лежит на льду
+                    if (KK.Head != null) Dizzy.position = KK.Head.position + Vector3.up * (s.Stun ? 0.75f : 0.85f);
+                    Dizzy.rotation = Quaternion.Euler(Mathf.Sin(time * 3) * 12, time * 260, 0);
+                    float pulse = 1 + Mathf.Sin(time * 9) * 0.1f;
+                    Dizzy.localScale = new Vector3(pulse, pulse, pulse);
+                }
                 bool trail = !air && spd > 1.5f && !brawl && !s.Stun;
                 foreach (var t in Trails) t.emitting = trail;
                 if (brawl) return;

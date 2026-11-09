@@ -13,6 +13,8 @@ namespace Hockey
     public class KayKitCharacter
     {
         public Transform Model, HandR, Head, StickBlade, Stick;
+        public List<Transform> HelmetParts = new List<Transform>();
+        Spring headKick;
         float stickLen;
         public bool Goalie;
         PlayableGraph graph;
@@ -159,7 +161,7 @@ namespace Hockey
             }
 
             k.graph.Evaluate(0);
-            HockeyGear.Dress(go.transform, bones, parts, team, number, goalie);
+            k.HelmetParts = HockeyGear.Dress(go.transform, bones, parts, team, number, goalie);
             if (k.HandR != null) k.BuildStick(team, Mats.Hex(TapeColors[Mathf.Abs(tape) % TapeColors.Length]));
             go.AddComponent<KayKitGraphOwner>().Graph = k.graph;
             return k;
@@ -393,7 +395,19 @@ namespace Hockey
             upperLayerW += (upper - upperLayerW) * k;
             Apply();
             graph.Evaluate(0);
+            // откинутая ударом голова — пружиной поверх анимации
+            headKick.Step(0, 2.2f, 0.25f, dt);
+            if (Head != null && Mathf.Abs(headKick.X) > 0.001f)
+                Head.rotation = Quaternion.AngleAxis(-headKick.X * Mathf.Rad2Deg, Model.right) * Head.rotation;
             AimStick(s);
+        }
+
+        /// Удар по голове: голова резко откидывается назад и качается.
+        public void KickHead(float strength) { headKick.V += strength; }
+
+        public void SetHelmet(bool on)
+        {
+            foreach (var t in HelmetParts) if (t != null && t.gameObject.activeSelf != on) t.gameObject.SetActive(on);
         }
 
         /// После анимации наводим клюшку из руки на точку на льду справа-спереди (замах — вверх-назад, бросок — вперёд).

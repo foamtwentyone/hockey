@@ -220,6 +220,27 @@ namespace Hockey
                 autoFreeze = false;
             }
 
+            // шайба в голову: сначала слетает шлем, потом нокаут
+            if (me != null)
+            {
+                me.Stun = 0; me.Brawl = 0; me.Vx = me.Vz = 0;
+                foreach (var v in views) v.Init = false;
+                autoInput = default;
+                yield return Wait(0.5f);
+                sim.TestHeadShot(me.Idx);
+                yield return Wait(0.35f);
+                yield return Shot("19d_helmet_off");
+                yield return Wait(0.9f);
+                yield return Shot("19e_helmet_on_ice");
+                Log($"После попадания: шлем={me.Helmet}");
+                me.Stagger = 0;
+                sim.TestHeadShot(me.Idx);
+                yield return Wait(1.6f);
+                yield return Shot("19f_knockout");
+                Log($"Нокаут: оглушён={me.Stun > 0} ({me.Stun:F1} c)");
+                yield return Wait(2.5f);
+            }
+
             // драка: ставим соперника рядом и сцепляем
             if (me != null)
             {
