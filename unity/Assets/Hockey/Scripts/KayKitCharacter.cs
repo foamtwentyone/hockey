@@ -13,11 +13,11 @@ namespace Hockey
     public class KayKitCharacter
     {
         public Transform Model, HandR, Head, StickBlade, Stick;
-        Transform armL0, armL1, armL2;   // плечо, предплечье, кисть левой руки — для хвата клюшки двумя руками
+        Transform armL0, armL1, armL2, armR0, armR1, armR2;   // плечо, предплечье, кисть левой руки — для хвата клюшки двумя руками
         float gripW;
         readonly List<Transform> hands = new List<Transform>();
         const float HandShrink = 0.62f;
-        const float StickTop = 0.36f, GripL = 0.27f;
+        const float StickTop = 0.36f, GripL = 0.26f;
         public List<Transform> HelmetParts = new List<Transform>();
         Spring headKick;
         float stickLen;
@@ -151,6 +151,9 @@ namespace Hockey
                 else if (t.name == "upperarm.l") k.armL0 = t;
                 else if (t.name == "lowerarm.l") k.armL1 = t;
                 else if (t.name == "hand.l") k.armL2 = t;
+                else if (t.name == "upperarm.r") k.armR0 = t;
+                else if (t.name == "lowerarm.r") k.armR1 = t;
+                else if (t.name == "hand.r") k.armR2 = t;
                 else if (t.name == "head") k.Head = t;
             }
 
@@ -431,42 +434,70 @@ namespace Hockey
             // левая рука держит клюшку за верх рукояти (правая — ниже), и при замахе, и при броске
             bool grip = !Goalie && upper > 0.5f && punchT >= 0.4f && !s.Brawl && !s.Stun;
             gripW += ((grip ? 1 : 0) - gripW) * (1 - Mathf.Exp(-dt * 12));
-            if (gripW > 0.01f && Stick != null) GripLeft(gripW);
+            if (gripW > 0.01f && Stick != null) TwoHandGrip(s, gripW);
         }
 
-        /// Двухзвенный IK левой руки: кисть — к точке хвата на рукояти, локоть остаётся в плоскости анимации.
-        void GripLeft(float w)
+        /// Хват двумя руками: верх рукояти — в левой руке перед животом, правая ниже по древку;
+        /// клюшка качается вокруг верхней руки (замах, бросок), обе руки тянутся к своим точкам IK.
+        void TwoHandGrip(PlayerView s, float w)
         {
-            if (armL0 == null || armL1 == null || armL2 == null) return;
-            Vector3 a = armL0.position, b = armL1.position, c = armL2.position;
-            // хват — ближайшая к левому плечу точка рукояти, но не ниже правой руки и не выше набалдашника
+            if (armL0 == null || armL1 == null || armL2 == null || armR0 == null || armR1 == null || armR2 == null) return;
+            var fwd = Model.forward; fwd.y = 0;
+            if (fwd.sqrMagnitude < 1e-4f) return;
+            fwd.Normalize();
+            var right = Vector3.Cross(Vector3.up, fwd);
+            float reach = (armL1.position - armL0.position).magnitude + (armL2.position - armL1.position).magnitude;
+            var chest = (armL0.position + armR0.position) * 0.5f;
+            // верх рукояти: перед животом, чуть левее середины
+            var top = chest + Vector3.down * reach * 0.38f + fwd * reach * 0.45f - right * reach * 0.04f;
             float g = Stick.lossyScale.y;
-            float along = Vector3.Dot(a - Stick.position, Stick.up) / Mathf.Max(1e-4f, g);
-            var target = Stick.position + Stick.up * (Mathf.Clamp(along, 0.13f, GripL) * g);
-            float l1 = (b - a).magnitude, l2 = (c - b).magnitude;
-            // не тянемся, если рукоять далеко или выше плеча — иначе рука неестественно задирается
-            float reach = l1 + l2, dd = (target - a).magnitude;
-            float w0 = w;
-            w *= Mathf.Clamp01((reach * 1.3f - dd) / (reach * 0.3f));
-            w *= Mathf.Clamp01((a.y - target.y - reach * 0.1f) / (reach * 0.25f));
-            w *= Mathf.Clamp01(Vector3.Dot(target - a, Model.forward) / (reach * 0.2f) + 0.5f);   // рукоять перед грудью, а не за спиной
-            if (Application.isPlaying && System.Environment.CommandLine.Contains("-autotest") && Time.frameCount % 20 == 0)
-                Debug.Log($"[grip] {Model.root.name}@{Model.position:F2} shoulder={a:F2} hand={c:F2} target={target:F2} reach={reach:F2} d={dd:F2} w0={w0:F2} w={w:F2} stickUp={Stick.up:F2}");
-            if (w <= 0.001f) return;
+            var dir = StickDir(top, (stickLen - 0.25f + GripL) * g, s, fwd, right, out var bladeFwd);
+            var rot = Quaternion.LookRotation(bladeFwd, -dir);
+            var origin = top + dir * GripL * g;   // точка крепления клюшки (правая рука)
+            var slotOff = armR2.position - HandR.position;
+            Ik(armL0, armL1, armL2, top, w, -right);
+            Ik(armR0, armR1, armR2, origin + slotOff, w, right);
+            Stick.SetPositionAndRotation(Vector3.Lerp(Stick.position, origin, w), Quaternion.Slerp(Stick.rotation, rot, w));
+        }
+
+        /// Направление древка из точки pivot к крюку на льду (с замахом и проводкой), длина L.
+        Vector3 StickDir(Vector3 pivot, float L, PlayerView s, Vector3 fwd, Vector3 right, out Vector3 bladeFwd)
+        {
+            float g = Stick.lossyScale.y;
+            var target = Model.position + (fwd * (Goalie ? 0.75f : 0.95f) + right * (Goalie ? 0.05f : 0.32f)) * g;
+            float drop = pivot.y - (Model.position.y + 0.04f);
+            var hor = target - pivot; hor.y = 0;
+            Vector3 dir;
+            if (drop >= L || hor.sqrMagnitude < 1e-4f) dir = Vector3.down;
+            else dir = (hor.normalized * Mathf.Sqrt(L * L - drop * drop) + Vector3.down * drop) / L;
+            var wind = (-fwd * 0.45f + Vector3.up * 0.85f + right * 0.3f).normalized;
+            var follow = (fwd * 0.9f + Vector3.up * 0.1f - right * 0.4f).normalized;
+            dir = Vector3.Slerp(dir, wind, Mathf.Clamp01(s.Charge) * 0.9f);
+            if (swingT < 0.35f) dir = Vector3.Slerp(dir, follow, Mathf.Sin(swingT / 0.35f * Mathf.PI));
+            bladeFwd = Vector3.ProjectOnPlane(fwd, dir);
+            if (bladeFwd.sqrMagnitude < 1e-4f) bladeFwd = Vector3.ProjectOnPlane(right, dir);
+            bladeFwd.Normalize();
+            return dir;
+        }
+
+        /// Двухзвенный IK: кисть c — к target; локоть в плоскости текущей позы (или вниз-наружу).
+        static void Ik(Transform t0, Transform t1, Transform t2, Vector3 target, float w, Vector3 outward)
+        {
+            Vector3 a = t0.position, b = t1.position, c = t2.position;
             target = Vector3.Lerp(c, target, w);
+            float l1 = (b - a).magnitude, l2 = (c - b).magnitude;
             var at = target - a;
             float d = Mathf.Clamp(at.magnitude, Mathf.Abs(l1 - l2) + 1e-4f, (l1 + l2) * 0.999f);
             var dir = at.normalized;
-            // плоскость сгиба — по текущему локтю (если рука прямая — локоть вниз-наружу)
-            var pole = Vector3.ProjectOnPlane(b - a, dir);
-            if (pole.sqrMagnitude < 1e-6f) pole = Vector3.ProjectOnPlane(Vector3.down - Model.right * 0.5f, dir);
+            var pole = Vector3.ProjectOnPlane(Vector3.down * 0.6f + outward * 0.8f, dir);
+            if (pole.sqrMagnitude < 1e-6f) pole = Vector3.ProjectOnPlane(b - a, dir);
             pole.Normalize();
             float x = (l1 * l1 - l2 * l2 + d * d) / (2 * d);
             float h = Mathf.Sqrt(Mathf.Max(0, l1 * l1 - x * x));
             var elbow = a + dir * x + pole * h;
-            armL0.rotation = Quaternion.FromToRotation(b - a, elbow - a) * armL0.rotation;
-            var c2 = armL2.position; var b2 = armL1.position;
-            armL1.rotation = Quaternion.FromToRotation(c2 - b2, a + dir * d - b2) * armL1.rotation;
+            t0.rotation = Quaternion.FromToRotation(b - a, elbow - a) * t0.rotation;
+            var c2 = t2.position; var b2 = t1.position;
+            t1.rotation = Quaternion.FromToRotation(c2 - b2, a + dir * d - b2) * t1.rotation;
         }
 
         /// Удар по голове: голова резко откидывается назад и качается.
