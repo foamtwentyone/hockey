@@ -70,7 +70,8 @@ namespace Hockey
                     var up = Vector3.ProjectOnPlane(grip - shoulder, gripDir);
                     if (up.sqrMagnitude < 1e-6f) up = Vector3.ProjectOnPlane(Vector3.up, gripDir);
                     up.Normalize();
-                    var x = gripDir;
+                    // верхняя рука — хват сверху; нижняя (левая) — снизу: ладонь под древком, тыльная сторона вниз
+                    var x = g.Left ? -gripDir : gripDir;
                     g.Fist.SetPositionAndRotation(grip, Quaternion.LookRotation(Vector3.Cross(x, up), up));
                     PlaceSleeve(g, grip - up * g.FistSize * 0.45f);
                     continue;
@@ -116,9 +117,11 @@ namespace Hockey
         float upperLayerW = 1;
 
         // индексы клипов нижнего слоя
-        const int Idle = 0, Run = 1, Air = 2, Dive = 3, Fall = 4, StandUp = 5, Cheer = 6, Save = 7, Hit = 8;
-        static readonly string[] BaseNames = { "2H_Melee_Idle", "Running_A", "Jump_Idle", "Dodge_Forward", "Death_A", "Lie_StandUp", "Cheer", "Block_Hit", "Hit_A" };
-        static readonly string[] GoalieBase = { "Blocking", "Running_Strafe_Right", "Jump_Idle", "Dodge_Forward", "Death_A", "Lie_StandUp", "Cheer", "Dodge_Left", "Hit_A" };
+        const int Idle = 0, Run = 1, Air = 2, Dive = 3, Fall = 4, StandUp = 5, Cheer = 6, Save = 7, Hit = 8, SitI = 9;
+        /// Сидит на скамье (раздевалка): поза сидя, клюшки в руках нет.
+        public bool Sit;
+        static readonly string[] BaseNames = { "2H_Melee_Idle", "Running_A", "Jump_Idle", "Dodge_Forward", "Death_A", "Lie_StandUp", "Cheer", "Block_Hit", "Hit_A", "Sit_Chair_Idle" };
+        static readonly string[] GoalieBase = { "Blocking", "Running_Strafe_Right", "Jump_Idle", "Dodge_Forward", "Death_A", "Lie_StandUp", "Cheer", "Dodge_Left", "Hit_A", "Sit_Chair_Idle" };
         // верхний слой
         const int Hold = 0, Windup = 1, Swing = 2, PassAnim = 3, PunchAnim = 4;
         static readonly string[] UpperNames = { "2H_Melee_Idle", "2H_Melee_Attack_Chop", "2H_Melee_Attack_Slice", "Throw", "Unarmed_Melee_Attack_Punch_A" };
@@ -516,7 +519,14 @@ namespace Hockey
             fallT += dt; standT += dt; diveT += dt; swingT += dt; saveT += dt; hitT += dt; cheerT += dt;
 
             float upper = 1;
-            if (s.Stagger && !s.Stun)
+            if (Stick != null && Stick.gameObject.activeSelf == Sit) Stick.gameObject.SetActive(!Sit);
+            if (Sit)
+            {
+                targetB[SitI] = 1;
+                SetTime(baseClips, SitI, cheerT, true);
+                upper = 0;
+            }
+            else if (s.Stagger && !s.Stun)
             {
                 targetB[Hit] = 1;
                 SetTime(baseClips, Hit, hitT * 1.4f, false);

@@ -298,7 +298,7 @@ namespace Hockey
 
         public struct AnimCtx
         {
-            public bool HasPuck, Celebrate, Dance, Sad;
+            public bool HasPuck, Celebrate, Dance, Sad, Sit;
             public Vector3 LookAt;
             public float Dt, Time;
         }
@@ -420,12 +420,13 @@ namespace Hockey
                     if (spinT >= 1) spinT = -1;
                 }
                 float sway = Mathf.Sin(phase) * 0.07f * amp * (air ? 0 : 1);
-                float pitchK = leanF.X * 0.45f + (Goalie ? 0 : 0.14f * (1 - celebrate.X)) - charge.X * 0.22f + lunge.X * 0.45f + sad.X * 0.35f;
+                float pitchK = leanF.X * 0.45f + (Goalie || ctx.Sit ? 0 : 0.14f * (1 - celebrate.X)) - charge.X * 0.22f + lunge.X * 0.45f + sad.X * 0.35f;
                 float rollK = -leanS.X * 0.7f + sway + wob.X * 0.1f + Mathf.Sin(time * 1.3f) * 0.06f * sad.X;
                 Tilt.localRotation = Quaternion.Euler(pitchK * Mathf.Rad2Deg, spin, rollK * Mathf.Rad2Deg);
                 Tilt.localPosition = new Vector3(0, hopY + celHop + Mathf.Abs(Mathf.Sin(phase)) * 0.025f * amp, 0);
                 float wx = 1 + wob.X * 0.07f, wz = 1 - wob.X * 0.07f;
                 Scale.localScale = new Vector3(Scale.localScale.x * wx, Scale.localScale.y * (1 - sad.X * 0.07f), Scale.localScale.z * wz);
+                KK.Sit = ctx.Sit;
                 KK.Update(s, ctx.Celebrate, ctx.Dance, ctx.HasPuck, Vector3.Dot(vel, right), dt);
                 return;
             }

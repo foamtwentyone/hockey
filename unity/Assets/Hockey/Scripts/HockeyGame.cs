@@ -68,6 +68,8 @@ namespace Hockey
         readonly List<GameObject> extras = new List<GameObject>();
         readonly Dictionary<int, Transform> rings = new Dictionary<int, Transform>();
         readonly List<CharacterRig> showcase = new List<CharacterRig>();
+        LockerRoom locker;
+        static readonly Vector3 ShowPos0 = new Vector3(-1.3f, 0, 0.4f);
         Transform puck, puckRing, puckFire;
         LineRenderer trail;
         readonly List<Vector3> trailPts = new List<Vector3>();
@@ -108,6 +110,7 @@ namespace Hockey
             menuCam = MakeCamera("MenuCam");
             menuCam.fieldOfView = 40;
             BuildShowcase();
+            locker = new LockerRoom(transform, new Vector3(0, -60, 0), profNum);
             ApplySettings();
             finder = new LanFinder();
             StartAutotestIfRequested();
@@ -212,6 +215,7 @@ namespace Hockey
             var c = CharacterRig.Build(0, profSkin, profTape, profNum, false, transform);
             c.Root.localPosition = pos; c.Root.localRotation = rot; c.Root.gameObject.SetActive(act);
             showcase[0] = c;
+            locker?.SetNumber(profNum);
         }
 
         void OnDestroy() { CloseNet(); finder?.Dispose(); }
@@ -763,25 +767,33 @@ namespace Hockey
 
         void MenuScene(float dt)
         {
+            // «Раздевалка» переносит в комнату под ареной: свой игрок сидит на скамье у шкафчика
+            bool inLocker = uiPage == UiPage.Locker && locker != null;
+            if (showcase.Count > 0)
+            {
+                var me = showcase[0].Root;
+                me.position = inLocker ? locker.Seat : transform.TransformPoint(ShowPos0);
+                me.localRotation = Quaternion.Euler(0, inLocker ? 180 : 200, 0);
+            }
             for (int i = 0; i < showcase.Count; i++)
             {
                 var c = showcase[i];
+                bool sit = inLocker && i == 0;
                 var pv = new PlayerView { H = c.Root.localEulerAngles.y * Mathf.Deg2Rad, Save = c.Goalie ? Mathf.Max(0, Mathf.Sin(time * 1.3f)) * 0.3f : 0 };
-                bool dance = i != 2 && Mathf.Repeat(time + i * 3, 9) > 4.5f;
-                c.Animate(pv, new CharacterRig.AnimCtx { Dt = dt, Time = time + i * 1.7f, Dance = dance, Celebrate = !dance && i == 0 && Mathf.Repeat(time, 9) > 3, LookAt = menuCam.transform.position });
+                bool dance = !sit && i != 2 && Mathf.Repeat(time + i * 3, 9) > 4.5f;
+                c.Animate(pv, new CharacterRig.AnimCtx { Dt = dt, Time = time + i * 1.7f, Dance = dance, Sit = sit, Celebrate = !sit && !dance && i == 0 && Mathf.Repeat(time, 9) > 3, LookAt = menuCam.transform.position });
             }
-            if (Mathf.Repeat(time, 6) < dt) fx.Confetti(new Vector3(0, 0.5f, 0.5f), 80);
+            if (!inLocker && Mathf.Repeat(time, 6) < dt) fx.Confetti(new Vector3(0, 0.5f, 0.5f), 80);
             float sway = Mathf.Sin(time * 0.25f) * 0.6f;
-            // в раздевалке камера подъезжает к своему игроку
-            bool locker = uiPage == UiPage.Locker;
-            var camT = locker ? new Vector3(-0.3f + sway * 0.2f, 1.45f, -2.6f) : new Vector3(-2.6f + sway, 1.7f, -6.4f);
-            var lookT = locker ? new Vector3(-0.6f, 1.0f, 0.4f) : new Vector3(-1.5f + sway * 0.5f, 1.0f, 0.6f);
+            var camT = inLocker ? locker.CamPos + new Vector3(sway * 0.25f, 0, 0) : new Vector3(-2.6f + sway, 1.7f, -6.4f);
+            var lookT = inLocker ? locker.CamLook : new Vector3(-1.5f + sway * 0.5f, 1.0f, 0.6f);
             float ck = 1 - Mathf.Exp(-dt * 4);
-            menuCamPos = menuCamPos == Vector3.zero ? camT : Vector3.Lerp(menuCamPos, camT, ck);
-            menuLook = menuLook == Vector3.zero ? lookT : Vector3.Lerp(menuLook, lookT, ck);
+            bool jump = menuCamPos == Vector3.zero || (menuCamPos - camT).sqrMagnitude > 400;   // между ареной и раздевалкой — склейка
+            menuCamPos = jump ? camT : Vector3.Lerp(menuCamPos, camT, ck);
+            menuLook = jump ? lookT : Vector3.Lerp(menuLook, lookT, ck);
             menuCam.transform.position = menuCamPos;
             menuCam.transform.LookAt(menuLook);
-            menuCam.fieldOfView = 40;
+            menuCam.fieldOfView = inLocker ? 46 : 40;
             fx.FacingCam = menuCam;
             arena.DrawScore(0, 0, 0);
         }

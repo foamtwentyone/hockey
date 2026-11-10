@@ -324,9 +324,9 @@ namespace Hockey
             if (logoTex != null)
             {
                 // нарисованный логотип: шайба со шлейфом над пухлой надписью; слегка покачивается
-                float w = 300 * scale, h = w * 531f / 809f;   // исходные пропорции картинки (при импорте её могут растянуть до степени двойки)
+                float w = 360 * scale, h = w * 531f / 809f;   // исходные пропорции картинки (при импорте её могут растянуть до степени двойки)
                 float bob = Mathf.Sin(time * 2.2f) * 3 * scale;
-                var lr = new Rect(x - 10 * scale, y - 30 * scale + bob, w, h);
+                var lr = new Rect(x - 14 * scale, y - 44 * scale + bob, w, h);
                 GUIUtility.RotateAroundPivot(Mathf.Sin(time * 1.3f) * 1.2f, lr.center * uiScale);
                 GUI.DrawTexture(lr, logoTex, ScaleMode.StretchToFill, true);
                 GUI.matrix = baseM;
@@ -435,7 +435,7 @@ namespace Hockey
             float ta = Mathf.Clamp01(Mathf.Min(Mathf.Repeat(time, 6), 6 - Mathf.Repeat(time, 6)) * 2);
             var tipStyle = new GUIStyle(sSmall) { alignment = TextAnchor.MiddleCenter, fontSize = 17 };
             GUI.color = new Color(1, 1, 1, ta);
-            if (uiPage == UiPage.Main) GUI.Label(new Rect(VW * 0.42f, VH - 54, VW * 0.56f, 30), "Совет: " + Tips[tip], sTag);
+            if (uiPage == UiPage.Main) GUI.Label(new Rect(VW * 0.4f, VH - 66, VW * 0.58f, 36), "Совет: " + Tips[tip], sTag);
             GUI.color = Color.white;
             GUI.Label(new Rect(VW - 420, VH - 24, 400, 22), "v3.1 · Unity · модели KayKit (CC0) · шрифты OFL", new GUIStyle(sSmall) { alignment = TextAnchor.LowerRight, fontSize = 13 });
         }
@@ -452,35 +452,37 @@ namespace Hockey
                 GUI.matrix = baseM * Matrix4x4.Translate(new Vector3((1 - e) * -220, 0, 0));
                 idx++;
             }
-            GUILayout.BeginArea(new Rect(60, 214, 470, VH - 360));
+            GUILayout.BeginArea(new Rect(60, 226, 480, VH - 372));
+            // кнопки с подписями: крупное название и строка пояснения
+            string Cap(string title, string sub, int ts, int ss = 14) => $"<size={ts}>{title}</size>\n<size={ss}><color=#ffffffcc>{sub}</color></size>";
             Enter();
             float pulse = 1 + Mathf.Sin(time * 3.2f) * 0.015f;
-            var playStyle = Btn("#ffb347", "#ff4f5e", (int)(36 * pulse));
-            if (Button("ИГРАТЬ", playStyle, GUILayout.Height(92))) uiPage = UiPage.Play;
+            var playStyle = Btn("#ffb347", "#ff4f5e", 20);
+            if (Button(Cap("ИГРАТЬ", "матч против ботов — один или с друзьями", (int)(38 * pulse), 15), playStyle, GUILayout.Height(104))) uiPage = UiPage.Play;
             GUILayout.Space(4);
-            Enter(); if (Button("Вдвоём на одном экране", BtnBlue, GUILayout.Height(62))) uiPage = UiPage.Split;
-            Enter(); if (Button("Игра по сети", BtnGreen, GUILayout.Height(62))) uiPage = UiPage.Online;
-            Enter(); if (Button("Раздевалка", Btn("#ffd23f", "#f29a1f", 22), GUILayout.Height(56))) uiPage = UiPage.Locker;
+            Enter(); if (Button(Cap("Вдвоём на одном экране", "сплит-скрин: WASD и стрелки или геймпады", 23), BtnBlue, GUILayout.Height(70))) uiPage = UiPage.Split;
+            Enter(); if (Button(Cap("Игра по сети", "создай матч или найди игру друзей", 23), BtnGreen, GUILayout.Height(70))) uiPage = UiPage.Online;
+            Enter(); if (Button(Cap("Раздевалка", "имя, номер, обмотка клюшки", 22), Btn("#ffd23f", "#f29a1f", 20), GUILayout.Height(66))) uiPage = UiPage.Locker;
             Enter();
             GUILayout.BeginHorizontal();
-            if (Button("Настройки", BtnGhost, GUILayout.Height(52))) { settingsReturn = UiPage.Main; uiPage = UiPage.Settings; }
-            if (Button("Управление", BtnGhost, GUILayout.Height(52))) { settingsReturn = UiPage.Main; uiPage = UiPage.Controls; }
+            if (Button("Настройки", BtnGhost, GUILayout.Height(50))) { settingsReturn = UiPage.Main; uiPage = UiPage.Settings; }
+            if (Button("Управление", BtnGhost, GUILayout.Height(50))) { settingsReturn = UiPage.Main; uiPage = UiPage.Controls; }
             GUILayout.EndHorizontal();
             Enter();
             GUILayout.BeginHorizontal();
-            if (Button("Авторы", BtnGhost, GUILayout.Height(48))) uiPage = UiPage.Credits;
-            if (Button("Выход", BtnGhost, GUILayout.Height(48))) uiPage = UiPage.Quit;
+            if (Button("Авторы", BtnGhost, GUILayout.Height(46))) uiPage = UiPage.Credits;
+            if (Button("Выход", BtnGhost, GUILayout.Height(46))) uiPage = UiPage.Quit;
             GUILayout.EndHorizontal();
             if (!string.IsNullOrEmpty(message)) GUILayout.Label($"<color=#ffd23f>{message}</color>", sLabel);
             GUILayout.EndArea();
             Enter();
-            DrawPlayerCard(new Rect(60, VH - 140, 470, 104));
+            DrawPlayerCard(new Rect(VW - 420, 26, 390, 96));   // карточка игрока — в правом верхнем углу
             GUI.matrix = baseM;
         }
 
         void DrawLocker()
         {
-            GUILayout.BeginArea(new Rect(60, 200, 660, VH - 280), sPanel);
+            GUILayout.BeginArea(new Rect(60, 226, 600, VH - 290), sPanel);
             scroll = GUILayout.BeginScrollView(scroll);
             GUILayout.Label("Раздевалка", sH1);
             GUILayout.Label("Твоё имя", sSmall);
