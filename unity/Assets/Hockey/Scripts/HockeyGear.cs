@@ -316,9 +316,14 @@ namespace Hockey
         public static Texture2D CrestTexture() => CrestTex();
 
         /// Шлем с визором для головы произвольной модели: центр hc и размеры hs головы (мировые), поворот rot.
-        public static List<Transform> HeadGear(Transform head, Vector3 hc, Vector3 hs, Quaternion rot, int team)
+        public static List<Transform> HeadGear(Transform head, Vector3 hc, Vector3 hs, Quaternion rot, int team, bool goalie = false)
         {
             var list = new List<Transform>();
+            if (goalie)
+            {
+                Gear("goalie_mask", GearModels.GoalieMask(Mats.Hex("#e6e3dc"), Mats.Hex(TeamColors.All[Mathf.Clamp(team, 0, 1)].Main)), Mats.Get("#ffffff", 0.1f), hc, rot * Quaternion.Euler(-3, 0, 0), head, hs * 1.02f, Color.white, true, team);
+                return list;
+            }
             var tc = TeamColors.All[Mathf.Clamp(team, 0, 1)];
             var visorM = Mats.Fade("#8fd8ff", 0.3f, true); visorM.SetFloat("_Glossiness", 0.25f);
             var helmRot = rot * Quaternion.Euler(-6, 0, 0);

@@ -113,8 +113,8 @@ namespace Hockey
             c.Tilt = Group("tilt", c.Scale, Vector3.zero);
 
             // основной путь: модели KayKit «Adventurers» в цветах команды
-            var kk = goalie ? KayKitCharacter.Create(team, skin, hair, number, goalie, c.Tilt) : null;
-            if (!goalie) c.PB = ProBody.Create(team, skin, hair, number, c.Tilt);
+            KayKitCharacter kk = null;
+            c.PB = ProBody.Create(team, skin, hair, number, c.Tilt, goalie);
             if (kk != null || c.PB != null)
             {
                 c.KK = kk;

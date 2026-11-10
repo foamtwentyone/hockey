@@ -11,7 +11,7 @@ namespace Hockey
     {
         public Transform Model, Head, Stick, StickBlade;
         public List<Transform> HelmetParts = new List<Transform>();
-        public bool Sit;
+        public bool Sit, Goalie;
 
         // размеры (метры)
         const float HipW = 0.11f, Thigh = 0.2f, Shin = 0.2f, Ankle = 0.08f, Pelvis = 0.2f, Chest = 0.36f, ShW = 0.21f;
@@ -44,10 +44,20 @@ namespace Hockey
         static Pose Follow => new Pose { Hip = new Vector3(-0.02f, 0.39f, 0.07f), Pitch = 0.5f, Twist = 0.6f, Roll = 0.05f, FootL = new Vector3(-0.18f, Ankle, 0.14f), FootR = new Vector3(0.14f, Ankle + 0.03f, -0.16f),
             Top = new Vector3(0.15f, 0.68f, 0.42f), Blade = new Vector3(-0.05f, 0.55f, 1.35f), Sep = 0.3f, HeadPitch = -0.1f };
 
+        // вратарь: низкая широкая стойка, блин с клюшкой справа, ловушка слева наготове
+        static Pose GStance => new Pose { Hip = new Vector3(0, 0.35f, 0), Pitch = 0.38f, FootL = new Vector3(-0.25f, Ankle, 0.02f), FootR = new Vector3(0.25f, Ankle, 0.02f),
+            Top = new Vector3(0.36f, 0.6f, 0.34f), Blade = new Vector3(0.1f, 0.03f, 0.8f), Sep = 0.3f, FreeL = 1, HandL = new Vector3(-0.44f, 0.8f, 0.36f) };
+        // сейв «бабочкой»: колени на лёд, щитки в стороны, руки шире
+        static Pose GSave => new Pose { Hip = new Vector3(0, 0.25f, 0.02f), Pitch = 0.22f, FootL = new Vector3(-0.42f, Ankle + 0.01f, -0.1f), FootR = new Vector3(0.42f, Ankle + 0.01f, -0.1f),
+            Top = new Vector3(0.52f, 0.62f, 0.32f), Blade = new Vector3(0.3f, 0.03f, 0.7f), Sep = 0.3f, FreeL = 1, HandL = new Vector3(-0.56f, 0.98f, 0.3f), HeadPitch = -0.05f };
+
         // части тела
         Transform torso, hem, hemStripe, pants, headT, shoulderL, shoulderR, numberT, crestT;
         Transform uaL, faL, elL, stL, uaR, faR, elR, stR, thL, shL, knL, s1L, s2L, btL, blL, thR, shR, knR, s1R, s2R, btR, blR, fistL, fistR;
         int team;
+        Transform padL, padR, blocker, catcher;
+        Pose cur, mid; bool poseInit;
+        const float BaseScale = 1.18f;
         float phase, swingT = 9, punchT = 9, heldCharge, relCharge, wWind, wShot, wCel, wSad, wAir, wDive, wFall, wSit, wPunch, celT, headKick, headKickV, time;
         bool relPass, wasSwing, wasPunch;
 
@@ -90,12 +100,12 @@ namespace Hockey
             return a + dir * x + p * h;
         }
 
-        public static ProBody Create(int team, int skin, int tape, int number, Transform parent)
+        public static ProBody Create(int team, int skin, int tape, int number, Transform parent, bool goalie = false)
         {
-            var b = new ProBody { team = team };
+            var b = new ProBody { team = team, Goalie = goalie };
             b.Model = new GameObject("ProBody").transform;
             b.Model.SetParent(parent, false);
-            b.Model.localScale = Vector3.one * 1.18f;   // рост как у прежней модели
+            b.Model.localScale = Vector3.one * BaseScale * (goalie ? 1.06f : 1);   // рост как у прежней модели
             var tc = TeamColors.All[Mathf.Clamp(team, 0, 1)];
             Material jersey = Mats.Get(tc.Main, 0.12f), dark = Mats.Get(tc.Dark, 0.12f), white = Mats.Get("#f6f6f2", 0.1f), pantsM = Mats.Get(tc.Pants, 0.1f);
             Material skinM = Mats.Get(CharacterRig.Skins[Mathf.Abs(skin) % CharacterRig.Skins.Length], 0.12f), black = Mats.Get("#23232b", 0.35f), steel = Mats.Get("#dfe8f2", 0.6f), hair = Mats.Get("#7a4a2a", 0.2f);
@@ -152,22 +162,53 @@ namespace Hockey
             }
             var carbon = Mats.Get("#2b2f3d", 0.85f); var stripe = Mats.Get(tc.Main, 0.8f);
             var tapeM = Mats.Get(KayKitCharacter.TapeColors[Mathf.Abs(tape) % KayKitCharacter.TapeColors.Length], 0.25f);
+            if (goalie)
+            {   // вратарская клюшка: широкая «лопата» над крюком
+                P(MeshKit.Superellipsoid(0.06f, 0.22f, 0.028f, 0.25f, 0.3f, 20), carbon, new Vector3(0, -StickL + 0.26f, 0.02f));
+                P(MeshKit.Superellipsoid(0.062f, 0.035f, 0.03f, 0.25f, 0.3f, 16), stripe, new Vector3(0, -StickL + 0.4f, 0.02f));
+            }
             float shaft = StickL + 0.1f;
             P(MeshKit.Superellipsoid(0.027f, shaft / 2, 0.021f, 0.25f, 0.35f, 20), carbon, new Vector3(0, 0.1f - shaft / 2, 0));
             P(MeshKit.Superellipsoid(0.034f, 0.05f, 0.028f, 0.5f, 0.5f, 16), tapeM, new Vector3(0, 0.07f, 0));
             P(MeshKit.Superellipsoid(0.03f, 0.04f, 0.024f, 0.25f, 0.35f, 16), stripe, new Vector3(0, -StickL * 0.55f, 0));
             b.StickBlade = new GameObject("blade").transform; b.StickBlade.SetParent(b.Stick, false); b.StickBlade.localPosition = new Vector3(0, -StickL, 0);
-            const float bl = 0.37f;
-            P(MeshKit.Blade(bl, 0.085f, 0.022f, 0.045f), carbon, new Vector3(0, -StickL - 0.02f, -0.04f));
+            float bl = goalie ? 0.5f : 0.37f;
+            P(MeshKit.Blade(bl, goalie ? 0.12f : 0.085f, 0.022f, goalie ? 0.02f : 0.045f), carbon, new Vector3(0, -StickL - 0.02f, -0.04f));
             P(MeshKit.Superellipsoid(0.016f, 0.085f * 0.56f, bl * 0.25f, 0.3f, 0.4f, 16), tapeM, new Vector3(0.006f, -StickL - 0.02f, bl * 0.42f));
 
             // краги-кулаки и шлем — модели экипировки
             b.fistL = HockeyGear.Fist(team, b.Model, FistS, false); b.fistR = HockeyGear.Fist(team, b.Model, FistS, true);
             if (b.fistL != null) b.fistL.gameObject.SetActive(true);
             if (b.fistR != null) b.fistR.gameObject.SetActive(true);
+            if (goalie)
+            {   // щитки, блин и ловушка
+                Transform Pad()
+                {
+                    var t = b.Make(MeshKit.RoundedBox(0.21f, 0.52f, 0.11f, 0.04f), white);
+                    void Sub(Mesh m, Material mt, Vector3 pos)
+                    {
+                        var c = new GameObject("s").transform; c.SetParent(t, false); c.localPosition = pos;
+                        c.gameObject.AddComponent<MeshFilter>().sharedMesh = m; c.gameObject.AddComponent<MeshRenderer>().sharedMaterial = mt;
+                    }
+                    Sub(MeshKit.RoundedBox(0.215f, 0.05f, 0.115f, 0.02f), jersey, new Vector3(0, 0.1f, 0));
+                    Sub(MeshKit.RoundedBox(0.215f, 0.05f, 0.115f, 0.02f), dark, new Vector3(0, -0.08f, 0));
+                    Sub(MeshKit.RoundedBox(0.07f, 0.44f, 0.04f, 0.02f), Mats.Get("#e2e2dc", 0.1f), new Vector3(0, 0, 0.05f));   // центральный валик
+                    return t;
+                }
+                b.padL = Pad(); b.padR = Pad();
+                b.blocker = b.Make(MeshKit.RoundedBox(0.2f, 0.32f, 0.05f, 0.02f), white);
+                var bs = new GameObject("s").transform; bs.SetParent(b.blocker, false); bs.localPosition = new Vector3(0, 0.06f, 0.004f);
+                bs.gameObject.AddComponent<MeshFilter>().sharedMesh = MeshKit.RoundedBox(0.202f, 0.06f, 0.05f, 0.02f); bs.gameObject.AddComponent<MeshRenderer>().sharedMaterial = jersey;
+                b.catcher = b.Make(MeshKit.Superellipsoid(0.17f, 0.19f, 0.07f, 0.7f, 0.8f, 22), white);
+                var cp = new GameObject("s").transform; cp.SetParent(b.catcher, false); cp.localPosition = new Vector3(0, 0.03f, 0.045f);
+                cp.gameObject.AddComponent<MeshFilter>().sharedMesh = MeshKit.Superellipsoid(0.12f, 0.13f, 0.04f, 0.8f, 0.8f, 18); cp.gameObject.AddComponent<MeshRenderer>().sharedMaterial = Mats.Get("#2b2b33", 0.2f);
+                var cc = new GameObject("s").transform; cc.SetParent(b.catcher, false); cc.localPosition = new Vector3(0, -0.2f, 0);
+                cc.gameObject.AddComponent<MeshFilter>().sharedMesh = MeshKit.RoundedBox(0.2f, 0.1f, 0.09f, 0.03f); cc.gameObject.AddComponent<MeshRenderer>().sharedMaterial = jersey;
+                if (b.fistL != null) b.fistL.gameObject.SetActive(false);
+            }
             b.time = Random.value * 10;
-            b.Solve(Stance, 0);
-            b.HelmetParts = HockeyGear.HeadGear(b.headT, b.headT.position, new Vector3(0.52f, 0.5f, 0.54f), b.Model.rotation, team);
+            b.Solve(goalie ? GStance : Stance, 0);
+            b.HelmetParts = HockeyGear.HeadGear(b.headT, b.headT.position, new Vector3(0.52f, 0.5f, 0.54f) * b.Model.localScale.x, b.Model.rotation, team, goalie);
             return b;
         }
 
@@ -195,14 +236,20 @@ namespace Hockey
             phase += dt * (2.2f + Mathf.Min(spd, 11) * 0.75f);
 
             // стойка: катание — толчки коньками в стороны-назад, корпус качается навстречу; клюшка ведёт шайбу
-            var p = Stance;
+            var p = Goalie ? GStance : Stance;
+            if (Goalie) spd = Mathf.Min(spd, 3.5f);
             float amp = Mathf.Clamp01(spd / 6f), sp = Mathf.Sin(phase), pushL = Mathf.Max(0, sp), pushR = Mathf.Max(0, -sp);
             p.FootL += new Vector3(-0.12f * pushL, 0.05f * Mathf.Max(0, -Mathf.Cos(phase)) * pushR, -0.2f * pushL + 0.06f * pushR) * amp;
             p.FootR += new Vector3(0.12f * pushR, 0.05f * Mathf.Max(0, Mathf.Cos(phase)) * pushL, -0.2f * pushR + 0.06f * pushL) * amp;
             p.Hip += new Vector3(-sp * 0.035f * amp, -0.02f * amp + Mathf.Abs(sp) * 0.015f * amp + Mathf.Sin(time * 2.1f) * 0.006f, 0);
             p.Roll = sp * 0.07f * amp; p.Twist = -sp * 0.08f * amp;
             p.Pitch += Mathf.Min(spd, 11) * 0.012f;
-            float dr = hasPuck ? Mathf.Sin(time * 7) * 0.1f : Mathf.Sin(time * 1.7f) * 0.03f;   // ведение шайбы
+            // дыхание и живое покачивание в покое; на скорости — глубже посадка
+            float idle = 1 - amp;
+            p.Pitch += Mathf.Sin(time * 1.9f) * 0.015f * idle; p.Hip.y -= 0.025f * amp;
+            p.Top += new Vector3(0, Mathf.Sin(time * 1.9f + 0.6f) * 0.008f * idle, 0);
+            p.HeadPitch += -0.04f * amp + Mathf.Sin(time * 0.9f) * 0.02f * idle;
+            float dr = Goalie ? 0 : hasPuck ? Mathf.Sin(time * 7) * 0.1f : Mathf.Sin(time * 1.7f) * 0.03f;   // ведение шайбы
             p.Blade += new Vector3(dr, 0, Mathf.Abs(dr) * 0.2f);
             p.Top += new Vector3(-dr * 0.2f, 0, 0);
 
@@ -216,6 +263,11 @@ namespace Hockey
             wFall += ((s.Stun ? 1 : 0) - wFall) * K(s.Stun ? 10 : 5); wSit += ((Sit ? 1 : 0) - wSit) * K(20);
             wPunch += ((punchT < 0.3f ? 1 : 0) - wPunch) * K(25);
 
+            if (Goalie)
+            {   // сейв: быстро в «бабочку», медленнее обратно
+                float sv = Mathf.Clamp01(s.Save * 2.6f);
+                if (sv > 0.001f) p = Pose.Lerp(p, GSave, Ease(sv));
+            }
             if (wWind > 0.001f) p = Pose.Lerp(p, Pose.Lerp(Stance, Windup, Ease(s.Charge * 1.15f)), wWind);
             if (wShot > 0.001f) p = Pose.Lerp(p, ShotPose(shotFrom + (1 - shotFrom) * Mathf.Clamp01(swingT / shotDur)), wShot);
             if (wSad > 0.001f)
@@ -270,8 +322,15 @@ namespace Hockey
             // голова, откинутая ударом шайбы, — пружиной
             float w = 2.2f * Mathf.PI * 2;
             headKickV += (-w * w * headKick - 2 * 0.25f * w * headKickV) * dt; headKick += headKickV * dt;
-            Solve(p, -headKick);
+            // сглаживание в два прохода: движения начинаются и заканчиваются плавно, без рывков между позами
+            if (!poseInit) { mid = cur = p; poseInit = true; }
+            float ks = K(shooting || charging ? 30 : 16);
+            mid = Pose.Lerp(mid, p, ks); cur = Pose.Lerp(cur, mid, ks);
+            Solve(cur, -headKick);
         }
+
+        /// Точка модели в пространстве родителя (с учётом наклона тела в нырке и падении).
+        Vector3 ToParent(Vector3 v) => Model.localPosition + Model.localRotation * (v * Model.localScale.x);
 
         void Solve(Pose p, float headExtra)
         {
@@ -286,7 +345,7 @@ namespace Hockey
             var qt = Quaternion.Slerp(qp, qc, 0.65f);
             var mid = (hip + chestTop) * 0.5f;
             torso.localPosition = mid + qt * new Vector3(0, 0.03f, 0); torso.localRotation = qt;
-            torso.localScale = new Vector3(0.5f, (chestTop - hip).magnitude + 0.2f, 0.38f);
+            torso.localScale = new Vector3(Goalie ? 0.6f : 0.5f, (chestTop - hip).magnitude + 0.2f, Goalie ? 0.45f : 0.38f);
             pants.localPosition = hip + qp * new Vector3(0, -0.06f, 0); pants.localRotation = qp; pants.localScale = new Vector3(0.47f, 0.3f, 0.37f);
             hem.localPosition = hip + qp * new Vector3(0, 0.06f, 0); hem.localRotation = qp; hem.localScale = new Vector3(0.515f, 0.13f, 0.395f);
             hemStripe.localPosition = hip + qp * new Vector3(0, 0.02f, 0); hemStripe.localRotation = qp; hemStripe.localScale = new Vector3(0.522f, 0.035f, 0.402f);
@@ -299,8 +358,8 @@ namespace Hockey
             headT.localRotation = qh; headT.localScale = Vector3.one * 0.51f;
 
             // ноги
-            Leg(hip + qp * new Vector3(-HipW, -0.02f, 0), p.FootL, -1, thL, shL, knL, s1L, s2L, btL, blL);
-            Leg(hip + qp * new Vector3(HipW, -0.02f, 0), p.FootR, 1, thR, shR, knR, s1R, s2R, btR, blR);
+            Leg(hip + qp * new Vector3(-HipW, -0.02f, 0), p.FootL, -1, thL, shL, knL, s1L, s2L, btL, blL, padL);
+            Leg(hip + qp * new Vector3(HipW, -0.02f, 0), p.FootR, 1, thR, shR, knR, s1R, s2R, btR, blR, padR);
 
             // клюшка и руки: правая — сверху, левая — ниже по древку (или свободна)
             Vector3 shR0 = chestTop + qc * new Vector3(ShW, -0.03f, 0), shL0 = chestTop + qc * new Vector3(-ShW, -0.03f, 0);
@@ -314,6 +373,9 @@ namespace Hockey
                 float drop = top.y - 0.035f; var hor = p.Blade - top; hor.y = 0;
                 if (drop < StickL && hor.sqrMagnitude > 1e-6f) dir = (hor.normalized * Mathf.Sqrt(StickL * StickL - drop * drop) + Vector3.down * drop) / StickL;
             }
+            // клюшка не уходит под лёд: если крюк ниже льда — приподнимаем его
+            var upLocal = Quaternion.Inverse(Model.localRotation) * Vector3.up;
+            for (int i = 0; i < 12 && ToParent(top + dir * StickL).y < 0.045f; i++) dir = (dir + upLocal * 0.06f).normalized;
             var low = top + dir * p.Sep;
             for (int i = 0; i < 10 && p.Sep - i * 0.02f > 0.16f && (low - shL0).magnitude > (UArm + FArm) * 0.93f; i++) low = top + dir * (p.Sep - (i + 1) * 0.02f);
             var hl = Vector3.Lerp(low, p.HandL, p.FreeL);
@@ -325,14 +387,29 @@ namespace Hockey
             Stick.localPosition = top; Stick.localRotation = Quaternion.LookRotation(bladeFwd.normalized, -dir);
             Fist(fistR, top, elbowR, dir, false, 1);
             Fist(fistL, hl, elbowL, dir, true, 1 - p.FreeL);
+            if (Goalie)
+            {
+                blocker.localPosition = top + qc * new Vector3(0.02f, 0.02f, 0.09f); blocker.localRotation = qc; blocker.localScale = Vector3.one;
+                catcher.localPosition = hl + qc * new Vector3(-0.02f, 0.06f, 0.07f); catcher.localRotation = qc * Quaternion.Euler(0, -12, 12); catcher.localScale = Vector3.one;
+            }
         }
 
-        void Leg(Vector3 hipJ, Vector3 foot, float side, Transform th, Transform sh, Transform kn, Transform s1, Transform s2, Transform boot, Transform blade)
+        void Leg(Vector3 hipJ, Vector3 foot, float side, Transform th, Transform sh, Transform kn, Transform s1, Transform s2, Transform boot, Transform blade, Transform pad)
         {
             var knee = Ik(hipJ, ref foot, Thigh, Shin, Vector3.forward + Vector3.right * side * 0.35f);
+            if (pad != null)
+            {   // щиток закрывает голень и колено, смотрит вперёд
+                var d = (knee - foot).normalized;
+                var f = Vector3.ProjectOnPlane(Vector3.forward, d); if (f.sqrMagnitude < 1e-4f) f = Vector3.up;
+                pad.localRotation = Quaternion.LookRotation(f.normalized, d);
+                pad.localPosition = foot + d * 0.2f + pad.localRotation * new Vector3(0, 0, 0.07f);
+                pad.localScale = Vector3.one;
+            }
             Seg(th, hipJ, knee, 0.095f); Seg(sh, knee, foot, 0.078f); Ball(kn, knee, 0.092f);
             Ring(s1, knee, foot, 0.45f, 0.025f, 0.081f); Ring(s2, knee, foot, 0.68f, 0.012f, 0.081f);
-            var yaw = Quaternion.Euler(0, side * 14, 0);
+            // при толчке конёк разворачивается наружу и чуть заваливается на ребро
+            float push = Mathf.Clamp01((Mathf.Abs(foot.x) - 0.16f) / 0.1f);
+            var yaw = Quaternion.Euler(0, side * (12 + 20 * push), -side * 10 * push);
             boot.localPosition = foot + yaw * new Vector3(0, -0.015f, 0.035f); boot.localRotation = yaw; boot.localScale = Vector3.one;
             blade.localPosition = foot + yaw * new Vector3(0, -0.068f, 0.03f); blade.localRotation = yaw; blade.localScale = new Vector3(0.014f, 0.03f, 0.27f);
         }
