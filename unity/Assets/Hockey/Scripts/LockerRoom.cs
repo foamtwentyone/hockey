@@ -12,12 +12,15 @@ namespace Hockey
         public Vector3 CamPos => Root.position + new Vector3(0.35f, 1.25f, -1.75f);
         public Vector3 CamLook => Root.position + new Vector3(-0.35f, 0.8f, 1.8f);
         MeshRenderer plate;
+        /// Слой комнаты: прожекторы арены её не освещают (иначе пересвет), лампа комнаты светит только на неё.
+        public const int Layer = 10;
 
         static GameObject Obj(Transform parent, Mesh mesh, Material mat, Vector3 pos, bool cast = true)
         {
             var go = new GameObject("p");
             go.transform.SetParent(parent, false);
             go.transform.localPosition = pos;
+            go.layer = Layer;
             go.AddComponent<MeshFilter>().sharedMesh = mesh;
             var mr = go.AddComponent<MeshRenderer>();
             mr.sharedMaterial = mat;
@@ -47,11 +50,12 @@ namespace Hockey
             Obj(Root, MeshKit.Box(W, 0.22f, 0.02f), team, new Vector3(0, 2.45f, D / 2 - 0.06f), false);
             Obj(Root, MeshKit.Box(W, 0.06f, 0.02f), white, new Vector3(0, 2.28f, D / 2 - 0.06f), false);
             // светильники
-            for (int i = -1; i <= 1; i++) Obj(Root, MeshKit.Box(1.6f, 0.05f, 0.35f), Mats.Emissive("#fff6e0", 1.2f), new Vector3(i * 2.6f, H - 0.08f, 0.4f), false);
+            for (int i = -1; i <= 1; i++) Obj(Root, MeshKit.Box(1.6f, 0.05f, 0.35f), Mats.Emissive("#fff6e0", 0.7f), new Vector3(i * 2.6f, H - 0.08f, 0.4f), false);
             var lamp = new GameObject("Lamp").AddComponent<Light>();
             lamp.transform.SetParent(Root, false);
             lamp.transform.localPosition = new Vector3(0.4f, 2.4f, 0.2f);
-            lamp.type = LightType.Point; lamp.range = 9; lamp.intensity = 0.9f; lamp.color = Mats.Hex("#ffe9c8"); lamp.shadows = LightShadows.None;
+            lamp.cullingMask = 1 << Layer;
+            lamp.type = LightType.Point; lamp.range = 10; lamp.intensity = 0.75f; lamp.color = Mats.Hex("#ffe9c8"); lamp.shadows = LightShadows.None;
 
             // шкафчики вдоль задней стены: перегородки, полка, скамья
             float back = D / 2 - 0.05f, stallW = 1.3f; int n = 6;

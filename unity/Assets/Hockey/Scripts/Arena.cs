@@ -91,6 +91,7 @@ namespace Hockey
             Fill.shadows = LightShadows.None;
             Fill.renderMode = LightRenderMode.ForceVertex;   // считается в основном проходе (SH) — без лишнего прохода отрисовки
             Fill.transform.rotation = Quaternion.LookRotation(new Vector3(-9, -14, 12));
+            Sun.cullingMask &= ~(1 << LockerRoom.Layer); Fill.cullingMask &= ~(1 << LockerRoom.Layer);
         }
 
         void BuildSky()
