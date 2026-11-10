@@ -238,6 +238,9 @@ namespace Hockey
         }
 
         /// Материал внешней модели: её текстура (Resources/Gear/<name>.png), у синей команды красное перекрашено в синий.
+        static Texture2D crestTex;
+        static Texture2D CrestTex() => crestTex != null ? crestTex : crestTex = HudArt.Shield(Color.white, new Color(0.82f, 0.85f, 0.92f));
+
         static Material ExtMaterial(string name, Color tint, int team)
         {
             string key = name + ColorUtility.ToHtmlStringRGB(tint) + team;
@@ -253,7 +256,7 @@ namespace Hockey
                 {
                     Color.RGBToHSV(px[i], out float h, out float s, out float v);
                     if (team == 1 && (h < 0.05f || h > 0.93f) && s > 0.35f && v > 0.25f) px[i] = Color.HSVToRGB(blueH, s, v);
-                    else if (tinted && s < 0.12f && v > 0.7f) px[i] *= tint;   // в цвет команды — только белые части
+                    else if (tinted && s < 0.12f && v > 0.45f) px[i] *= tint;   // в цвет команды — белые части и серые швы (швы выходят темнее)
                 }
                 use = new Texture2D(tex.width, tex.height, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Trilinear, anisoLevel = 8 };
                 use.SetPixels(px); use.Apply(true);
@@ -352,6 +355,22 @@ namespace Hockey
                 var back = bb.center - fr.Fwd * (bb.extents.z + 0.03f) + fr.Up * bb.size.y * 0.12f;
                 var num = Mats.Cutout(Tex.Number(number), Color.white);
                 Piece(MeshKit.Plane(u * 0.42f, u * 0.42f), num, back, fr.Rot, chest, false);
+                if (!goalie)
+                {
+                    // хоккейный свитер поверх туники: подол в цвет команды с белой и тёмной полосами закрывает ремень,
+                    // на груди — эмблема-щит
+                    var hemC = new Vector3(bb.center.x, bb.min.y + bb.size.y * 0.2f, bb.center.z);
+                    var hemS = new Vector3(bb.size.x * 1.07f, bb.size.y * 0.36f, bb.size.z * 1.1f);
+                    bones.TryGetValue("hips", out var hipsB);
+                    var hb = hipsB != null ? hipsB : chest;
+                    var cyl = MeshKit.Cylinder(0.5f, 1f, 28);
+                    Piece(cyl, team1, hemC, fr.Rot, hb, true, hemS);
+                    Piece(cyl, white, hemC - fr.Up * hemS.y * 0.22f, fr.Rot, hb, false, new Vector3(hemS.x * 1.012f, hemS.y * 0.16f, hemS.z * 1.012f));
+                    Piece(cyl, dark, hemC - fr.Up * hemS.y * 0.4f, fr.Rot, hb, false, new Vector3(hemS.x * 1.012f, hemS.y * 0.1f, hemS.z * 1.012f));
+                    var crest = Mats.Cutout(CrestTex(), Color.white);
+                    var front = bb.center + fr.Fwd * (bb.extents.z + 0.035f) + fr.Up * bb.size.y * 0.2f;
+                    Piece(MeshKit.Plane(u * 0.34f, u * 0.4f), crest, front, fr.Rot * Quaternion.Euler(0, 180, 0), chest, false);
+                }
                 if (!goalie)
                     for (int i = 0; i < 2; i++)
                     {
