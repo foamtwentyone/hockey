@@ -4,7 +4,7 @@
 # 2) несколько проходов «большинства соседей» по смежности граней — сглаживает границы, убирает пятна;
 # 3) (palm) грани ладони (-Z, ниже раструба), бывшие белыми, — в цвет кожи;
 # 4) текстура рисуется заново: UV-треугольник каждой грани заливается её цветом, плюс поля (dilation) против швов.
-import sys, numpy as np, trimesh
+import os, sys, numpy as np, trimesh
 from PIL import Image, ImageDraw, ImageFilter
 base = sys.argv[1]
 pal = np.array([[int(h[i:i + 2], 16) for i in (0, 2, 4)] for h in sys.argv[2].split(',')], float)
@@ -58,6 +58,10 @@ if palm:
                 if cnt[skin] >= 2 and cls[i] == white and fn[i, 2] < -0.2 and cy[i] < cuff: new[i] = skin
                 elif cnt[skin] == 0 and cls[i] == skin: new[i] = white
         cls = new
+if os.environ.get('BACK_WHITE'):
+    # кулак: кожа только на ладони (−Z); тыльная сторона (+Z) — белые валики
+    fn = m.face_normals; skin = len(pal) - 1
+    cls[(cls == skin) & (fn[:, 2] > 0.1)] = 0
 # новая текстура
 out = Image.new('RGB', (w, h), tuple(int(x) for x in pal[0]))
 mask = Image.new('L', (w, h), 0)

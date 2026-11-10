@@ -282,6 +282,34 @@ namespace Hockey
         }
 
         /// Надевает экипировку. Возвращает детали шлема (их можно сбить шайбой).
+        /// Крага-кулак (Resources/Gear/fist): обхватывает клюшку, центр хвата — в начале координат,
+        /// древко идёт по оси X, раструб — вниз (−Y). Возвращает держатель или null, если модели нет.
+        public static Transform Fist(int team, Transform parent, float size, bool mirror)
+        {
+            var prefab = LoadExt("fist");
+            if (prefab == null) return null;
+            var holder = new GameObject("gear_fist").transform;
+            holder.SetParent(parent, false);
+            var go = Object.Instantiate(prefab, holder, false);
+            go.name = "fist_model";
+            var em = ExtMaterial("fist", Mats.Hex(TeamColors.All[Mathf.Clamp(team, 0, 1)].Main), team);
+            float maxDim = 1e-3f;
+            foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+            {
+                var mats = r.sharedMaterials;
+                for (int k = 0; k < mats.Length; k++) mats[k] = em;
+                r.sharedMaterials = mats;
+                var mf = r.GetComponent<MeshFilter>();
+                if (mf != null && mf.sharedMesh != null) maxDim = Mathf.Max(maxDim, mf.sharedMesh.bounds.size.y);
+            }
+            go.transform.localPosition = Vector3.zero;
+            go.transform.localRotation = Quaternion.identity;
+            float k0 = size / maxDim / Mathf.Max(1e-4f, parent.lossyScale.x);   // size — в мировых единицах
+            go.transform.localScale = new Vector3(mirror ? -k0 : k0, k0, k0);
+            holder.gameObject.SetActive(false);
+            return holder;
+        }
+
         public static List<Transform> Dress(Transform model, Dictionary<string, Transform> bones, Dictionary<string, SkinnedMeshRenderer> parts, int team, int number, bool goalie)
         {
             var helmet = new List<Transform>();

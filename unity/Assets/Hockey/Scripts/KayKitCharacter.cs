@@ -22,7 +22,7 @@ namespace Hockey
         float wWind, wShot, leftSign = 1, lastDt = 1 / 60f;   // исходное положение кистей (рука «тянется» только на кадр)
         float gripW;
         readonly List<Transform> hands = new List<Transform>();
-        class GloveRig { public Transform T, Hand, Lower; public float Along; public Vector3 BackLocal; public bool Left; }
+        class GloveRig { public Transform T, Hand, Lower, Fist; public float Along; public Vector3 BackLocal; public bool Left; }
         // текущий хват: точки на древке для правой (верхней) и левой (нижней) руки и направление древка к крюку
         Vector3 gripTop, gripLow, gripDir; float gripNow;
         readonly List<GloveRig> gloves = new List<GloveRig>();
@@ -38,6 +38,21 @@ namespace Hockey
                 if (back.sqrMagnitude < 1e-6f) back = Vector3.ProjectOnPlane(Model.forward, fdir);
                 var pos = g.Hand.position + fdir * g.Along;
                 var rot = Quaternion.LookRotation(back.normalized, fdir);
+                bool fist = g.Fist != null && gripNow > 0.5f;
+                if (g.Fist != null && g.Fist.gameObject.activeSelf != fist) g.Fist.gameObject.SetActive(fist);
+                if (g.T.gameObject.activeSelf == fist) g.T.gameObject.SetActive(!fist);
+                if (fist)
+                {
+                    // кулак обхватывает древко: центр хвата — в точке на клюшке, древко по оси X кулака,
+                    // раструб смотрит к локтю
+                    var grip = g.Left ? gripLow : gripTop;
+                    var up = Vector3.ProjectOnPlane(grip - g.Lower.position, gripDir);
+                    if (up.sqrMagnitude < 1e-6f) up = Vector3.ProjectOnPlane(Vector3.up, gripDir);
+                    up.Normalize();
+                    var x = gripDir;
+                    g.Fist.SetPositionAndRotation(grip, Quaternion.LookRotation(Vector3.Cross(x, up), up));
+                    continue;
+                }
                 if (gripNow > 0.01f)
                 {
                     // кулак обхватывает древко: центр краги — на древке, пальцы — по руке (от локтя)
@@ -282,6 +297,10 @@ namespace Hockey
                             Left = side == ".l",
                         });
                         ch.SetParent(go.transform, true);
+                        // кулак той же величины: длина кулака ≈ 0.72 длины раскрытой краги
+                        float len = 0.2f;
+                        foreach (var rr in ch.GetComponentsInChildren<Renderer>(true)) len = Mathf.Max(len, rr.bounds.size.magnitude * 0.62f);
+                        k.gloves[k.gloves.Count - 1].Fist = HockeyGear.Fist(team, go.transform, len * 0.72f, side == ".r");
                     }
                 }
             // кулак модели меньше — чтобы не протыкал крагу; всё надетое на кисть компенсируем, оно остаётся прежнего размера
