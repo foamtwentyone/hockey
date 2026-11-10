@@ -54,12 +54,16 @@ namespace Hockey
         public bool Shoot, Pass, Check, Sprint, Jump, Fight;
         /// Куда смотрит камера (курс в радианах): бросок и пас идут в прицел по центру экрана.
         public float AimYaw; public bool HasAim;
+        /// Точка прицела в мире (куда смотрит центр экрана): шайба летит из крюка точно в неё — и по высоте тоже.
+        public float AimX, AimY, AimZ;
         public static readonly PlayerInput None = default;
 
         public byte Bits => (byte)((Shoot ? 1 : 0) | (Pass ? 2 : 0) | (Check ? 4 : 0) | (Sprint ? 8 : 0) | (Jump ? 16 : 0) | (Fight ? 32 : 0) | (HasAim ? 64 : 0));
-        public static PlayerInput FromBits(float mx, float mz, byte bits, float aim = 0)
+        public static PlayerInput FromBits(float mx, float mz, byte bits, float aim = 0, float ax = 0, float ay = 0, float az = 0)
         {
             if (float.IsNaN(aim) || float.IsInfinity(aim)) aim = 0;
+            if (!(float.IsFinite(ax) && float.IsFinite(ay) && float.IsFinite(az))) ax = ay = az = 0;
+            ax = Math.Clamp(ax, -100, 100); ay = Math.Clamp(ay, 0, 6); az = Math.Clamp(az, -100, 100);
             float l = MathF.Sqrt(mx * mx + mz * mz);
             if (float.IsNaN(l)) { mx = mz = 0; l = 0; }
             if (l > 1) { mx /= l; mz /= l; }
@@ -67,7 +71,7 @@ namespace Hockey
             {
                 MoveX = mx, MoveZ = mz,
                 Shoot = (bits & 1) != 0, Pass = (bits & 2) != 0, Check = (bits & 4) != 0, Sprint = (bits & 8) != 0, Jump = (bits & 16) != 0, Fight = (bits & 32) != 0,
-                HasAim = (bits & 64) != 0, AimYaw = aim,
+                HasAim = (bits & 64) != 0, AimYaw = aim, AimX = ax, AimY = ay, AimZ = az,
             };
         }
         public PlayerInput Scaled(float k) { var c = this; c.MoveX *= k; c.MoveZ *= k; return c; }
@@ -174,9 +178,18 @@ namespace Hockey
         public bool Has(Buff b) => Buffs[(int)b] > 0;
         public float Radius => Has(Buff.Giant) ? 0.62f : 0.45f;
         public PlayerInput Prev;
-        public float AimH; public bool HasAim;
-        /// Направление броска/паса: у человека — по прицелу камеры, у ботов — куда смотрит игрок.
-        public float ShotH => HasAim && Human != null ? AimH : H;
+        public float AimH, AimX, AimY, AimZ; public bool HasAim;
+        /// Направление броска/паса: у человека — из крюка в точку прицела, у ботов — куда смотрит игрок.
+        public float ShotH
+        {
+            get
+            {
+                if (!(HasAim && Human != null)) return H;
+                Sim.Blade(this, out float bx, out float bz);
+                float dx = AimX - bx, dz = AimZ - bz;
+                return dx * dx + dz * dz > 1 ? MathF.Atan2(dx, dz) : AimH;
+            }
+        }
         internal BotState Bot = new BotState();
     }
 
@@ -556,7 +569,7 @@ namespace Hockey
                 }
                 if (!diving && !frozen)
                 {
-                    if (inp.HasAim) { p.AimH = inp.AimYaw; p.HasAim = true; }
+                    if (inp.HasAim) { p.AimH = inp.AimYaw; p.AimX = inp.AimX; p.AimY = inp.AimY; p.AimZ = inp.AimZ; p.HasAim = true; }
                     if (inp.Shoot) p.Charge = MathF.Min(1, p.Charge + dt / 0.9f);
                     else if (p.Prev.Shoot && p.Stun <= 0) { Shoot(p, p.Charge); p.Charge = 0; }
                     else p.Charge = 0;
@@ -765,11 +778,10 @@ namespace Hockey
             float gx = Rink.TeamDir[p.Team] * Rink.GoalX;
             if (p.Human != null && p.HasAim)
             {
-                // человек: шайба летит ровно в прицел; высота у ворот зависит только от силы замаха
-                // (короткий щелчок — по льду, полный замах — под перекладину). Никаких случайностей.
-                float along = MathF.Abs(dx) > 0.05f ? (gx - bx) / dx : -1;
-                float dist = along > 1 && along < 45 ? along : 14;
-                vy = ShotVy(charge, dist, speed);
+                // человек: шайба летит из крюка ровно в точку прицела (центр экрана) — и по направлению,
+                // и по высоте: камеру можно поднять и целиться в «девятку». Сила замаха — только скорость.
+                float dist = MathF.Max(2, Hyp(p.AimX - bx, p.AimZ - bz));
+                vy = AimVy(p.AimY, dist, speed);
                 float err = oneTimer ? 0.02f : 0.006f;
                 float a0 = MathF.Atan2(dx, dz) + Rnd(-err, err);
                 dx = MathF.Sin(a0); dz = MathF.Cos(a0);
@@ -802,7 +814,9 @@ namespace Hockey
 
             pk.Owner = -1;
             pk.X = bx; pk.Z = bz; pk.Y = 0.08f;
-            pk.Vx = dx * speed + p.Vx * 0.25f; pk.Vz = dz * speed + p.Vz * 0.25f; pk.Vy = vy;
+            bool aimed = p.Human != null && p.HasAim;
+            float carry = aimed ? 0 : 0.25f;   // у человека — без сноса скоростью игрока, шайба идёт ровно в прицел
+            pk.Vx = dx * speed + p.Vx * carry; pk.Vz = dz * speed + p.Vz * carry; pk.Vy = vy;
             pk.SaveCheck.Clear();
             pk.PassTarget = -1;
             Touch(p);
@@ -812,6 +826,7 @@ namespace Hockey
                 p.Buffs[(int)Buff.Mega] = 0;
                 pk.Mega = true;
                 pk.Vx *= 1.45f; pk.Vz *= 1.45f;
+                if (aimed) pk.Vy = AimVy(p.AimY, MathF.Max(2, Hyp(p.AimX - bx, p.AimZ - bz)), speed * 1.45f);
                 Ev(EvType.MegaShot, 0, p.Idx);
             }
             Ev(EvType.Shot, power, p.Idx);
@@ -826,6 +841,13 @@ namespace Hockey
 
         /// Высота шайбы над льдом на линии ворот: от льда (щелчок) до ~1.05 м (полный замах).
         public static float ShotHeight(float charge) => 0.05f + 1.0f * Math.Clamp(charge, 0, 1);
+
+        /// Вертикальная скорость, чтобы на расстоянии dist шайба оказалась на высоте h (с учётом тяжести).
+        public static float AimVy(float h, float dist, float speed)
+        {
+            float t = dist / speed;
+            return Math.Clamp((Math.Clamp(h, 0.03f, 3f) - 0.08f + 0.5f * G * t * t) / t, 0, 12);
+        }
 
         /// Вертикальная скорость, чтобы на расстоянии dist шайба была на высоте ShotHeight.
         public static float ShotVy(float charge, float dist, float speed)

@@ -523,15 +523,37 @@ namespace Hockey
             lx += raw.LookRateX * 160 * dt; ly += raw.LookRateY * 110 * dt;
             if (Mathf.Abs(lx) + Mathf.Abs(ly) > 0.01f) v.LastManual = time;
             v.Yaw += lx * Mathf.Deg2Rad;
-            v.Pitch = Mathf.Clamp(v.Pitch + (Settings.InvertY ? ly : -ly) * Mathf.Deg2Rad, 0.08f, 0.85f);
+            // ниже 0.06 камера уже не опускается, а смотрит вверх — можно целиться в «девятку»
+            v.Pitch = Mathf.Clamp(v.Pitch + (Settings.InvertY ? ly : -ly) * Mathf.Deg2Rad, -0.35f, 0.85f);
             float fx = Mathf.Sin(v.Yaw), fz = Mathf.Cos(v.Yaw);
+            var aim = v.Cam != null ? AimPoint(v, out _) : Vector3.zero;
             return new PlayerInput
             {
                 MoveX = fx * raw.MoveY + fz * raw.MoveX,
                 MoveZ = fz * raw.MoveY - fx * raw.MoveX,
                 Shoot = raw.Shoot, Pass = raw.Pass, Check = raw.Check, Sprint = raw.Sprint, Jump = raw.Jump, Fight = raw.Fight,
-                AimYaw = v.Yaw, HasAim = true,
+                AimYaw = v.Yaw, HasAim = v.Cam != null, AimX = aim.x, AimY = aim.y, AimZ = aim.z,
             };
+        }
+
+        /// Точка, в которую смотрит центр экрана (прицел): на плоскости чужих ворот, если камера смотрит в их сторону,
+        /// иначе — в 30 м по лучу; не ниже льда. onGoal — луч попадает в створ ворот.
+        Vector3 AimPoint(View v, out bool onGoal)
+        {
+            onGoal = false;
+            var cam = v.Cam.transform; var o = cam.position; var d = cam.forward;
+            int team = v.Follow >= 0 && v.Follow < roster.Count ? roster[v.Follow].Team : 0;
+            float gx = Rink.TeamDir[team] * Rink.GoalX;
+            Vector3 p = o + d * 30;
+            bool toGoal = d.x * Mathf.Sign(gx) > 0.05f;
+            if (toGoal) { float t = (gx - o.x) / d.x; if (t > 0 && t < 80) p = o + d * t; else toGoal = false; }
+            if (p.y < 0.03f)
+            {
+                if (d.y < -1e-3f) { float t = (0.03f - o.y) / d.y; p = o + d * t; toGoal = false; }
+                p.y = 0.03f;
+            }
+            onGoal = toGoal && Mathf.Abs(p.z) < Rink.GoalW / 2 - 0.05f && p.y < Rink.GoalH - 0.05f;
+            return p;
         }
 
         View ViewFor(string key)
@@ -824,11 +846,14 @@ namespace Hockey
                 if (auto || autotest) v.Yaw += Sim.Wrap(s.H - v.Yaw) * (1 - Mathf.Exp(-dt * (mouseDriven ? 1.2f : 2.4f)));
                 float dist = (5.8f + Mathf.Min(s.Spd, 10) * 0.12f) * Settings.CamDistance * (s.Has(Buff.Giant) ? 1.3f : 1);
                 float fx2 = Mathf.Sin(v.Yaw), fz = Mathf.Cos(v.Yaw);
-                float horiz = dist * Mathf.Cos(v.Pitch);
+                // наклон камеры: выше 0.06 — камера поднимается над игроком; ниже — остаётся низко,
+                // а точка взгляда поднимается: прицел уходит вверх, к перекладине и «девяткам»
+                float pe = Mathf.Max(v.Pitch, 0.06f), lift = Mathf.Max(0, 0.06f - v.Pitch) * 4.5f;
+                float horiz = dist * Mathf.Cos(pe);
                 float cx = Mathf.Clamp(s.X - fx2 * horiz, -Rink.L / 2 - 3.2f, Rink.L / 2 + 3.2f);
                 float cz = Mathf.Clamp(s.Z - fz * horiz, -Rink.W / 2 - 3.2f, Rink.W / 2 + 3.2f);
-                var target = new Vector3(cx, 1.3f + dist * Mathf.Sin(v.Pitch) + s.Y * 0.5f, cz);
-                var look = new Vector3(s.X + fx2 * 2.2f, 1.1f + s.Y * 0.5f, s.Z + fz * 2.2f);
+                var target = new Vector3(cx, 1.3f + dist * Mathf.Sin(pe) + s.Y * 0.5f, cz);
+                var look = new Vector3(s.X + fx2 * 2.2f, 1.1f + lift + s.Y * 0.5f, s.Z + fz * 2.2f);
                 if (!v.Init) { v.Pos = target; v.Look = look; v.Init = true; }
                 v.Pos = Vector3.Lerp(v.Pos, target, 1 - Mathf.Exp(-dt * 10));
                 v.Look = Vector3.Lerp(v.Look, look, 1 - Mathf.Exp(-dt * 12));

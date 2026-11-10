@@ -13,7 +13,7 @@ namespace Hockey
     {
         public const int GamePort = 7777;
         public const int DiscoveryPort = 7778;
-        public const int Protocol = 4;
+        public const int Protocol = 5;
         public static readonly byte[] Magic = { (byte)'D', (byte)'V', (byte)'H', (byte)'K' };
     }
 
@@ -298,7 +298,7 @@ namespace Hockey
                 case Msg.Input:
                     if (c == null) return;
                     c.LastSeen = now;
-                    { float mx = r.ReadSingle(), mz = r.ReadSingle(); byte bits = r.ReadByte(); c.Input = PlayerInput.FromBits(mx, mz, bits, r.ReadSingle()); }
+                    { float mx = r.ReadSingle(), mz = r.ReadSingle(); byte bits = r.ReadByte(); float aim = r.ReadSingle(); float ax = r.ReadSingle(), ay = r.ReadSingle(), az = r.ReadSingle(); c.Input = PlayerInput.FromBits(mx, mz, bits, aim, ax, ay, az); }
                     break;
                 case Msg.SetTeam:
                     if (c == null) return;
@@ -403,7 +403,7 @@ namespace Hockey
             if (Connected && now - lastInput > 1.0 / 30)
             {
                 lastInput = now;
-                var w = peer.Begin(Msg.Input); w.Write(inp.MoveX); w.Write(inp.MoveZ); w.Write(inp.Bits); w.Write(inp.AimYaw); peer.SendTo(host);
+                var w = peer.Begin(Msg.Input); w.Write(inp.MoveX); w.Write(inp.MoveZ); w.Write(inp.Bits); w.Write(inp.AimYaw); w.Write(inp.AimX); w.Write(inp.AimY); w.Write(inp.AimZ); peer.SendTo(host);
             }
             if (Connected && now - lastPing > 1.5)
             {

@@ -1085,16 +1085,9 @@ namespace Hockey
         void DrawCrosshair(View v, ViewState st, PlayerView p, Rect area)
         {
             if (v.Src == null || st.Phase != Phase.Play || p.Stun || p.Brawl || v.Follow >= roster.Count) return;
-            int team = roster[v.Follow].Team;
             float ch = Mathf.Clamp01(p.Charge);
-            float gx = Rink.TeamDir[team] * Rink.GoalX;
-            // точка вылета: шайба у клюшки или крюк
-            float px = st.PuckOwner == v.Follow ? st.PuckX : p.X + Mathf.Sin(p.H) * 1.2f - Mathf.Cos(p.H) * 0.42f;
-            float pz = st.PuckOwner == v.Follow ? st.PuckZ : p.Z + Mathf.Cos(p.H) * 1.2f + Mathf.Sin(p.H) * 0.42f;
-            float dx = Mathf.Sin(v.Yaw), dz = Mathf.Cos(v.Yaw);
-            float along = Mathf.Abs(dx) > 0.05f ? (gx - px) / dx : -1;
-            float hitZ = pz + dz * along;
-            bool onGoal = along > 1 && along < 45 && Mathf.Abs(hitZ) < Rink.GoalW / 2 + 0.05f;
+            bool onGoal = false;
+            if (v.Cam != null) AimPoint(v, out onGoal);
             Color col = ch > 0.7f ? Mats.Hex("#ff5a4c") : ch > 0.02f ? Mats.Hex("#ffb14a") : onGoal ? Mats.Hex("#5cf28a") : Color.white;
 
             var c = new Vector2(area.x + area.width / 2, VH / 2);

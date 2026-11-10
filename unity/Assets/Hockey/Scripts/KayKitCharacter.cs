@@ -19,7 +19,8 @@ namespace Hockey
         Transform bHips, bSpine, bChest, bHead, bWristL, bWristR, bLegL, bLegR;
         MocapClip moStance, moWind, moShot;
         readonly float[] fS = new float[MocapClip.Stride], fW = new float[MocapClip.Stride], fSh = new float[MocapClip.Stride], fMix = new float[MocapClip.Stride];
-        float wWind, wShot, leftSign = 1, lastDt = 1 / 60f;   // исходное положение кистей (рука «тянется» только на кадр)
+        float wWind, wShot, leftSign = 1, lastDt = 1 / 60f;
+        float heldCharge, relCharge; bool relPass;   // исходное положение кистей (рука «тянется» только на кадр)
         float gripW;
         readonly List<Transform> hands = new List<Transform>();
         class GloveRig { public Transform T, Hand, Lower, Fist, Sleeve, Stripe; public float Along, FistSize; public Vector3 BackLocal; public bool Left; }
@@ -498,7 +499,15 @@ namespace Hockey
             if (s.Stun && !wasStun) fallT = 0;
             if (!s.Stun && wasStun) standT = 0;
             if (s.Dive && !wasDive) diveT = 0;
-            if (swing && !wasSwing) swingT = 0;
+            if (s.Charge > 0.02f) heldCharge = s.Charge;
+            if (swing && !wasSwing)
+            {
+                swingT = 0;
+                // тип удара: пас (короткий взмах) или бросок с силой последнего замаха
+                relPass = s.Swing < 0.27f;
+                relCharge = relPass ? 0 : heldCharge;
+                heldCharge = 0;
+            }
             if (s.Punch && !wasPunch) punchT = 0;
             wasPunch = s.Punch; punchT += dt;
             if (s.Save > 0.3f && !wasSave) saveT = 0;
@@ -656,13 +665,17 @@ namespace Hockey
         void MocapGrip(PlayerView s, float w)
         {
             float dt = lastDt;
-            bool charging = s.Charge > 0.02f, shooting = !charging && swingT < 0.45f;
+            // разные удары: пас — короткий толчок клюшкой; кистевой/щелчок (слабый замах) — быстрый, без большого
+            // замаха, с середины удара; сильный бросок — полный замах и полный удар с проводкой
+            float shotDur = relPass ? 0.24f : Mathf.Lerp(0.26f, 0.5f, relCharge);
+            float shotFrom = relPass ? 0.5f : Mathf.Lerp(0.42f, 0f, relCharge);
+            bool charging = s.Charge > 0.02f, shooting = !charging && swingT < shotDur;
             wWind += ((charging ? 1 : 0) - wWind) * (1 - Mathf.Exp(-dt * 18));
             wShot += ((shooting ? 1 : 0) - wShot) * (1 - Mathf.Exp(-dt * 22));
             float ws = Mathf.Max(0, 1 - wWind - wShot);
             moStance.SampleLoop(Time.time * 0.8f, fS);
             moWind.Sample(s.Charge, fW);
-            moShot.Sample(swingT / 0.45f, fSh);
+            moShot.Sample(shotFrom + (1 - shotFrom) * Mathf.Clamp01(swingT / shotDur), fSh);
             for (int i = 0; i < MocapClip.Stride; i++) fMix[i] = fS[i] * ws + fW[i] * wWind + fSh[i] * wShot;
             float act = Mathf.Clamp01(wWind + wShot);
 
