@@ -95,6 +95,7 @@ namespace Hockey
             var b = new ProBody { team = team };
             b.Model = new GameObject("ProBody").transform;
             b.Model.SetParent(parent, false);
+            b.Model.localScale = Vector3.one * 1.18f;   // рост как у прежней модели
             var tc = TeamColors.All[Mathf.Clamp(team, 0, 1)];
             Material jersey = Mats.Get(tc.Main, 0.12f), dark = Mats.Get(tc.Dark, 0.12f), white = Mats.Get("#f6f6f2", 0.1f), pantsM = Mats.Get(tc.Pants, 0.1f);
             Material skinM = Mats.Get(CharacterRig.Skins[Mathf.Abs(skin) % CharacterRig.Skins.Length], 0.12f), black = Mats.Get("#23232b", 0.35f), steel = Mats.Get("#dfe8f2", 0.6f), hair = Mats.Get("#7a4a2a", 0.2f);
@@ -255,8 +256,8 @@ namespace Hockey
             }
             if (wSit > 0.001f)
             {   // сидит на скамье: бёдра горизонтально, руки на коленях
-                var q = new Pose { Hip = new Vector3(0, 0.45f, -0.36f), Pitch = 0.1f + Mathf.Sin(time * 1.6f) * 0.015f, FootL = new Vector3(-0.13f, Ankle + 0.02f, -0.14f), FootR = new Vector3(0.13f, Ankle + 0.02f, -0.14f),
-                    Top = new Vector3(0.16f, 0.52f, -0.12f), Blade = new Vector3(0.16f, -1f, -0.1f), Sep = 0.3f, FreeL = 1, HandL = new Vector3(-0.16f, 0.52f, -0.12f), HeadPitch = Mathf.Sin(time * 0.7f) * 0.06f };
+                var q = new Pose { Hip = new Vector3(0, 0.33f, -0.3f), Pitch = 0.1f + Mathf.Sin(time * 1.6f) * 0.015f, FootL = new Vector3(-0.13f, 0.13f + Mathf.Sin(time * 1.9f) * 0.02f, -0.1f), FootR = new Vector3(0.13f, 0.13f - Mathf.Sin(time * 1.9f) * 0.02f, -0.1f),
+                    Top = new Vector3(0.15f, 0.4f, -0.08f), Blade = new Vector3(0.15f, -1f, -0.06f), Sep = 0.3f, FreeL = 1, HandL = new Vector3(-0.15f, 0.4f, -0.08f), HeadPitch = Mathf.Sin(time * 0.7f) * 0.06f };
                 p = Pose.Lerp(p, q, wSit);
             }
             bool showStick = wSit < 0.5f;
