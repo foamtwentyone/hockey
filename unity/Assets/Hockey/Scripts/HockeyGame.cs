@@ -29,6 +29,7 @@ namespace Hockey
             public Vector3 Pos, Look; public Rect Rect;
             public string Toast; public Color ToastColor; public float ToastT;
             public bool HudInit; public float ChargeA, LastCharge;
+            public float Side;
         }
 
         // ---------- состояние ----------
@@ -870,6 +871,12 @@ namespace Hockey
                 float cz = Mathf.Clamp(s.Z - fz * horiz, -Rink.W / 2 - 3.2f, Rink.W / 2 + 3.2f);
                 var target = new Vector3(cx, 1.3f + dist * Mathf.Sin(pe) + s.Y * 0.5f, cz);
                 var look = new Vector3(s.X + fx2 * 2.2f, 1.1f + lift + s.Y * 0.5f, s.Z + fz * 2.2f);
+                // с шайбой камера уходит за правое плечо (клюшка и шайба слева): игрок смещается влево на экране
+                // и не загораживает ворота и прицел — как прицеливание «из-за плеча» в играх от третьего лица
+                bool aiming = st.PuckOwner == v.Follow || s.Charge > 0.02f;
+                v.Side = Mathf.Lerp(v.Side, aiming ? 1 : 0, 1 - Mathf.Exp(-dt * 5));
+                var sideOff = new Vector3(fz, 0, -fx2) * (1.15f * v.Side) + Vector3.up * (0.25f * v.Side);
+                target += sideOff; look += sideOff;
                 if (!v.Init) { v.Pos = target; v.Look = look; v.Init = true; }
                 v.Pos = Vector3.Lerp(v.Pos, target, 1 - Mathf.Exp(-dt * 10));
                 v.Look = Vector3.Lerp(v.Look, look, 1 - Mathf.Exp(-dt * 12));
