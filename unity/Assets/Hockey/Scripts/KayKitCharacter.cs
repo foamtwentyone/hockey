@@ -49,7 +49,7 @@ namespace Hockey
                     var up = Vector3.ProjectOnPlane(grip - g.Lower.position, gripDir);
                     if (up.sqrMagnitude < 1e-6f) up = Vector3.ProjectOnPlane(Vector3.up, gripDir);
                     up.Normalize();
-                    var x = gripDir;
+                    var x = g.Left ? gripDir : -gripDir;   // верхний кулак — тыльной стороной наружу, ладонью к телу
                     g.Fist.SetPositionAndRotation(grip, Quaternion.LookRotation(Vector3.Cross(x, up), up));
                     continue;
                 }
@@ -638,8 +638,9 @@ namespace Hockey
             Aim(bSpine, bChest, MV(2), w);
             Aim(bChest, Head, MV(3), w * 0.85f);
             Twist(bChest, Head, armL0, armR0, MV(4), w);
-            Aim(armL0, armL1, MV(5), w); Aim(armL1, bWristL, MV(6), w);
-            Aim(armR0, armR1, MV(7), w); Aim(armR1, bWristR, MV(8), w);
+            // руки из записи — только в замахе и броске; в стойке их ставим прямо на клюшку (IK ниже)
+            Aim(armL0, armL1, MV(5), w * act); Aim(armL1, bWristL, MV(6), w * act);
+            Aim(armR0, armR1, MV(7), w * act); Aim(armR1, bWristR, MV(8), w * act);
 
             // клюшка
             var fwd = Model.forward; fwd.y = 0;
@@ -647,15 +648,21 @@ namespace Hockey
             fwd.Normalize();
             var right = Vector3.Cross(Vector3.up, fwd);
             float g = Stick.lossyScale.y;
-            var top = HandR.position;
+            // стойка как у хоккеиста: верхняя (правая) рука с концом клюшки у правого бедра, нижняя (левая) —
+            // далеко по древку, клюшка длинная и пологая, крюк на льду впереди слева
+            float reach = (armR1.position - armR0.position).magnitude + (bWristR.position - armR1.position).magnitude;
+            var chest = (armL0.position + armR0.position) * 0.5f;
+            var topStance = chest + Vector3.down * reach * 0.72f + fwd * reach * 0.4f + right * reach * 0.34f;
+            var top = Vector3.Lerp(topStance, HandR.position, act);
             var iceDir = IceDir(top, (stickLen - 0.25f + GripL) * g, fwd, right);
             var dir = Vector3.Slerp(iceDir, MV(9), act).normalized;
             var bladeFwd = Vector3.ProjectOnPlane(right * 0.9f + fwd * 0.35f, dir);
             if (bladeFwd.sqrMagnitude < 1e-4f) bladeFwd = Vector3.ProjectOnPlane(fwd, dir);
             float armLen = (armL1.position - armL0.position).magnitude + (bWristL.position - armL1.position).magnitude;
-            float sep = Mathf.Clamp(fMix[30] * armLen, 0.16f, 0.45f);
+            float sep = Mathf.Lerp(0.46f, Mathf.Clamp(fMix[30] * armLen, 0.16f, 0.45f), act);
             var lowGrip = top + dir * sep;
-            float alongL = GloveAlong(true);
+            float alongL = GloveAlong(true), alongR = GloveAlong(false);
+            if (act < 0.99f) Ik(armR0, armR1, armR2, top - (top - armR0.position).normalized * alongR, w * (1 - act), right);
             Ik(armL0, armL1, armL2, lowGrip - (lowGrip - armL0.position).normalized * alongL, w, -right);
             gripTop = top; gripLow = lowGrip; gripDir = dir;
             var origin = top + dir * GripL * g;
