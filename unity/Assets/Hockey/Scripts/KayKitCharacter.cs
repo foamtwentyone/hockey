@@ -734,6 +734,9 @@ namespace Hockey
             float armLen = (armL1.position - armL0.position).magnitude + (bWristL.position - armL1.position).magnitude;
             float sep = Mathf.Clamp(fMix[30] * armLen, 0.2f, 0.8f);
             var lowGrip = top + dir * sep;
+            // локоть должен оставаться согнутым: если до точки хвата дальше 82% длины руки — берёмся ближе к верхней руке
+            float maxReach = (armLen + alongL) * 0.82f;
+            for (int it = 0; it < 12 && sep > 0.16f && (lowGrip - armL0.position).magnitude > maxReach; it++) { sep -= 0.03f; lowGrip = top + dir * sep; }
             Ik(armL0, armL1, armL2, lowGrip - (lowGrip - armL0.position).normalized * alongL, w, -right);
             gripTop = top; gripLow = lowGrip; gripDir = dir;
             var origin = top + dir * GripL * g;

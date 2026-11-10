@@ -34,6 +34,11 @@ def pose(k,P):
         k.fk(); sh=k.WP[k.idx('upperarm'+s)]; w=pt-nz(pt-sh)*0.05
         ik(k,'upperarm'+s,'lowerarm'+s,'hand'+s,w,P.get('elbow'+s,[sx*1,-0.5,-0.3]))
     k.fk()
+    if P.get('_dbg'):
+        for sfx,pt in (('.r',top),('.l',low)):
+            g=lambda n:k.WP[k.idx(n)]
+            L=np.linalg.norm(g('lowerarm'+sfx)-g('upperarm'+sfx))+np.linalg.norm(g('hand'+sfx)-g('lowerarm'+sfx))
+            print(P['_dbg'],sfx,'reach',round(np.linalg.norm(pt-g('upperarm'+sfx))/L,2))
     return top,low,blade,d
 VIEWS=[([1,0,0],[0,1,0],[0,0,1]),([0,0,-1],[0,1,0],[1,0,0]),([0.75,0,0.66],[0,1,0],[-0.66,0.3,0.75])]
 def draw(k,info,S=440,label=''):
@@ -47,16 +52,16 @@ def draw(k,info,S=440,label=''):
         im=k.render(v,S,center=np.array([0.1,0.68,0.25]),scale=S*0.46,lines=lines)
         ImageDraw.Draw(im).text((5,5),label,fill=(255,255,255)); out.paste(im,(i*S,0))
     return out
-STANCE=dict(top=[-0.22,0.52,0.2],blade=[0.45,0.03,1.0],sep=0.5,spine=[0,1,0.34],pelvis=[0,1,0.12],hips=[0,-0.08,-0.05])
+STANCE=dict(top=[-0.16,0.6,0.26],blade=[0.45,0.03,1.0],sep=0.3,spine=[0,1,0.42],pelvis=[0,1,0.14],hips=[0,-0.08,-0.05])
 STANCE['foot.l']=[0.25,0.145,0.05]; STANCE['foot.r']=[-0.25,0.145,-0.08]
 FEET={'foot.l':[0.25,0.145,0.05],'foot.r':[-0.25,0.145,-0.08]}
 STANCE.update(FEET)
-WINDUP=dict(top=[-0.02,0.66,0.3],blade=[0.8,1.0,-0.5],sep=0.5,spine=[0.08,1,0.36],pelvis=[0,1,0.12],hips=[0.02,-0.09,-0.05],chestTwist=[0.75,0,-0.65],neck=[-0.05,1,0.2],**{'elbow.l':[1,0.2,-0.6],'elbow.r':[-1,-0.6,0.2]},**FEET)
-CONTACT=dict(top=[-0.2,0.56,0.26],blade=[0.38,0.03,0.7],sep=0.5,spine=[0.05,1,0.5],pelvis=[0,1,0.18],hips=[0.03,-0.11,0.0],chestTwist=[1,0,-0.1],**FEET)
-FOLLOW=dict(top=[-0.16,0.66,0.12],blade=[0.02,0.5,1.3],sep=0.5,spine=[-0.05,1,0.5],pelvis=[0,1,0.2],hips=[0.0,-0.1,0.06],chestTwist=[0.8,0,0.6],**{'elbow.l':[1,-0.2,0.3],'elbow.r':[-1,-0.3,-0.5]},**FEET)
+WINDUP=dict(top=[0.0,0.72,0.3],blade=[0.8,1.0,-0.5],sep=0.34,spine=[0.08,1,0.36],pelvis=[0,1,0.12],hips=[0.02,-0.09,-0.05],chestTwist=[0.75,0,-0.65],neck=[-0.05,1,0.2],**{'elbow.l':[1,0.2,-0.6],'elbow.r':[-1,-0.6,0.2]},**FEET)
+CONTACT=dict(top=[-0.14,0.62,0.3],blade=[0.38,0.03,0.75],sep=0.3,spine=[0.05,1,0.5],pelvis=[0,1,0.18],hips=[0.03,-0.11,0.0],chestTwist=[1,0,-0.1],**FEET)
+FOLLOW=dict(top=[-0.14,0.7,0.2],blade=[0.05,0.5,1.3],sep=0.34,spine=[-0.05,1,0.5],pelvis=[0,1,0.2],hips=[0.0,-0.1,0.06],chestTwist=[0.8,0,0.6],**{'elbow.l':[1,-0.2,0.3],'elbow.r':[-1,-0.3,-0.5]},**FEET)
 POSES=dict(stance=STANCE,windup=WINDUP,contact=CONTACT,follow=FOLLOW)
 if __name__=='__main__':
-    k=new_kk(); ims=[draw(k,pose(k,P),S=330,label=n) for n,P in POSES.items()]
+    k=new_kk(); ims=[draw(k,pose(k,dict(P,_dbg=n)),S=330,label=n) for n,P in POSES.items()]
     out=Image.new('RGB',(ims[0].width,ims[0].height*len(ims)))
     for i,im in enumerate(ims): out.paste(im,(0,i*im.height))
     out.save(sys.argv[1] if len(sys.argv)>1 else 'pose.png')
