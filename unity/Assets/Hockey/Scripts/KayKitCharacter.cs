@@ -22,7 +22,7 @@ namespace Hockey
         float wWind, wShot, leftSign = 1, lastDt = 1 / 60f;   // исходное положение кистей (рука «тянется» только на кадр)
         float gripW;
         readonly List<Transform> hands = new List<Transform>();
-        class GloveRig { public Transform T, Hand, Lower, Fist; public float Along; public Vector3 BackLocal; public bool Left; }
+        class GloveRig { public Transform T, Hand, Lower, Fist; public float Along, FistSize; public Vector3 BackLocal; public bool Left; }
         // текущий хват: точки на древке для правой (верхней) и левой (нижней) руки и направление древка к крюку
         Vector3 gripTop, gripLow, gripDir; float gripNow;
         readonly List<GloveRig> gloves = new List<GloveRig>();
@@ -74,7 +74,8 @@ namespace Hockey
         }
         float GloveAlong(bool left)
         {
-            foreach (var g in gloves) if (g.Left == left) return Mathf.Max(0, g.Along);
+            // у кулака кисть заходит в раструб: запястье — на полпути от центра хвата к краю раструба
+            foreach (var g in gloves) if (g.Left == left) return g.Fist != null ? g.FistSize * 0.5f : Mathf.Max(0, g.Along);
             return 0;
         }
         const float HandShrink = 0.62f;
@@ -300,7 +301,9 @@ namespace Hockey
                         // кулак той же величины: длина кулака ≈ 0.72 длины раскрытой краги
                         float len = 0.2f;
                         foreach (var rr in ch.GetComponentsInChildren<Renderer>(true)) len = Mathf.Max(len, rr.bounds.size.magnitude * 0.62f);
-                        k.gloves[k.gloves.Count - 1].Fist = HockeyGear.Fist(team, go.transform, len * 0.72f, side == ".r");
+                        var gr = k.gloves[k.gloves.Count - 1];
+                        gr.FistSize = len * 0.72f;
+                        gr.Fist = HockeyGear.Fist(team, go.transform, gr.FistSize, side == ".r");
                     }
                 }
             // кулак модели меньше — чтобы не протыкал крагу; всё надетое на кисть компенсируем, оно остаётся прежнего размера
@@ -659,7 +662,7 @@ namespace Hockey
             var bladeFwd = Vector3.ProjectOnPlane(right * 0.9f + fwd * 0.35f, dir);
             if (bladeFwd.sqrMagnitude < 1e-4f) bladeFwd = Vector3.ProjectOnPlane(fwd, dir);
             float armLen = (armL1.position - armL0.position).magnitude + (bWristL.position - armL1.position).magnitude;
-            float sep = Mathf.Lerp(0.46f, Mathf.Clamp(fMix[30] * armLen, 0.16f, 0.45f), act);
+            float sep = Mathf.Lerp(0.62f, Mathf.Clamp(fMix[30] * armLen, 0.16f, 0.45f), act);   // в стойке руки широко по древку
             var lowGrip = top + dir * sep;
             float alongL = GloveAlong(true), alongR = GloveAlong(false);
             if (act < 0.99f) Ik(armR0, armR1, armR2, top - (top - armR0.position).normalized * alongR, w * (1 - act), right);
