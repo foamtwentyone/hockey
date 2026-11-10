@@ -1212,13 +1212,13 @@ namespace Hockey
                 // бросок в угол ворот тяжелее взять, даже если вратарь на месте
                 float tg = (s * Rink.GoalX - pk.X) / (MathF.Abs(pk.Vx) > 0.1f ? pk.Vx : 0.1f);
                 float zg = MathF.Abs(pk.Z + pk.Vz * MathF.Max(0, tg));
-                float corner = MathF.Max(0, zg - 0.7f) * 0.32f + MathF.Max(0, pk.Y - 0.7f) * 0.15f;
-                float prob = diff.SaveP + 0.04f + (lateral < 0.35f ? 0.05f : 0) - corner - (spd - 14) / 70 - lateral * 0.22f - MathF.Max(0, pk.Y - 0.9f) * 0.3f;
+                float corner = MathF.Max(0, zg - 0.7f) * 0.25f + MathF.Max(0, pk.Y - 0.7f) * 0.15f;
+                float prob = diff.SaveP + 0.24f + (lateral < 0.35f ? 0.05f : 0) - corner - (spd - 14) / 140 - lateral * 0.22f - MathF.Max(0, pk.Y - 0.9f) * 0.3f;
                 if (pk.Mega) prob -= 0.35f;
                 if (g.Has(Buff.Frozen)) prob -= 0.25f;
                 int lt = pk.LastTouch[0];
                 if (lt >= 0 && Players[lt].Team == g.Team) prob = 1;
-                prob = Clamp(prob, 0.18f, 0.95f);
+                prob = Clamp(prob, diff.SaveP * 0.9f, 0.95f);   // даже идеальный бросок вратарь иногда берёт — чаще на высокой сложности
                 bool ok = Rand() < prob;
                 pk.SaveCheck[g.Idx] = ok;
                 if (!ok) continue;
@@ -1336,6 +1336,8 @@ namespace Hockey
                 float dx = pk.X - p.X, dz = pk.Z - p.Z;
                 float d = Hyp(dx, dz);
                 float r = p.Goalie ? 0.5f : 0.4f;
+                // вратарь не взял бросок — шайба проходит мимо него (между щитков, под рукой), а не отскакивает от корпуса
+                if (p.Goalie && pk.SaveCheck.TryGetValue(p.Idx, out bool saved) && !saved) continue;
                 if (d < r && d > 1e-4f)
                 {
                     float nx = dx / d, nz = dz / d;
