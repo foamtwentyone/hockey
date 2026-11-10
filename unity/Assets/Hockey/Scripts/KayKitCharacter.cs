@@ -39,7 +39,7 @@ namespace Hockey
         }   // исходное положение кистей (рука «тянется» только на кадр)
         float gripW;
         readonly List<Transform> hands = new List<Transform>();
-        class GloveRig { public Transform T, Hand, Lower, Fist, Sleeve, Stripe; public float Along, FistSize; public Vector3 BackLocal; public bool Left; }
+        class GloveRig { public Transform T, Hand, Lower, Fist, Sleeve, Stripe, Upper; public float Along, FistSize; public Vector3 BackLocal; public bool Left; }
 
         /// Рукав хоккейного свитера: цилиндр цвета команды от локтя до раструба краги, с белой полосой.
         void PlaceSleeve(GloveRig g, Vector3 cuff)
@@ -57,6 +57,18 @@ namespace Hockey
             g.Sleeve.localScale = new Vector3(2 * r, L, 2 * r) / ps;
             g.Stripe.SetPositionAndRotation(a + d * 0.74f, rot);
             g.Stripe.localScale = new Vector3(2.12f * r, L * 0.1f, 2.12f * r) / ps;
+            // плечевая часть рукава: от плеча до локтя, чуть толще — рука цельная, без «провала» у плеча
+            if (g.Upper != null && g.Lower.parent != null)
+            {
+                var sh = g.Lower.parent.position; var du = elbow - sh; float lu = du.magnitude;
+                if (lu > 1e-4f)
+                {
+                    float ru = r * 1.18f;
+                    var s0 = sh - du / lu * ru * 0.5f; var e1 = elbow + du / lu * ru * 0.7f;
+                    g.Upper.SetPositionAndRotation((s0 + e1) * 0.5f, Quaternion.FromToRotation(Vector3.up, du));
+                    g.Upper.localScale = new Vector3(2 * ru, (e1 - s0).magnitude, 2 * ru) / ps;
+                }
+            }
         }
         // текущий хват: точки на древке для правой (верхней) и левой (нижней) руки и направление древка к крюку
         Vector3 gripTop, gripLow, gripDir; float gripNow;
@@ -360,6 +372,7 @@ namespace Hockey
                         }
                         gr.Sleeve = Cyl("sleeve" + side, TeamColors.All[Mathf.Clamp(team, 0, 1)].Main);
                         gr.Stripe = Cyl("sleeve_stripe" + side, "#f4f4f0");
+                        gr.Upper = Cyl("sleeve_upper" + side, TeamColors.All[Mathf.Clamp(team, 0, 1)].Main);
                     }
                 }
             // кулак модели меньше — чтобы не протыкал крагу; всё надетое на кисть компенсируем, оно остаётся прежнего размера
