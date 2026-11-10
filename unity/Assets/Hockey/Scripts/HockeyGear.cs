@@ -349,7 +349,7 @@ namespace Hockey
             if (parts.TryGetValue("Body", out var bodyR) && bones.TryGetValue("chest", out var chest))
             {
                 var bb = WorldBounds(bodyR);
-                var back = bb.center - fr.Fwd * (bb.extents.z + 0.012f) + fr.Up * bb.size.y * 0.12f;
+                var back = bb.center - fr.Fwd * (bb.extents.z + 0.03f) + fr.Up * bb.size.y * 0.12f;
                 var num = Mats.Cutout(Tex.Number(number), Color.white);
                 Piece(MeshKit.Plane(u * 0.42f, u * 0.42f), num, back, fr.Rot, chest, false);
                 if (!goalie)

@@ -83,11 +83,11 @@ namespace Hockey
                     {
                         var sl = Obj(j, MeshKit.Box(0.2f, 0.5f, 0.07f), team, new Vector3(sd * 0.36f, 0.06f, 0));
                         sl.transform.localRotation = Quaternion.Euler(0, 0, sd * 22);
-                        Obj(sl.transform, MeshKit.Box(0.21f, 0.07f, 0.075f), white, new Vector3(0, -0.14f, 0), false);
+                        Obj(sl.transform, MeshKit.Box(0.215f, 0.07f, 0.095f), white, new Vector3(0, -0.14f, 0), false);
                     }
-                    Obj(j, MeshKit.Box(0.57f, 0.09f, 0.075f), white, new Vector3(0, -0.22f, 0), false);
+                    Obj(j, MeshKit.Box(0.575f, 0.09f, 0.095f), white, new Vector3(0, -0.22f, 0), false);
                     Obj(j, MeshKit.Box(0.3f, 0.03f, 0.03f), steel, new Vector3(0, 0.36f, 0), false);
-                    Obj(j, MeshKit.Plane(0.34f, 0.34f), Mats.Cutout(Tex.Number(nums[i] == 0 ? 7 : nums[i]), Color.white), new Vector3(0, 0.02f, -0.04f), false);
+                    Obj(j, MeshKit.Plane(0.34f, 0.34f), Mats.Cutout(Tex.Number(nums[i] == 0 ? 7 : nums[i]), Color.white), new Vector3(0, 0.02f, -0.06f), false);
                 }
                 // коньки под скамьёй и сумка
                 Obj(Root, MeshKit.Box(0.34f, 0.2f, 0.3f), i % 3 == 0 ? teamDark : black, new Vector3(cx + 0.35f, 0.1f, back - 0.2f));
@@ -96,7 +96,7 @@ namespace Hockey
                 if (mine)
                 {
                     pl.transform.localScale = new Vector3(1.25f, 1.25f, 1);
-                    plate = Obj(Root, MeshKit.Plane(0.27f, 0.27f), Mats.Cutout(Tex.Number(number), Color.white), new Vector3(cx, 2.2f, back - 0.075f), false).GetComponent<MeshRenderer>();
+                    plate = Obj(Root, MeshKit.Plane(0.27f, 0.27f), Mats.Cutout(Tex.Number(number), Color.white), new Vector3(cx, 2.2f, back - 0.09f), false).GetComponent<MeshRenderer>();
                 }
             }
             // клюшки у боковой стены

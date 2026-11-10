@@ -109,7 +109,7 @@ namespace Hockey
             uiPage = UiPage.Play; yield return Wait(0.5f); yield return Shot("02_menu_play");
             uiPage = UiPage.Settings; yield return Wait(0.5f); yield return Shot("03_settings");
             uiPage = UiPage.Controls; yield return Wait(0.5f); yield return Shot("04_controls");
-            uiPage = UiPage.Locker; yield return Wait(1.2f); yield return Shot("04b_locker");
+            uiPage = UiPage.Locker; yield return Wait(2.2f); yield return Shot("04b_locker");
             uiPage = UiPage.Credits; yield return Wait(0.5f); yield return Shot("04c_credits");
             uiPage = UiPage.Main; yield return Wait(1.2f);
 

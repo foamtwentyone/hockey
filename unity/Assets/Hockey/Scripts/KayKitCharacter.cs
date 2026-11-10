@@ -797,7 +797,7 @@ namespace Hockey
             var at = target - a;
             float d = Mathf.Clamp(at.magnitude, Mathf.Abs(l1 - l2) + 1e-4f, (l1 + l2) * 0.999f);
             var dir = at.normalized;
-            var pole = Vector3.ProjectOnPlane(Vector3.down * 0.6f + outward * 0.8f, dir);
+            var pole = Vector3.ProjectOnPlane(outward + Vector3.down * 0.15f, dir);   // локти разведены в стороны: руки идут дугой от плеч к клюшке
             if (pole.sqrMagnitude < 1e-6f) pole = Vector3.ProjectOnPlane(b - a, dir);
             pole.Normalize();
             float x = (l1 * l1 - l2 * l2 + d * d) / (2 * d);

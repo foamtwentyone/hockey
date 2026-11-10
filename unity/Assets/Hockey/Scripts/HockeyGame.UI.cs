@@ -21,7 +21,7 @@ namespace Hockey
         readonly Dictionary<string, GUIStyle> fills = new Dictionary<string, GUIStyle>();
         Texture2D hudRing, hudReticle, hudPuck, hudStickE, hudStickF, hudBladeE, hudBladeF, hudRink, hudRays;
         readonly Texture2D[] hudShield = new Texture2D[2];
-        GUIStyle sBoard, sBubbleText, sPillRed, sPillBlue;
+        GUIStyle sBoard, sBubbleText, sPillRed, sPillBlue, sIce;
         Font bubbleFont;
         Texture2D bubSoap; readonly Texture2D[] bubTeam = new Texture2D[2];
         readonly int[] shownScore = { 0, 0 };
@@ -57,7 +57,7 @@ namespace Hockey
 
         static GUIStyle Panel(Color top, Color bottom, Color border, int radius = 22, int shadow = 6)
         {
-            var s = new GUIStyle { padding = new RectOffset(26, 26, 22, 24 + shadow), border = new RectOffset(radius + 2, radius + 2, radius + 2, radius + 2 + shadow), font = Resources.Load<Font>("Fonts/RussoOne") };
+            var s = new GUIStyle { padding = new RectOffset(26, 26, 22, 24 + shadow), border = new RectOffset(radius + 2, radius + 2, radius + 2, radius + 2 + shadow), font = Resources.Load<Font>("Fonts/NunitoBlack") ?? Resources.Load<Font>("Fonts/RussoOne") };
             s.normal.background = TexArt.RoundRect(radius * 2 + 12, radius, top, bottom, border, 3, shadow);
             return s;
         }
@@ -96,9 +96,10 @@ namespace Hockey
             white = Tex.Solid(Color.white);
             circleTex = TexArt.Circle(64, Color.white);
             // шрифты (SIL OFL): Russo One — интерфейс с кириллицей, Lilita One — логотип
-            uiFont = Resources.Load<Font>("Fonts/RussoOne");
+            // Nunito Black (OFL): округлый жирный шрифт в стиле логотипа, с кириллицей
+            uiFont = Resources.Load<Font>("Fonts/NunitoBlack") ?? Resources.Load<Font>("Fonts/RussoOne");
             logoFont = Resources.Load<Font>("Fonts/LilitaOne") ?? uiFont;
-            bubbleFont = Resources.Load<Font>("Fonts/RubikBubbles") ?? logoFont;   // «пузырчатый» шрифт табло и баннеров
+            bubbleFont = uiFont;   // табло и баннеры — тем же шрифтом, что и логотип
             btn.Clear();
             sPanel = Panel(new Color(0.16f, 0.19f, 0.42f, 0.94f), new Color(0.1f, 0.12f, 0.3f, 0.94f), new Color(0.45f, 0.55f, 1f, 0.9f));
             sCard = Panel(new Color(0.22f, 0.26f, 0.55f, 0.95f), new Color(0.16f, 0.19f, 0.44f, 0.95f), new Color(0.4f, 0.48f, 0.9f, 0.8f), 16, 4);
@@ -154,9 +155,9 @@ namespace Hockey
             sHudMid.normal.background = TexArt.RoundRect(64, 22, Mats.Hex("#3a3f8f"), Mats.Hex("#1b1f52"), Mats.Hex("#ffd23f"), 4, 6);
             sTrack = new GUIStyle { border = new RectOffset(16, 16, 16, 20) };
             sTrack.normal.background = TexArt.RoundRect(44, 14, new Color(0.1f, 0.12f, 0.32f, 0.9f), new Color(0.05f, 0.06f, 0.2f, 0.9f), new Color(1, 1, 1, 0.85f), 3, 4);
-            sHudNum = new GUIStyle(GUI.skin.label) { font = Resources.Load<Font>("Fonts/RubikBubbles") ?? logoFont, fontSize = 50, alignment = TextAnchor.MiddleCenter, wordWrap = false, clipping = TextClipping.Overflow };
+            sHudNum = new GUIStyle(GUI.skin.label) { font = uiFont, fontSize = 50, alignment = TextAnchor.MiddleCenter, wordWrap = false, clipping = TextClipping.Overflow };
             sHudTime = new GUIStyle(sHudNum) { fontSize = 42 };
-            sHudName = new GUIStyle(GUI.skin.label) { font = Resources.Load<Font>("Fonts/RubikBubbles") ?? uiFont, fontSize = 17, alignment = TextAnchor.MiddleCenter, wordWrap = false, clipping = TextClipping.Overflow };
+            sHudName = new GUIStyle(GUI.skin.label) { font = uiFont, fontSize = 17, alignment = TextAnchor.MiddleCenter, wordWrap = false, clipping = TextClipping.Overflow };
             sMeterText = new GUIStyle(sHudName) { fontSize = 15 };
             // хоккейные элементы: шайба-часы, гербы, клюшка, лезвие конька, площадка
             hudPuck = HudArt.Puck();
@@ -165,6 +166,8 @@ namespace Hockey
             hudBladeE = HudArt.Blade(false); hudBladeF = HudArt.Blade(true);
             hudRink = HudArt.Rink(320);
             hudRays = HudArt.Rays();
+            sIce = new GUIStyle { border = new RectOffset(28, 28, 28, 34) };
+            sIce.normal.background = TexArt.RoundRect(72, 26, new Color(0.93f, 0.97f, 1f, 0.2f), new Color(0.75f, 0.86f, 1f, 0.12f), new Color(1, 1, 1, 0.65f), 3, 6);
             bubSoap = HudArt.BubbleBall(Color.white, true);
             for (int t = 0; t < 2; t++) bubTeam[t] = HudArt.BubbleBall(Mats.Hex(TeamColors.All[t].Main), false);
             sPillRed = new GUIStyle { border = new RectOffset(48, 48, 48, 52) };
@@ -229,7 +232,14 @@ namespace Hockey
         bool Button(string text, GUIStyle style, params GUILayoutOption[] opts)
         {
             bool r = GUILayout.Button(text, style, opts);
-            if (Event.current.type == EventType.Repaint && GUILayoutUtility.GetLastRect().Contains(Event.current.mousePosition)) hoverNow = text;
+            if (Event.current.type == EventType.Repaint && GUILayoutUtility.GetLastRect().Contains(Event.current.mousePosition))
+            {
+                hoverNow = text;
+                // шайба-указатель на кнопке под курсором
+                var hr = GUILayoutUtility.GetLastRect();
+                float ph = Mathf.Min(34, hr.height * 0.5f), pwd = ph * 1.6f;
+                GUI.DrawTexture(new Rect(hr.xMax - pwd - 14 + Mathf.Sin(Time.realtimeSinceStartup * 7) * 3, hr.center.y - ph / 2 - 2, pwd, ph), hudPuck);
+            }
             if (r) audioFx.Ui(true);
             return r;
         }
@@ -409,6 +419,16 @@ namespace Hockey
                 GUI.DrawTexture(new Rect(i * 22, 0, 22, VH), white);
             }
             GUI.color = Color.white;
+            // «ледовая» панель под кнопками: полупрозрачный лёд с красной и синей линиями и кругом вбрасывания
+            if (uiPage == UiPage.Main)
+            {
+                var ice = new Rect(36, 212, 528, VH - 300);
+                GUI.color = new Color(1, 1, 1, 0.9f); GUI.Label(ice, "", sIce);
+                GUI.color = new Color(0.9f, 0.25f, 0.24f, 0.55f); GUI.DrawTexture(new Rect(ice.x + 14, ice.y + 16, 5, ice.height - 38), white);
+                GUI.color = new Color(0.2f, 0.45f, 0.9f, 0.55f); GUI.DrawTexture(new Rect(ice.xMax - 19, ice.y + 16, 5, ice.height - 38), white);
+                GUI.color = new Color(0.9f, 0.25f, 0.24f, 0.16f); GUI.DrawTexture(new Rect(ice.xMax - 190, ice.yMax - 200, 230, 230), hudRing);
+                GUI.color = Color.white;
+            }
             DrawTitle(60, 40);
             if (uiPage != lastPage) { lastPage = uiPage; pageT = Time.realtimeSinceStartup; scroll = Vector2.zero; }
             float k = Mathf.Clamp01((Time.realtimeSinceStartup - pageT) * 4.5f);
@@ -435,9 +455,34 @@ namespace Hockey
             float ta = Mathf.Clamp01(Mathf.Min(Mathf.Repeat(time, 6), 6 - Mathf.Repeat(time, 6)) * 2);
             var tipStyle = new GUIStyle(sSmall) { alignment = TextAnchor.MiddleCenter, fontSize = 17 };
             GUI.color = new Color(1, 1, 1, ta);
-            if (uiPage == UiPage.Main) GUI.Label(new Rect(VW * 0.4f, VH - 66, VW * 0.58f, 36), "Совет: " + Tips[tip], sTag);
+            if (uiPage == UiPage.Main)
+            {
+                // бегущая строка, как светодиодная лента на бортах арены
+                GUI.color = new Color(0.05f, 0.06f, 0.18f, 0.88f); GUI.DrawTexture(new Rect(0, VH - 44, VW, 44), white);
+                GUI.color = Mats.Hex("#ffd23f"); GUI.DrawTexture(new Rect(0, VH - 46, VW, 3), white);
+                GUI.color = Color.white;
+                var ts = new GUIStyle(sLabel) { fontSize = 19, wordWrap = false, alignment = TextAnchor.MiddleLeft, clipping = TextClipping.Overflow };
+                string line = "";
+                for (int i = 0; i < Tips.Length; i++) line += "   ●   " + Tips[i];
+                float lw = ts.CalcSize(new GUIContent(line)).x;
+                float off = Mathf.Repeat(Time.realtimeSinceStartup * 70, lw);
+                GUI.BeginGroup(new Rect(0, VH - 42, VW, 40));
+                GUI.Label(new Rect(-off, 0, lw + 10, 40), line, ts);
+                GUI.Label(new Rect(-off + lw, 0, lw + 10, 40), line, ts);
+                GUI.EndGroup();
+            }
+            // переход в раздевалку и обратно: затемнение со скользящей шайбой
+            if (lockerFade > 0.001f)
+            {
+                float fa = Mathf.SmoothStep(0, 1, lockerFade);
+                GUI.color = new Color(0.05f, 0.06f, 0.18f, fa); GUI.DrawTexture(new Rect(0, 0, VW, VH), white);
+                GUI.color = new Color(1, 1, 1, fa);
+                float pw = 220, px = Mathf.Lerp(-pw, VW, Mathf.Repeat(Time.realtimeSinceStartup * 0.9f, 1));
+                GUI.DrawTexture(new Rect(px, VH / 2 - pw * 0.31f, pw, pw * 0.625f), hudPuck);
+                GUI.color = Color.white;
+            }
             GUI.color = Color.white;
-            GUI.Label(new Rect(VW - 420, VH - 24, 400, 22), "v3.1 · Unity · модели KayKit (CC0) · шрифты OFL", new GUIStyle(sSmall) { alignment = TextAnchor.LowerRight, fontSize = 13 });
+            if (uiPage != UiPage.Main) GUI.Label(new Rect(VW - 420, VH - 24, 400, 22), "v3.2 · Unity · модели KayKit (CC0) · шрифты OFL", new GUIStyle(sSmall) { alignment = TextAnchor.LowerRight, fontSize = 13 });
         }
 
         void DrawMainButtons()

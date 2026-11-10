@@ -69,6 +69,7 @@ namespace Hockey
         readonly Dictionary<int, Transform> rings = new Dictionary<int, Transform>();
         readonly List<CharacterRig> showcase = new List<CharacterRig>();
         LockerRoom locker;
+        bool lockerShown; float lockerFade;
         static readonly Vector3 ShowPos0 = new Vector3(-1.3f, 0, 0.4f);
         Transform puck, puckRing, puckFire;
         LineRenderer trail;
@@ -768,7 +769,10 @@ namespace Hockey
         void MenuScene(float dt)
         {
             // «Раздевалка» переносит в комнату под ареной: свой игрок сидит на скамье у шкафчика
-            bool inLocker = uiPage == UiPage.Locker && locker != null;
+            bool wantLocker = uiPage == UiPage.Locker && locker != null;
+            if (wantLocker != lockerShown) { lockerFade = Mathf.Min(1, lockerFade + Time.unscaledDeltaTime * 3.5f); if (lockerFade >= 1) lockerShown = wantLocker; }
+            else lockerFade = Mathf.Max(0, lockerFade - Time.unscaledDeltaTime * 2.5f);
+            bool inLocker = lockerShown;
             if (showcase.Count > 0)
             {
                 var me = showcase[0].Root;
