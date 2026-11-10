@@ -39,7 +39,7 @@ namespace Hockey
         }   // исходное положение кистей (рука «тянется» только на кадр)
         float gripW;
         readonly List<Transform> hands = new List<Transform>();
-        class GloveRig { public Transform T, Hand, Lower, Fist, Sleeve, Stripe, Upper; public float Along, FistSize; public Vector3 BackLocal; public bool Left; }
+        class GloveRig { public Transform T, Hand, Lower, Fist, Sleeve, Stripe, Upper, Ball; public float Along, FistSize; public Vector3 BackLocal; public bool Left; }
 
         /// Рукав хоккейного свитера: цилиндр цвета команды от локтя до раструба краги, с белой полосой.
         void PlaceSleeve(GloveRig g, Vector3 cuff)
@@ -67,6 +67,12 @@ namespace Hockey
                     var s0 = sh - du / lu * ru * 0.5f; var e1 = elbow + du / lu * ru * 0.7f;
                     g.Upper.SetPositionAndRotation((s0 + e1) * 0.5f, Quaternion.FromToRotation(Vector3.up, du));
                     g.Upper.localScale = new Vector3(2 * ru, (e1 - s0).magnitude, 2 * ru) / ps;
+                    // шар плеча: соединяет рукав с корпусом, плечо не «висит» отдельно
+                    if (g.Ball != null)
+                    {
+                        g.Ball.position = sh + (Model.position + Vector3.up * (sh.y - Model.position.y) - sh) * 0.18f;
+                        g.Ball.localScale = Vector3.one * (ru * 3.1f) / ps;
+                    }
                 }
             }
         }
@@ -95,9 +101,13 @@ namespace Hockey
                     var grip = g.Left ? gripLow : gripTop;
                     // раструб смотрит к плечу (а не к локтю, который IK может увести вперёд — кулак выворачивался)
                     // кулак — продолжение предплечья: раструб смотрит на локоть, рука входит в крагу прямо, без излома
-                    var up = Vector3.ProjectOnPlane(grip - g.Lower.position, gripDir);
+                    var fore = (grip - g.Lower.position).normalized;
+                    var up = Vector3.ProjectOnPlane(fore, gripDir);
                     if (up.sqrMagnitude < 1e-6f) up = Vector3.ProjectOnPlane(Vector3.up, gripDir);
                     up.Normalize();
+                    // запястье не заламывается: кулак наполовину доворачивается по оси предплечья
+                    // (древко при этом чуть наискось в кулаке — как и у живой руки)
+                    up = Vector3.Slerp(up, fore, 0.55f).normalized;
                     // верхняя рука — хват сверху; нижняя (левая) — снизу: ладонь под древком, тыльная сторона вниз
                     var x = g.Left ? -gripDir : gripDir;
                     g.Fist.SetPositionAndRotation(grip, Quaternion.LookRotation(Vector3.Cross(x, up), up));
@@ -373,6 +383,8 @@ namespace Hockey
                         gr.Sleeve = Cyl("sleeve" + side, TeamColors.All[Mathf.Clamp(team, 0, 1)].Main);
                         gr.Stripe = Cyl("sleeve_stripe" + side, "#f4f4f0");
                         gr.Upper = Cyl("sleeve_upper" + side, TeamColors.All[Mathf.Clamp(team, 0, 1)].Main);
+                        gr.Ball = Cyl("shoulder" + side, TeamColors.All[Mathf.Clamp(team, 0, 1)].Main);
+                        gr.Ball.GetComponent<MeshFilter>().sharedMesh = MeshKit.Sphere(0.5f, 16, 0);
                     }
                 }
             // кулак модели меньше — чтобы не протыкал крагу; всё надетое на кисть компенсируем, оно остаётся прежнего размера
