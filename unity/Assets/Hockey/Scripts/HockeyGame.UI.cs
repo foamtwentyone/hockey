@@ -315,9 +315,23 @@ namespace Hockey
 
         // ---------------------------------------------------------------- главное меню
         /// Логотип: объёмные буквы с толстой обводкой, двухцветной заливкой и бликом, шайба с «хвостом», лента-подзаголовок.
+        Texture2D logoTex; bool logoTried;
+
         void DrawTitle(float x, float y, float scale = 1)
         {
             var baseM = GUI.matrix;
+            if (!logoTried) { logoTried = true; logoTex = Resources.Load<Texture2D>("UI/logo"); }
+            if (logoTex != null)
+            {
+                // нарисованный логотип: шайба со шлейфом над пухлой надписью; слегка покачивается
+                float w = 300 * scale, h = w * 531f / 809f;   // исходные пропорции картинки (при импорте её могут растянуть до степени двойки)
+                float bob = Mathf.Sin(time * 2.2f) * 3 * scale;
+                var lr = new Rect(x - 10 * scale, y - 30 * scale + bob, w, h);
+                GUIUtility.RotateAroundPivot(Mathf.Sin(time * 1.3f) * 1.2f, lr.center * uiScale);
+                GUI.DrawTexture(lr, logoTex, ScaleMode.StretchToFill, true);
+                GUI.matrix = baseM;
+                return;
+            }
             float bounce = Mathf.Sin(time * 2.2f) * 3 * scale;
             var st = sLogo;
             st.fontSize = (int)(128 * scale);

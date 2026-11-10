@@ -15,7 +15,7 @@ namespace Hockey
         readonly Dictionary<string, List<AudioClip>> samples = new Dictionary<string, List<AudioClip>>();
         // ключи, где синтез звучит поверх сэмпла (мультяшный «бойнг», кукушка, фанфары)
         static readonly HashSet<string> layered = new HashSet<string> { "save", "ko", "goal", "hit", "helmet", "mega", "freeze" };
-        float crowdTarget = 0.12f, crowdHold;
+        float crowdTarget = 0.06f, crowdHold;
         public bool Muted;
         static readonly System.Random rnd = new System.Random(1);
 
@@ -70,7 +70,7 @@ namespace Hockey
 
             crowd = host.AddComponent<AudioSource>();
             crowd.clip = CrowdLoop();
-            crowd.loop = true; crowd.volume = 0.12f; crowd.spatialBlend = 0;
+            crowd.loop = true; crowd.volume = 0.06f; crowd.spatialBlend = 0;
             crowd.Play();
         }
 
@@ -390,8 +390,8 @@ namespace Hockey
             var r = new System.Random(7);
             for (int voice = 0; voice < 24; voice++)
             {
-                float fc = 260 + (float)r.NextDouble() * 1100;          // центр полосы
-                float q = 1.2f + (float)r.NextDouble() * 2;
+                float fc = 150 + (float)r.NextDouble() * 380;           // центр полосы: низкий гул голосов, без шипения
+                float q = 0.9f + (float)r.NextDouble() * 0.9f;
                 float w0 = 2 * Mathf.PI * fc / Rate, alpha = Mathf.Sin(w0) / (2 * q);
                 float b0 = alpha, b2 = -alpha, a0 = 1 + alpha, a1 = -2 * Mathf.Cos(w0), a2 = 1 - alpha;
                 float x1 = 0, x2 = 0, y1 = 0, y2 = 0;
@@ -404,10 +404,15 @@ namespace Hockey
                     x2 = x1; x1 = x; y2 = y1; y1 = y;
                     float t = i / (float)Rate;
                     // слоги: «рваная» огибающая, периодичная по длине петли
-                    float env = Mathf.Max(0, Mathf.Sin(t * syl * 2 * Mathf.PI / 1f + ph)) * (0.6f + 0.4f * Mathf.Sin(t * 2 * Mathf.PI / 6f * (1 + voice % 3) + ph));
+                    // плавная огибающая без резких «слогов» — рваные вспышки шума звучали как шорох
+                    float e1 = 0.6f + 0.4f * Mathf.Sin(t * syl * 0.5f * Mathf.PI + ph);
+                    float env = e1 * e1 * (0.7f + 0.3f * Mathf.Sin(t * 2 * Mathf.PI / 6f * (1 + voice % 3) + ph));
                     d[i] += y * env * amp;
                 }
             }
+            // мягкий фильтр низких частот (~900 Гц): убирает остатки «шуршания»
+            float lp = 0, a = 1 - Mathf.Exp(-2 * Mathf.PI * 900f / Rate);
+            for (int i = 0; i < n; i++) { lp += (d[i] - lp) * a; d[i] = lp; }
             float peak = 1e-4f;
             for (int i = 0; i < n; i++) peak = Mathf.Max(peak, Mathf.Abs(d[i]));
             for (int i = 0; i < n; i++) d[i] = d[i] / peak * 0.8f;
@@ -442,7 +447,7 @@ namespace Hockey
         public void Update(float dt)
         {
             crowdHold -= dt;
-            if (crowdHold <= 0) crowdTarget = Mathf.MoveTowards(crowdTarget, 0.12f, dt * 0.1f);
+            if (crowdHold <= 0) crowdTarget = Mathf.MoveTowards(crowdTarget, 0.06f, dt * 0.1f);
             crowd.volume = Muted ? 0 : Mathf.MoveTowards(crowd.volume, crowdTarget * Settings.Crowd, dt * 1.5f);
             music.volume = Muted ? 0 : Mathf.MoveTowards(music.volume, musicOn ? Settings.Music * 0.35f : Settings.Music * 0.12f, dt * 0.5f);
             AudioListener.volume = Settings.Master;

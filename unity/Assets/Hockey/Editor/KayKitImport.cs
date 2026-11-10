@@ -28,6 +28,17 @@ namespace Hockey.EditorTools
 
         void OnPreprocessTexture()
         {
+            if (assetPath.Replace('\\', '/').Contains("/Resources/UI/"))
+            {
+                // картинки интерфейса (логотип): без сжатия и без растяжения до степени двойки, гладкие мип-карты
+                var ui = (TextureImporter)assetImporter;
+                ui.textureType = TextureImporterType.Default;
+                ui.npotScale = TextureImporterNPOTScale.None;
+                ui.textureCompression = TextureImporterCompression.Uncompressed;
+                ui.mipmapEnabled = true; ui.filterMode = FilterMode.Trilinear;
+                ui.alphaIsTransparency = true; ui.wrapMode = TextureWrapMode.Clamp;
+                return;
+            }
             if (!IsKayKit) return;
             var ti = (TextureImporter)assetImporter;
             ti.isReadable = true;
