@@ -362,11 +362,11 @@ namespace Hockey
                     var hemC = new Vector3(bb.center.x, bb.min.y + bb.size.y * 0.2f, bb.center.z);
                     var hemS = new Vector3(bb.size.x * 1.07f, bb.size.y * 0.36f, bb.size.z * 1.1f);
                     bones.TryGetValue("hips", out var hipsB);
-                    var hb = hipsB != null ? hipsB : chest;
+                    var hemBone = hipsB != null ? hipsB : chest;
                     var cyl = MeshKit.Cylinder(0.5f, 1f, 28);
-                    Piece(cyl, team1, hemC, fr.Rot, hb, true, hemS);
-                    Piece(cyl, white, hemC - fr.Up * hemS.y * 0.22f, fr.Rot, hb, false, new Vector3(hemS.x * 1.012f, hemS.y * 0.16f, hemS.z * 1.012f));
-                    Piece(cyl, dark, hemC - fr.Up * hemS.y * 0.4f, fr.Rot, hb, false, new Vector3(hemS.x * 1.012f, hemS.y * 0.1f, hemS.z * 1.012f));
+                    Piece(cyl, team1, hemC, fr.Rot, hemBone, true, hemS);
+                    Piece(cyl, white, hemC - fr.Up * hemS.y * 0.22f, fr.Rot, hemBone, false, new Vector3(hemS.x * 1.012f, hemS.y * 0.16f, hemS.z * 1.012f));
+                    Piece(cyl, dark, hemC - fr.Up * hemS.y * 0.4f, fr.Rot, hemBone, false, new Vector3(hemS.x * 1.012f, hemS.y * 0.1f, hemS.z * 1.012f));
                     var crest = Mats.Cutout(CrestTex(), Color.white);
                     var front = bb.center + fr.Fwd * (bb.extents.z + 0.035f) + fr.Up * bb.size.y * 0.2f;
                     Piece(MeshKit.Plane(u * 0.34f, u * 0.4f), crest, front, fr.Rot * Quaternion.Euler(0, 180, 0), chest, false);
