@@ -313,6 +313,22 @@ namespace Hockey
             return holder;
         }
 
+        public static Texture2D CrestTexture() => CrestTex();
+
+        /// Шлем с визором для головы произвольной модели: центр hc и размеры hs головы (мировые), поворот rot.
+        public static List<Transform> HeadGear(Transform head, Vector3 hc, Vector3 hs, Quaternion rot, int team)
+        {
+            var list = new List<Transform>();
+            var tc = TeamColors.All[Mathf.Clamp(team, 0, 1)];
+            var visorM = Mats.Fade("#8fd8ff", 0.3f, true); visorM.SetFloat("_Glossiness", 0.25f);
+            var helmRot = rot * Quaternion.Euler(-6, 0, 0);
+            var helmScale = hs * 1.02f;
+            bool ext = HasExt("helmet");
+            list.Add(Gear("helmet", GearModels.Helmet(Mats.Hex(tc.Main), Mats.Hex(tc.Dark), Mats.Hex("#2b2b33")), Mats.Get("#ffffff", 0.1f), hc, helmRot, head, helmScale, Mats.Hex(tc.Main)));
+            list.Add(Piece(GearModels.Visor(), visorM, hc + (ext ? rot * Vector3.forward * hs.z * 0.02f - Vector3.up * hs.y * 0.13f : Vector3.zero), helmRot, head, false, ext ? helmScale * 0.98f : helmScale));
+            return list;
+        }
+
         public static List<Transform> Dress(Transform model, Dictionary<string, Transform> bones, Dictionary<string, SkinnedMeshRenderer> parts, int team, int number, bool goalie)
         {
             var helmet = new List<Transform>();

@@ -686,11 +686,11 @@ namespace Hockey
                     {
                         if (Settings.ScreenShake) shake = Mathf.Max(shake, 0.2f);
                         var dir = new Vector3(Mathf.Sin(e.Value), 0, Mathf.Cos(e.Value));
-                        if (e.Who >= 0 && e.Who < chars.Count && chars[e.Who].KK != null)
+                        if (e.Who >= 0 && e.Who < chars.Count && chars[e.Who].HelmetParts != null)
                         {
-                            fx.FlyingHelmet(chars[e.Who].KK.HelmetParts, dir * 5f + Vector3.up * 6f);
-                            chars[e.Who].KK.SetHelmet(false);
-                            chars[e.Who].KK.KickHead(9);
+                            fx.FlyingHelmet(chars[e.Who].HelmetParts, dir * 5f + Vector3.up * 6f);
+                            chars[e.Who].SetHelmet(false);
+                            chars[e.Who].KickHead(9);
                             chars[e.Who].Kick(-2);
                         }
                         fx.Pow(who + Vector3.up * 1.7f, 0.9f);
@@ -700,7 +700,7 @@ namespace Hockey
                     }
                 case EvType.Knockout:
                     if (Settings.ScreenShake) shake = Mathf.Max(shake, 0.35f);
-                    if (e.Who >= 0 && e.Who < chars.Count && chars[e.Who].KK != null) chars[e.Who].KK.KickHead(14);
+                    if (e.Who >= 0 && e.Who < chars.Count) chars[e.Who].KickHead(14);
                     fx.Pow(who + Vector3.up * 1.6f, 1.5f);
                     fx.Sparks(who + Vector3.up * 1.6f, Mats.Hex("#ffd23f"), 30, 5);
                     fx.Shockwave(who, Mats.Hex("#ffd23f"), 3f);

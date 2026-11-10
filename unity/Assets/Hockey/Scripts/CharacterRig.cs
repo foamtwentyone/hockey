@@ -1,6 +1,7 @@
 // «Шайбятки»: мягкие игрушечные хоккеисты (большая голова, круглые ручки, толстые коньки)
 // и пружинная анимация в духе Fall Guys — наклоны по инерции, сжатие-растяжение, болтающаяся голова,
 // кувырки после силовых приёмов, нырок «рыбкой», танцы.
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Hockey
@@ -42,6 +43,11 @@ namespace Hockey
         public Transform[] Legs = new Transform[2], Arms = new Transform[2];
         public Transform MegaGlow;
         public KayKitCharacter KK;
+        public ProBody PB;   // своя модель полевого игрока (вратарь пока на прежней модели)
+        public Transform HeadT => PB != null ? PB.Head : KK != null ? KK.Head : null;
+        public List<Transform> HelmetParts => PB != null ? PB.HelmetParts : KK != null ? KK.HelmetParts : null;
+        public void SetHelmet(bool on) { if (PB != null) PB.SetHelmet(on); else KK?.SetHelmet(on); }
+        public void KickHead(float k) { if (PB != null) PB.KickHead(k); else KK?.KickHead(k); }
         public Transform Dizzy, Blob;
         static Material blobMat;
         public TrailRenderer[] Trails;   // настоящая модель KayKit (если есть), иначе — процедурная
@@ -107,14 +113,16 @@ namespace Hockey
             c.Tilt = Group("tilt", c.Scale, Vector3.zero);
 
             // основной путь: модели KayKit «Adventurers» в цветах команды
-            var kk = KayKitCharacter.Create(team, skin, hair, number, goalie, c.Tilt);
-            if (kk != null)
+            var kk = goalie ? KayKitCharacter.Create(team, skin, hair, number, goalie, c.Tilt) : null;
+            if (!goalie) c.PB = ProBody.Create(team, skin, hair, number, c.Tilt);
+            if (kk != null || c.PB != null)
             {
                 c.KK = kk;
                 var ice0 = Part(RB(1.0f, 1.9f, 1.0f, 0.2f, 0), Mats.Fade("#bfefff", 0.42f, true), new Vector3(0, 0.95f, 0), c.Root, false);
                 ice0.gameObject.SetActive(false);
                 c.Ice = ice0;
-                var glowParent = kk.StickBlade != null ? kk.StickBlade : c.Tilt;
+                var sb = c.PB != null ? c.PB.StickBlade : kk.StickBlade;
+                var glowParent = sb != null ? sb : c.Tilt;
                 var glow0 = Part(MeshKit.Sphere(0.16f, 12, 0), Mats.Fade("#ff6a2e", 0.55f, true), Vector3.zero, glowParent, false, new Vector3(1.2f, 0.9f, 2.6f));
                 glow0.gameObject.SetActive(false);
                 c.MegaGlow = glow0;
@@ -365,7 +373,7 @@ namespace Hockey
             float inv = 1 / Mathf.Sqrt(sq);
             Scale.localScale = new Vector3(g * inv, g * sq * breathe, g * inv);
 
-            if (KK != null)
+            if (KK != null || PB != null)
             {
                 bool brawl = s.Brawl;
                 float bs = Mathf.Lerp(1, 0.45f, Mathf.Clamp01(s.Y / 2f)) * giant.X * (Goalie ? 1.15f : 1);
@@ -373,13 +381,13 @@ namespace Hockey
                 Blob.localPosition = new Vector3(0, 0.008f - s.Y, 0);
                 Blob.gameObject.SetActive(!brawl);
                 if (Scale.gameObject.activeSelf == brawl) Scale.gameObject.SetActive(!brawl); // в драке видно только облако
-                KK.SetHelmet(s.Helmet);
+                SetHelmet(s.Helmet);
                 bool dizzy = (s.Stun || s.Stagger) && !brawl;
                 Dizzy.gameObject.SetActive(dizzy);
                 if (dizzy)
                 {
                     // звёздочки кружатся над головой — даже когда игрок лежит на льду
-                    if (KK.Head != null) Dizzy.position = KK.Head.position + Vector3.up * (s.Stun ? 0.75f : 0.85f);
+                    if (HeadT != null) Dizzy.position = HeadT.position + Vector3.up * (s.Stun ? 0.75f : 0.85f);
                     Dizzy.rotation = Quaternion.Euler(Mathf.Sin(time * 3) * 12, time * 260, 0);
                     float pulse = 1 + Mathf.Sin(time * 9) * 0.1f;
                     Dizzy.localScale = new Vector3(pulse, pulse, pulse);
@@ -422,10 +430,12 @@ namespace Hockey
                 float sway = Mathf.Sin(phase) * 0.07f * amp * (air ? 0 : 1);
                 float pitchK = leanF.X * 0.45f + (Goalie || ctx.Sit ? 0 : 0.14f * (1 - celebrate.X)) - charge.X * 0.22f + lunge.X * 0.45f + sad.X * 0.35f;
                 float rollK = -leanS.X * 0.7f + sway + wob.X * 0.1f + Mathf.Sin(time * 1.3f) * 0.06f * sad.X;
+                if (PB != null) pitchK = leanF.X * 0.3f + lunge.X * 0.2f;   // наклоны корпуса у своей модели заложены в позы
                 Tilt.localRotation = Quaternion.Euler(pitchK * Mathf.Rad2Deg, spin, rollK * Mathf.Rad2Deg);
                 Tilt.localPosition = new Vector3(0, hopY + celHop + Mathf.Abs(Mathf.Sin(phase)) * 0.025f * amp, 0);
                 float wx = 1 + wob.X * 0.07f, wz = 1 - wob.X * 0.07f;
                 Scale.localScale = new Vector3(Scale.localScale.x * wx, Scale.localScale.y * (1 - sad.X * 0.07f), Scale.localScale.z * wz);
+                if (PB != null) { PB.Sit = ctx.Sit; PB.Update(s, ctx.Celebrate, ctx.Dance, ctx.Sad, ctx.HasPuck, dt); return; }
                 KK.Sit = ctx.Sit;
                 KK.Update(s, ctx.Celebrate, ctx.Dance, ctx.HasPuck, Vector3.Dot(vel, right), dt);
                 return;
