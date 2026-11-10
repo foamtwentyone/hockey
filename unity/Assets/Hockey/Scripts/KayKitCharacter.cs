@@ -14,7 +14,12 @@ namespace Hockey
     {
         public Transform Model, HandR, Head, StickBlade, Stick;
         Transform armL0, armL1, armL2, armR0, armR1, armR2;   // плечо, предплечье, кисть обеих рук — для хвата клюшки
-        Vector3 restL2, restR2;   // исходное положение кистей (рука «тянется» только на кадр)
+        Vector3 restL2, restR2;
+        // кости и клипы захвата движения (MocapPose.cs)
+        Transform bHips, bSpine, bChest, bHead, bWristL, bWristR, bLegL, bLegR;
+        MocapClip moStance, moWind, moShot;
+        readonly float[] fS = new float[MocapClip.Stride], fW = new float[MocapClip.Stride], fSh = new float[MocapClip.Stride], fMix = new float[MocapClip.Stride];
+        float wWind, wShot, leftSign = 1, lastDt = 1 / 60f;   // исходное положение кистей (рука «тянется» только на кадр)
         float gripW;
         readonly List<Transform> hands = new List<Transform>();
         class GloveRig { public Transform T, Hand, Lower; public float Along; public Vector3 BackLocal; public bool Left; }
@@ -232,6 +237,13 @@ namespace Hockey
                 else if (t.name == "upperarm.r") k.armR0 = t;
                 else if (t.name == "lowerarm.r") k.armR1 = t;
                 else if (t.name == "hand.r") k.armR2 = t;
+                else if (t.name == "hips") k.bHips = t;
+                else if (t.name == "spine") k.bSpine = t;
+                else if (t.name == "chest") k.bChest = t;
+                else if (t.name == "wrist.l") k.bWristL = t;
+                else if (t.name == "wrist.r") k.bWristR = t;
+                else if (t.name == "upperleg.l") k.bLegL = t;
+                else if (t.name == "upperleg.r") k.bLegR = t;
                 else if (t.name == "head") k.Head = t;
             }
 
@@ -279,6 +291,12 @@ namespace Hockey
                     k.hands.Add(hb);
                     foreach (Transform ch in hb) { ch.localPosition /= HandShrink; ch.localScale /= HandShrink; }
                 }
+            if (!goalie)
+            {
+                k.moStance = MocapClip.Load("stance"); k.moWind = MocapClip.Load("windup"); k.moShot = MocapClip.Load("shot");
+                if (k.bLegL != null && k.bLegR != null)
+                    k.leftSign = Mathf.Sign(k.Model.InverseTransformDirection(k.bLegL.position - k.bLegR.position).x);
+            }
             if (k.armL2 != null) k.restL2 = k.armL2.localPosition;
             if (k.armR2 != null) k.restR2 = k.armR2.localPosition;
             go.AddComponent<KayKitGraphOwner>().Graph = k.graph;
@@ -537,6 +555,7 @@ namespace Hockey
             bool grip = !Goalie && upper > 0.5f && punchT >= 0.4f && !s.Brawl && !s.Stun;
             gripW += ((grip ? 1 : 0) - gripW) * (1 - Mathf.Exp(-dt * 12));
             gripNow = 0;
+            lastDt = dt;
             if (gripW > 0.01f && Stick != null) { TwoHandGrip(s, gripW); gripNow = gripW; }
             PlaceGloves();
         }
@@ -545,6 +564,9 @@ namespace Hockey
         /// клюшка качается вокруг верхней руки (замах, бросок), обе руки тянутся к своим точкам IK.
         void TwoHandGrip(PlayerView s, float w)
         {
+            if (moStance != null && moWind != null && moShot != null && bHips != null && bSpine != null && bChest != null && Head != null
+                && bWristL != null && bWristR != null && bLegL != null && bLegR != null && armL0 != null && armR0 != null && armL1 != null && armR1 != null && armL2 != null)
+            { MocapGrip(s, w); return; }
             if (armL0 == null || armL1 == null || armL2 == null || armR0 == null || armR1 == null || armR2 == null) return;
             var fwd = Model.forward; fwd.y = 0;
             if (fwd.sqrMagnitude < 1e-4f) return;
@@ -571,6 +593,92 @@ namespace Hockey
             Ik(armL0, armL1, armL2, lowGrip - (lowGrip - armL0.position).normalized * alongL, w, -right);
             gripTop = top; gripLow = lowGrip; gripDir = dir;
             Stick.SetPositionAndRotation(Vector3.Lerp(Stick.position, origin, w), Quaternion.Slerp(Stick.rotation, rot, w));
+        }
+
+        /// Поза из захвата движения: стойка (подметание), замах и бросок (удар в гольфе) — корпус, плечи, руки;
+        /// клюшка: верх в правой руке, в стойке крюк на льду впереди слева, в замахе и броске — как клюшка у актёра.
+        void MocapGrip(PlayerView s, float w)
+        {
+            float dt = lastDt;
+            bool charging = s.Charge > 0.02f, shooting = !charging && swingT < 0.45f;
+            wWind += ((charging ? 1 : 0) - wWind) * (1 - Mathf.Exp(-dt * 18));
+            wShot += ((shooting ? 1 : 0) - wShot) * (1 - Mathf.Exp(-dt * 22));
+            float ws = Mathf.Max(0, 1 - wWind - wShot);
+            moStance.SampleLoop(Time.time * 0.8f, fS);
+            moWind.Sample(s.Charge, fW);
+            moShot.Sample(swingT / 0.45f, fSh);
+            for (int i = 0; i < MocapClip.Stride; i++) fMix[i] = fS[i] * ws + fW[i] * wWind + fSh[i] * wShot;
+            float act = Mathf.Clamp01(wWind + wShot);
+
+            // корпус и руки
+            if (act > 0.01f)
+            {
+                Aim(bHips, bSpine, MV(0), w * act);
+                Twist(bHips, bSpine, bLegL, bLegR, MV(1), w * act);
+            }
+            Aim(bSpine, bChest, MV(2), w);
+            Aim(bChest, Head, MV(3), w * 0.85f);
+            Twist(bChest, Head, armL0, armR0, MV(4), w);
+            Aim(armL0, armL1, MV(5), w); Aim(armL1, bWristL, MV(6), w);
+            Aim(armR0, armR1, MV(7), w); Aim(armR1, bWristR, MV(8), w);
+
+            // клюшка
+            var fwd = Model.forward; fwd.y = 0;
+            if (fwd.sqrMagnitude < 1e-4f) return;
+            fwd.Normalize();
+            var right = Vector3.Cross(Vector3.up, fwd);
+            float g = Stick.lossyScale.y;
+            var top = HandR.position;
+            var iceDir = IceDir(top, (stickLen - 0.25f + GripL) * g, fwd, right);
+            var dir = Vector3.Slerp(iceDir, MV(9), act).normalized;
+            var bladeFwd = Vector3.ProjectOnPlane(right * 0.9f + fwd * 0.35f, dir);
+            if (bladeFwd.sqrMagnitude < 1e-4f) bladeFwd = Vector3.ProjectOnPlane(fwd, dir);
+            float armLen = (armL1.position - armL0.position).magnitude + (bWristL.position - armL1.position).magnitude;
+            float sep = Mathf.Clamp(fMix[30] * armLen, 0.16f, 0.45f);
+            var lowGrip = top + dir * sep;
+            float alongL = GloveAlong(true);
+            Ik(armL0, armL1, armL2, lowGrip - (lowGrip - armL0.position).normalized * alongL, w, -right);
+            gripTop = top; gripLow = lowGrip; gripDir = dir;
+            var origin = top + dir * GripL * g;
+            Stick.SetPositionAndRotation(Vector3.Lerp(Stick.position, origin, w), Quaternion.Slerp(Stick.rotation, Quaternion.LookRotation(bladeFwd.normalized, -dir), w));
+        }
+
+        /// Направление из данных клипа (система персонажа) в мировое.
+        Vector3 MV(int j)
+        {
+            var v = new Vector3(fMix[j * 3] * leftSign, fMix[j * 3 + 1], fMix[j * 3 + 2]);
+            if (v.sqrMagnitude < 1e-8f) v = Vector3.up;
+            return Model.TransformDirection(v.normalized);
+        }
+
+        static void Aim(Transform b, Transform c, Vector3 target, float w)
+        {
+            if (w <= 0.001f) return;
+            var cur = c.position - b.position;
+            if (cur.sqrMagnitude < 1e-10f) return;
+            b.rotation = Quaternion.Slerp(b.rotation, Quaternion.FromToRotation(cur, target) * b.rotation, w);
+        }
+
+        /// Поворот кости b вокруг её оси (b→axisEnd), чтобы линия sideA−sideB смотрела как target.
+        static void Twist(Transform b, Transform axisEnd, Transform sideA, Transform sideB, Vector3 target, float w)
+        {
+            if (w <= 0.001f) return;
+            var ax = (axisEnd.position - b.position).normalized;
+            var cur = Vector3.ProjectOnPlane(sideA.position - sideB.position, ax);
+            var tg = Vector3.ProjectOnPlane(target, ax);
+            if (cur.sqrMagnitude < 1e-8f || tg.sqrMagnitude < 1e-8f) return;
+            b.rotation = Quaternion.Slerp(b.rotation, Quaternion.FromToRotation(cur, tg) * b.rotation, w);
+        }
+
+        /// Древко из точки pivot к крюку на льду впереди слева (без замаха).
+        Vector3 IceDir(Vector3 pivot, float L, Vector3 fwd, Vector3 right)
+        {
+            float g = Stick.lossyScale.y;
+            var target = Model.position + (fwd * 1.2f - right * 0.55f) * g;
+            float drop = pivot.y - (Model.position.y + 0.04f);
+            var hor = target - pivot; hor.y = 0;
+            if (drop >= L || hor.sqrMagnitude < 1e-4f) return Vector3.down;
+            return (hor.normalized * Mathf.Sqrt(L * L - drop * drop) + Vector3.down * drop) / L;
         }
 
         /// Направление древка из точки pivot к крюку на льду (с замахом и проводкой), длина L.
