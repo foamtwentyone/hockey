@@ -174,3 +174,58 @@ def skate():
     V, F, C = from_bpy([(boot, 4), (cuff, 4), (toe, 2), (tongue, 0), (hold, 2), (blade, 5)] + [(l, 2) for l in laces])
     write('skate', V, F, C)
 skate()
+
+# ---------- клюшка: древко (метры; ноль — верхний хват, вниз по −Y до −1.12), набалдашник, цветные вставки ----------
+def stick_shaft(L=1.12):
+    seg = 20
+    keys = [(0.1, 0.9, 2), (0.085, 1.35, 2), (0.045, 1.35, 2), (0.03, 1.0, 2), (-0.05, 1.0, 2), (-0.05, 1.0, 4), (-0.3, 1.0, 4), (-0.3, 1.04, 0), (-0.36, 1.04, 0),
+            (-0.36, 1.04, 2), (-0.385, 1.04, 2), (-0.385, 1.0, 4), (-0.62, 1.0, 4), (-0.62, 1.04, 6), (-0.64, 1.04, 6), (-0.64, 1.04, 0), (-0.86, 1.02, 0),
+            (-0.86, 1.02, 2), (-0.885, 1.02, 2), (-0.885, 1.0, 4), (-L, 1.08, 4)]
+    V, F, C = [], [], []
+    for y, k, _ in keys:
+        for i in range(seg):
+            a = 2 * math.pi * i / seg; c, s = math.cos(a), math.sin(a); e = 0.45
+            V.append((0.016 * k * math.copysign(abs(c) ** e, c), y, 0.0125 * k * math.copysign(abs(s) ** e, s)))
+    for j in range(len(keys) - 1):
+        for i in range(seg):
+            a, b = j * seg + i, j * seg + (i + 1) % seg
+            F.append([a, b, b + seg, a + seg]); C.append(keys[j + 1][2])
+    top, bot = len(V), len(V) + 1
+    V += [(0, keys[0][0], 0), (0, keys[-1][0], 0)]
+    last = (len(keys) - 1) * seg
+    for i in range(seg):
+        F.append([top, (i + 1) % seg, i]); C.append(2)
+        F.append([bot, last + i, last + (i + 1) % seg]); C.append(4)
+    write('stick', V, F, C)
+stick_shaft()
+
+# ---------- вратарь: щиток, блин, ловушка (метры, центр детали в нуле, лицевая сторона по +Z) ----------
+def goalie_gear():
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    base = box((0.23, 0.11, 0.56), (0, 0, 0), 0.045, 2)
+    rolls = [box((0.2, 0.05, 0.085), (0, -0.05, -0.2 + i * 0.105), 0.03, 2) for i in range(5)]          # горизонтальные валики
+    side = [box((0.045, 0.1, 0.5), (sx * 0.1, -0.035, 0.0), 0.02, 2) for sx in (-1, 1)]                  # боковые валики
+    knee = box((0.25, 0.09, 0.12), (0, -0.02, 0.24), 0.04, 2)                                           # наколенник
+    toe = box((0.24, 0.16, 0.09), (0, -0.045, -0.265), 0.035, 2)                                        # «ботинок» щитка
+    V, F, C = from_bpy([(base, 2)] + [(r, 2 if i != 2 else 0) for i, r in enumerate(rolls)] + [(s, 1) for s in side] + [(knee, 0), (toe, 2)])
+    write('gpad', V, F, C)
+
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    board = box((0.21, 0.05, 0.36), (0, 0, 0.02), 0.022, 2)
+    stripe = box((0.215, 0.055, 0.07), (0, 0, 0.1), 0.02, 2)
+    edge = box((0.215, 0.055, 0.04), (0, 0, -0.13), 0.015, 2)
+    cuff = box((0.15, 0.1, 0.12), (0, 0.06, -0.03), 0.04, 2)
+    V, F, C = from_bpy([(board, 2), (stripe, 0), (edge, 1), (cuff, 4)])
+    write('gblocker', V, F, C)
+
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    def mitt(v):                                     # ловушка: шире сверху, «клюв» в сторону большого пальца
+        v.co.x *= 1.0 + 0.35 * max(0, v.co.z / 0.2)
+    body = box((0.3, 0.1, 0.36), (0, 0, 0.03), 0.07, 2, mitt)
+    pocket = box((0.17, 0.05, 0.2), (0.02, -0.05, 0.07), 0.05, 2)
+    web = [box((0.012, 0.03, 0.17), (-0.05 + i * 0.035, -0.07, 0.08), 0.004, 1) for i in range(5)]
+    cuff2 = box((0.2, 0.1, 0.12), (0, 0.02, -0.19), 0.04, 2)
+    band = box((0.205, 0.105, 0.035), (0, 0.02, -0.16), 0.012, 2)
+    V, F, C = from_bpy([(body, 2), (pocket, 4), (cuff2, 2), (band, 0)] + [(w, 1) for w in web])
+    write('gcatcher', V, F, C)
+goalie_gear()

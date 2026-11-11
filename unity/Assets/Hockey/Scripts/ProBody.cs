@@ -59,7 +59,8 @@ namespace Hockey
         Pose cur, mid; bool poseInit, parts;
         const float BaseScale = 1.18f;
         float phase, swingT = 9, punchT = 9, heldCharge, relCharge, wWind, wShot, wCel, wSad, wAir, wDive, wFall, wSit, wPunch, celT, headKick, headKickV, time;
-        bool relPass, wasSwing, wasPunch;
+        bool relPass, wasSwing, wasPunch, hadPuck, prevInit;
+        float prevSpd, prevH, wBrake, brakeSide = 1, yawRate, accelS, lostT = 9, tapT = 9, nextTap = 4;
 
         Transform Make(Mesh m, Material mat, bool outline = true, bool shadow = true)
         {
@@ -131,6 +132,7 @@ namespace Hockey
             // детали из Blender (unity/Tools/blender/make_parts.py): свитер с кокеткой, воротником и полосами, шорты,
             // рукава с налокотниками, гамаши с наколенниками, коньки. Цвета — через палитру (один материал на игрока).
             Mesh L(string n) { var go = Resources.Load<GameObject>("Body/" + n); var mf = go != null ? go.GetComponentInChildren<MeshFilter>() : null; return mf != null ? mf.sharedMesh : null; }
+            Material pmat = null;
             Mesh mTorso = L("torso"), mPants = L("pants"), mUa = L("uarm"), mFa = L("farm"), mTh = L("thigh"), mSh = L("shin"), mSk = L("skate");
             if (mTorso != null && mPants != null && mUa != null && mFa != null && mTh != null && mSh != null && mSk != null)
             {
@@ -143,7 +145,7 @@ namespace Hockey
                 Set(b.btL, mSk); Set(b.btR, mSk);
                 foreach (var t in new[] { b.hem, b.hemStripe, b.stL, b.stR, b.s1L, b.s2L, b.s1R, b.s2R, b.blL, b.blR }) t.gameObject.SetActive(false);
                 foreach (var bt in new[] { b.btL, b.btR }) foreach (Transform ch in bt) ch.gameObject.SetActive(false);
-                b.parts = true;
+                b.parts = true; pmat = pm;
             }
 
             // голова: лицо в духе прежней модели — большие глаза, нос, улыбка, румянец; волосы под шлемом
@@ -186,9 +188,14 @@ namespace Hockey
                 P(MeshKit.Superellipsoid(0.062f, 0.035f, 0.03f, 0.25f, 0.3f, 16), stripe, new Vector3(0, -StickL + 0.4f, 0.02f));
             }
             float shaft = StickL + 0.1f;
-            P(MeshKit.Superellipsoid(0.027f, shaft / 2, 0.021f, 0.25f, 0.35f, 20), carbon, new Vector3(0, 0.1f - shaft / 2, 0));
-            P(MeshKit.Superellipsoid(0.034f, 0.05f, 0.028f, 0.5f, 0.5f, 16), tapeM, new Vector3(0, 0.07f, 0));
-            P(MeshKit.Superellipsoid(0.03f, 0.04f, 0.024f, 0.25f, 0.35f, 16), stripe, new Vector3(0, -StickL * 0.55f, 0));
+            var mStick = L("stick");
+            if (pmat != null && mStick != null) P(mStick, pmat, Vector3.zero);   // древко с набалдашником и цветными вставками
+            else
+            {
+                P(MeshKit.Superellipsoid(0.027f, shaft / 2, 0.021f, 0.25f, 0.35f, 20), carbon, new Vector3(0, 0.1f - shaft / 2, 0));
+                P(MeshKit.Superellipsoid(0.034f, 0.05f, 0.028f, 0.5f, 0.5f, 16), tapeM, new Vector3(0, 0.07f, 0));
+                P(MeshKit.Superellipsoid(0.03f, 0.04f, 0.024f, 0.25f, 0.35f, 16), stripe, new Vector3(0, -StickL * 0.55f, 0));
+            }
             b.StickBlade = new GameObject("blade").transform; b.StickBlade.SetParent(b.Stick, false); b.StickBlade.localPosition = new Vector3(0, -StickL, 0);
             float bl = goalie ? 0.5f : 0.37f;
             P(MeshKit.Blade(bl, goalie ? 0.12f : 0.085f, 0.022f, goalie ? 0.02f : 0.045f), carbon, new Vector3(0, -StickL - 0.02f, -0.04f));
@@ -200,8 +207,11 @@ namespace Hockey
             if (b.fistR != null) b.fistR.gameObject.SetActive(true);
             if (goalie)
             {   // щитки, блин и ловушка
+                Mesh mPad = L("gpad"), mBl = L("gblocker"), mCa = L("gcatcher");
+                bool gearMeshes = pmat != null && mPad != null && mBl != null && mCa != null;
                 Transform Pad()
                 {
+                    if (gearMeshes) return b.Make(mPad, pmat);
                     var t = b.Make(MeshKit.RoundedBox(0.21f, 0.52f, 0.11f, 0.04f), white);
                     void Sub(Mesh m, Material mt, Vector3 pos)
                     {
@@ -214,6 +224,8 @@ namespace Hockey
                     return t;
                 }
                 b.padL = Pad(); b.padR = Pad();
+                if (gearMeshes) { b.blocker = b.Make(mBl, pmat); b.catcher = b.Make(mCa, pmat); }
+                else {
                 b.blocker = b.Make(MeshKit.RoundedBox(0.2f, 0.32f, 0.05f, 0.02f), white);
                 var bs = new GameObject("s").transform; bs.SetParent(b.blocker, false); bs.localPosition = new Vector3(0, 0.06f, 0.004f);
                 bs.gameObject.AddComponent<MeshFilter>().sharedMesh = MeshKit.RoundedBox(0.202f, 0.06f, 0.05f, 0.02f); bs.gameObject.AddComponent<MeshRenderer>().sharedMaterial = jersey;
@@ -222,6 +234,7 @@ namespace Hockey
                 cp.gameObject.AddComponent<MeshFilter>().sharedMesh = MeshKit.Superellipsoid(0.12f, 0.13f, 0.04f, 0.8f, 0.8f, 18); cp.gameObject.AddComponent<MeshRenderer>().sharedMaterial = Mats.Get("#2b2b33", 0.2f);
                 var cc = new GameObject("s").transform; cc.SetParent(b.catcher, false); cc.localPosition = new Vector3(0, -0.2f, 0);
                 cc.gameObject.AddComponent<MeshFilter>().sharedMesh = MeshKit.RoundedBox(0.2f, 0.1f, 0.09f, 0.03f); cc.gameObject.AddComponent<MeshRenderer>().sharedMaterial = jersey;
+                }
                 if (b.fistL != null) b.fistL.gameObject.SetActive(false);
             }
             b.time = Random.value * 10;
@@ -253,6 +266,20 @@ namespace Hockey
             float spd = s.Spd;
             phase += dt * (2.2f + Mathf.Min(spd, 11) * 0.75f);
 
+            // производные движения: ускорение, торможение, поворот — для инерции тела
+            if (!prevInit) { prevSpd = spd; prevH = s.H; prevInit = true; }
+            float acc = (spd - prevSpd) / Mathf.Max(dt, 1e-4f);
+            accelS += (Mathf.Clamp(acc, -25, 25) - accelS) * (1 - Mathf.Exp(-dt * 8));
+            yawRate += (Mathf.Clamp(Sim.Wrap(s.H - prevH) / Mathf.Max(dt, 1e-4f), -8, 8) - yawRate) * (1 - Mathf.Exp(-dt * 9));
+            prevSpd = spd; prevH = s.H;
+            bool braking = !Goalie && accelS < -7 && spd > 1.2f && !s.Stun && !s.Dive;
+            if (braking && wBrake < 0.05f) brakeSide = yawRate >= 0 ? 1 : -1;
+            wBrake += ((braking ? 1 : 0) - wBrake) * (1 - Mathf.Exp(-dt * (braking ? 14 : 6)));
+            if (hadPuck && !hasPuck && !swing && swingT > 0.6f) lostT = 0;   // шайбу отобрали
+            hadPuck = hasPuck; lostT += dt;
+            tapT += dt;
+            if (spd < 0.4f && !Goalie && time > nextTap) { tapT = 0; nextTap = time + 5 + Random.value * 6; }
+
             // стойка: катание — толчки коньками в стороны-назад, корпус качается навстречу; клюшка ведёт шайбу
             var p = Goalie ? GStance : Stance;
             if (Goalie) spd = Mathf.Min(spd, 3.5f);
@@ -270,6 +297,30 @@ namespace Hockey
             float dr = Goalie ? 0 : hasPuck ? Mathf.Sin(time * 7) * 0.1f : Mathf.Sin(time * 1.7f) * 0.03f;   // ведение шайбы
             p.Blade += new Vector3(dr, 0, Mathf.Abs(dr) * 0.2f);
             p.Top += new Vector3(-dr * 0.2f, 0, 0);
+
+            // разгон: сильнее наклон и шире шаг; поворот: корпус и клюшка уходят внутрь дуги
+            float push01 = Mathf.Clamp01(accelS / 12f);
+            p.Pitch += 0.14f * push01; p.Hip.y -= 0.02f * push01;
+            float turn = Mathf.Clamp(yawRate * 0.12f, -0.35f, 0.35f) * Mathf.Clamp01(spd / 4f);
+            p.Twist += turn * 0.9f; p.Roll += turn * 0.25f;
+            p.FootL.z += turn * 0.12f; p.FootR.z -= turn * 0.12f;
+            p.Blade.x += turn * 0.35f;
+            // торможение «плугом»: корпус откидывается, коньки поперёк, клюшка перед собой
+            if (wBrake > 0.001f)
+            {
+                var q = p; q.Pitch = 0.18f; q.Hip = new Vector3(0, 0.34f, -0.1f); q.Roll = -0.12f * brakeSide;
+                q.FootL = new Vector3(-0.2f, Ankle, 0.16f); q.FootR = new Vector3(0.2f, Ankle, 0.12f);
+                q.Top.y += 0.06f; q.Blade.z -= 0.15f; q.HeadPitch = -0.05f;
+                p = Pose.Lerp(p, q, wBrake);
+            }
+            // потеря шайбы: вздрогнул, оглянулся вниз
+            if (lostT < 0.5f)
+            {
+                float k = Mathf.Sin(lostT / 0.5f * Mathf.PI);
+                p.HeadPitch += 0.35f * k; p.Top.y += 0.1f * k; p.Hip.y += 0.03f * k; p.Pitch -= 0.12f * k;
+            }
+            // в покое иногда постукивает клюшкой по льду
+            if (tapT < 0.7f) { float k = Mathf.Abs(Mathf.Sin(tapT / 0.7f * Mathf.PI * 2)); p.Top.y += 0.07f * k; p.Blade.y += 0.12f * k; }
 
             float shotDur = relPass ? 0.24f : Mathf.Lerp(0.26f, 0.52f, relCharge), shotFrom = relPass ? 0.3f : Mathf.Lerp(0.26f, 0f, relCharge);
             bool charging = s.Charge > 0.02f, shooting = !charging && swingT < shotDur;
@@ -334,7 +385,7 @@ namespace Hockey
             if (Stick.gameObject.activeSelf != showStick) Stick.gameObject.SetActive(showStick);
 
             // всё тело: нырок — вперёд «рыбкой», падение — на спину
-            Model.localRotation = Quaternion.Euler(78 * wDive - 84 * wFall, 0, 0);
+            Model.localRotation = Quaternion.Euler(78 * wDive - 84 * wFall, 62 * wBrake * brakeSide * (1 - wFall) * (1 - wDive), 0);
             Model.localPosition = new Vector3(0, 0.22f * wDive + 0.2f * wFall, -0.35f * wFall + 0.1f * wDive);
 
             // голова, откинутая ударом шайбы, — пружиной
@@ -420,7 +471,7 @@ namespace Hockey
                 var d = (knee - foot).normalized;
                 var f = Vector3.ProjectOnPlane(Vector3.forward, d); if (f.sqrMagnitude < 1e-4f) f = Vector3.up;
                 pad.localRotation = Quaternion.LookRotation(f.normalized, d);
-                pad.localPosition = foot + d * 0.2f + pad.localRotation * new Vector3(0, 0, 0.07f);
+                pad.localPosition = foot + d * (parts ? 0.25f : 0.2f) + pad.localRotation * new Vector3(0, 0, 0.07f);
                 pad.localScale = Vector3.one;
             }
             Seg(th, hipJ, knee, parts ? 0.1f : 0.095f); Seg(sh, knee, foot, parts ? 0.086f : 0.078f); Ball(kn, knee, parts ? 0.08f : 0.092f);
