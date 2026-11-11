@@ -56,7 +56,7 @@ namespace Hockey
         Transform uaL, faL, elL, stL, uaR, faR, elR, stR, thL, shL, knL, s1L, s2L, btL, blL, thR, shR, knR, s1R, s2R, btR, blR, fistL, fistR;
         int team;
         Transform padL, padR, blocker, catcher;
-        Pose cur, mid; bool poseInit;
+        Pose cur, mid; bool poseInit, parts;
         const float BaseScale = 1.18f;
         float phase, swingT = 9, punchT = 9, heldCharge, relCharge, wWind, wShot, wCel, wSad, wAir, wDive, wFall, wSit, wPunch, celT, headKick, headKickV, time;
         bool relPass, wasSwing, wasPunch;
@@ -126,6 +126,24 @@ namespace Hockey
                 var toe = new GameObject("toe").transform; toe.SetParent(bt, false); toe.localPosition = new Vector3(0, -0.02f, 0.1f);
                 toe.gameObject.AddComponent<MeshFilter>().sharedMesh = MeshKit.RoundedBox(0.112f, 0.07f, 0.06f, 0.02f);
                 toe.gameObject.AddComponent<MeshRenderer>().sharedMaterial = white;
+            }
+
+            // детали из Blender (unity/Tools/blender/make_parts.py): свитер с кокеткой, воротником и полосами, шорты,
+            // рукава с налокотниками, гамаши с наколенниками, коньки. Цвета — через палитру (один материал на игрока).
+            Mesh L(string n) { var go = Resources.Load<GameObject>("Body/" + n); var mf = go != null ? go.GetComponentInChildren<MeshFilter>() : null; return mf != null ? mf.sharedMesh : null; }
+            Mesh mTorso = L("torso"), mPants = L("pants"), mUa = L("uarm"), mFa = L("farm"), mTh = L("thigh"), mSh = L("shin"), mSk = L("skate");
+            if (mTorso != null && mPants != null && mUa != null && mFa != null && mTh != null && mSh != null && mSk != null)
+            {
+                var pal = Tex.Palette(new[] { Mats.Hex(tc.Main), Mats.Hex(tc.Dark), Mats.Hex("#f6f6f2"), Mats.Hex(tc.Pants), Mats.Hex("#23232b"), Mats.Hex("#dfe8f2"), Mats.Hex("#ffd23f"), Color.white });
+                var pm = Mats.Outlined(Mats.Toon(pal, "#ffffff", 0.18f), 0.8f);
+                void Set(Transform t, Mesh m) { t.GetComponent<MeshFilter>().sharedMesh = m; t.GetComponent<MeshRenderer>().sharedMaterial = pm; }
+                Set(b.torso, mTorso); Set(b.pants, mPants);
+                Set(b.uaL, mUa); Set(b.uaR, mUa); Set(b.faL, mFa); Set(b.faR, mFa);
+                Set(b.thL, mTh); Set(b.thR, mTh); Set(b.shL, mSh); Set(b.shR, mSh);
+                Set(b.btL, mSk); Set(b.btR, mSk);
+                foreach (var t in new[] { b.hem, b.hemStripe, b.stL, b.stR, b.s1L, b.s2L, b.s1R, b.s2R, b.blL, b.blR }) t.gameObject.SetActive(false);
+                foreach (var bt in new[] { b.btL, b.btR }) foreach (Transform ch in bt) ch.gameObject.SetActive(false);
+                b.parts = true;
             }
 
             // голова: лицо в духе прежней модели — большие глаза, нос, улыбка, румянец; волосы под шлемом
@@ -405,7 +423,7 @@ namespace Hockey
                 pad.localPosition = foot + d * 0.2f + pad.localRotation * new Vector3(0, 0, 0.07f);
                 pad.localScale = Vector3.one;
             }
-            Seg(th, hipJ, knee, 0.095f); Seg(sh, knee, foot, 0.078f); Ball(kn, knee, 0.092f);
+            Seg(th, hipJ, knee, parts ? 0.1f : 0.095f); Seg(sh, knee, foot, parts ? 0.086f : 0.078f); Ball(kn, knee, parts ? 0.08f : 0.092f);
             Ring(s1, knee, foot, 0.45f, 0.025f, 0.081f); Ring(s2, knee, foot, 0.68f, 0.012f, 0.081f);
             // при толчке конёк разворачивается наружу и чуть заваливается на ребро
             float push = Mathf.Clamp01((Mathf.Abs(foot.x) - 0.16f) / 0.1f);
