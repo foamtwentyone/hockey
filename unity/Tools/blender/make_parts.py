@@ -7,6 +7,15 @@ OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../Assets/Hoc
 
 def write(name, V, F, C):
     """V — вершины (x,y,z), F — грани (списки индексов, обход против часовой снаружи), C — индекс палитры на грань."""
+    # единая ориентация граней наружу (в каждой связной части) — иначе деталь в игре видна «изнутри»
+    import trimesh
+    tri, tc = [], []
+    for face, c in zip(F, C):
+        for k in range(1, len(face) - 1): tri.append([face[0], face[k], face[k + 1]]); tc.append(c)
+    m = trimesh.Trimesh(np.array(V, float), np.array(tri), process=False)
+    trimesh.repair.fix_normals(m, multibody=True)
+    F, C = m.faces.tolist(), tc
+    print('  volume', round(float(m.volume), 5))
     with open(os.path.join(OUT, name + '.obj'), 'w') as f:
         f.write('# PUCKO part: %s\n' % name)
         for v in V: f.write('v %.5f %.5f %.5f\n' % tuple(v))
