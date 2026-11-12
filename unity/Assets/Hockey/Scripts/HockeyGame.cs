@@ -911,8 +911,12 @@ namespace Hockey
                 if (v.GoalW > 0.01f && scorer >= 0 && scorer < st.Players.Length)
                 {
                     var sc = st.Players[scorer];
-                    var sf = new Vector3(Mathf.Sin(sc.H), 0, Mathf.Cos(sc.H)); var sr = new Vector3(sf.z, 0, -sf.x);
                     var sp0 = new Vector3(sc.X, sc.Y, sc.Z);
+                    var sf = new Vector3(Mathf.Sin(sc.H), 0, Mathf.Cos(sc.H));
+                    // камера всегда со стороны центра площадки: если игрок смотрит в борт, снимаем его сбоку-сзади, а не трибуны
+                    var toC = new Vector3(-sc.X, 0, -sc.Z); toC = toC.sqrMagnitude > 1 ? toC.normalized : sf;
+                    sf = (sf * 0.6f + toC).normalized;
+                    var sr = new Vector3(sf.z, 0, -sf.x);
                     var gpos = sp0 + sf * 3.6f + sr * Mathf.Sin(time * 0.7f) * 1.6f + Vector3.up * 1.5f;
                     gpos.x = Mathf.Clamp(gpos.x, -Rink.L / 2 + 0.8f, Rink.L / 2 - 0.8f); gpos.z = Mathf.Clamp(gpos.z, -Rink.W / 2 + 0.8f, Rink.W / 2 - 0.8f);
                     target = Vector3.Lerp(target, gpos, v.GoalW);
