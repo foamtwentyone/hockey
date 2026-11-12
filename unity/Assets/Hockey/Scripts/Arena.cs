@@ -297,7 +297,7 @@ namespace Hockey
         /// скамейки запасных за бортом. Всё вне льда — внимание остаётся на игроках.
         void BuildDecor()
         {
-            Material dark = Mats.Get("#23264e", 0.1f), truss = Mats.Get("#3a3f7a", 0.3f), glow = Mats.Emissive("#fff3c8", 1.1f), boxGlow = Mats.Emissive("#ffd58a", 0.7f);
+            Material dark = Mats.Get("#23264e", 0.1f), truss = Mats.Get("#3a3f7a", 0.3f), glow = Mats.Emissive("#fff3c8", 0.55f), boxGlow = Mats.Emissive("#ffd58a", 0.4f);
             // верхний ярус и ложи со светящимися окнами
             Obj("Upper", MeshKit.RingWall(11.2f, 15f, 9f, 9.4f, true, true, true), dark, Root, Vector3.zero, false, false).layer = CrowdLayer;
             Obj("UpperWall", MeshKit.RingWall(15f, 15.6f, 9.4f, 15f, true, false, true), Mats.Get("#1c1f45"), Root, Vector3.zero, false, false).layer = CrowdLayer;
@@ -305,7 +305,7 @@ namespace Hockey
             for (float d = 0; d < upLen; d += 4.2f, kk++)
             {
                 var p = MeshKit.PointAt(up, d);
-                var w = Obj("Suite", MeshKit.RoundedBox(2.6f, 1.3f, 0.12f, 0.08f), kk % 3 == 0 ? Mats.Emissive("#8fd8ff", 0.6f) : boxGlow, Root, new Vector3(p.X, 11.4f, p.Z), false, false);
+                var w = Obj("Suite", MeshKit.RoundedBox(2.6f, 1.3f, 0.12f, 0.08f), kk % 3 == 0 ? Mats.Emissive("#8fd8ff", 0.35f) : boxGlow, Root, new Vector3(p.X, 11.4f, p.Z), false, false);
                 w.transform.rotation = Quaternion.LookRotation(new Vector3(p.Nx, 0, p.Nz)); w.layer = CrowdLayer;
             }
             // ферма под крышей: овальное кольцо над бортами с прожекторами, направленными на лёд
