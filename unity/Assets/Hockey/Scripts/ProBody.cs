@@ -117,12 +117,12 @@ namespace Hockey
             b.pants = b.Make(sup, pantsM);
             b.torso = b.Make(sup, jersey);
             b.hem = b.Make(cyl, jersey); b.hemStripe = b.Make(cyl, white, false, false);
-            b.shoulderL = b.Make(sph, jersey); b.shoulderR = b.Make(sph, jersey);
-            b.uaL = b.Make(cyl, jersey); b.faL = b.Make(cyl, jersey); b.elL = b.Make(sph, jersey); b.stL = b.Make(cyl, white, false, false);
-            b.uaR = b.Make(cyl, jersey); b.faR = b.Make(cyl, jersey); b.elR = b.Make(sph, jersey); b.stR = b.Make(cyl, white, false, false);
-            b.thL = b.Make(cyl, pantsM); b.shL = b.Make(cyl, jersey); b.knL = b.Make(sph, pantsM); b.s1L = b.Make(cyl, white, false, false); b.s2L = b.Make(cyl, dark, false, false);
-            b.thR = b.Make(cyl, pantsM); b.shR = b.Make(cyl, jersey); b.knR = b.Make(sph, pantsM); b.s1R = b.Make(cyl, white, false, false); b.s2R = b.Make(cyl, dark, false, false);
-            b.btL = b.Make(MeshKit.RoundedBox(0.11f, 0.11f, 0.23f, 0.03f), black); b.btR = b.Make(MeshKit.RoundedBox(0.11f, 0.11f, 0.23f, 0.03f), black);
+            b.shoulderL = b.Make(sph, jersey, true, false); b.shoulderR = b.Make(sph, jersey, true, false);
+            b.uaL = b.Make(cyl, jersey); b.faL = b.Make(cyl, jersey); b.elL = b.Make(sph, jersey, true, false); b.stL = b.Make(cyl, white, false, false);
+            b.uaR = b.Make(cyl, jersey); b.faR = b.Make(cyl, jersey); b.elR = b.Make(sph, jersey, true, false); b.stR = b.Make(cyl, white, false, false);
+            b.thL = b.Make(cyl, pantsM); b.shL = b.Make(cyl, jersey); b.knL = b.Make(sph, pantsM, true, false); b.s1L = b.Make(cyl, white, false, false); b.s2L = b.Make(cyl, dark, false, false);
+            b.thR = b.Make(cyl, pantsM); b.shR = b.Make(cyl, jersey); b.knR = b.Make(sph, pantsM, true, false); b.s1R = b.Make(cyl, white, false, false); b.s2R = b.Make(cyl, dark, false, false);
+            b.btL = b.Make(MeshKit.RoundedBox(0.11f, 0.11f, 0.23f, 0.03f), black, true, false); b.btR = b.Make(MeshKit.RoundedBox(0.11f, 0.11f, 0.23f, 0.03f), black, true, false);   // коньки и шары суставов без тени: их тень сливается с ногами
             b.blL = b.Make(box, steel, false, false); b.blR = b.Make(box, steel, false, false);
             foreach (var bt in new[] { b.btL, b.btR })
             {   // белый носок ботинка и шнуровка

@@ -156,13 +156,13 @@ def from_bpy(objs):
             F.append([n0 + i for i in poly.vertices][::-1]); C.append(col)
     return V, F, C
 
-def box(size, loc, bevel, sub=2, taper=None):
+def box(size, loc, bevel, sub=1, taper=None):
     bpy.ops.mesh.primitive_cube_add(size=1, location=loc)
     ob = bpy.context.object; ob.scale = size
     bpy.ops.object.transform_apply(scale=True)
     if taper:
         for v in ob.data.vertices: taper(v)
-    m = ob.modifiers.new('b', 'BEVEL'); m.width = bevel; m.segments = 3
+    m = ob.modifiers.new("b", "BEVEL"); m.width = bevel; m.segments = 2
     if sub:
         s = ob.modifiers.new('s', 'SUBSURF'); s.levels = sub
     return ob
@@ -173,10 +173,10 @@ def skate():
         f = (-v.co.y + 0.115) / 0.23          # 0 — пятка, 1 — носок
         if v.co.z > 0: v.co.z *= 1.0 - 0.55 * f
         v.co.x *= 1.0 - 0.18 * f
-    boot = box((0.115, 0.235, 0.12), (0, -0.035, -0.005), 0.03, 2, boot_shape)
-    cuff = box((0.118, 0.1, 0.05), (0, 0.045, 0.06), 0.02, 2)                      # берец
-    toe = box((0.108, 0.07, 0.062), (0, -0.125, -0.028), 0.025, 2)                 # белый носок
-    tongue = box((0.06, 0.08, 0.03), (0, -0.03, 0.045), 0.012, 2)                  # язычок
+    boot = box((0.115, 0.235, 0.12), (0, -0.035, -0.005), 0.03, 1, boot_shape)
+    cuff = box((0.118, 0.1, 0.05), (0, 0.045, 0.06), 0.02, 1)                      # берец
+    toe = box((0.108, 0.07, 0.062), (0, -0.125, -0.028), 0.025, 1)                 # белый носок
+    tongue = box((0.06, 0.08, 0.03), (0, -0.03, 0.045), 0.012, 1)                  # язычок
     hold = box((0.035, 0.225, 0.035), (0, -0.035, -0.078), 0.012, 1)               # стакан
     blade = box((0.012, 0.275, 0.022), (0, -0.035, -0.103), 0.005, 1)              # лезвие
     laces = [box((0.07, 0.012, 0.012), (0, -0.07 + i * 0.03, 0.035 + i * 0.012), 0.004, 1) for i in range(3)]
@@ -211,30 +211,30 @@ stick_shaft()
 # ---------- вратарь: щиток, блин, ловушка (метры, центр детали в нуле, лицевая сторона по +Z) ----------
 def goalie_gear():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    base = box((0.23, 0.11, 0.56), (0, 0, 0), 0.045, 2)
-    rolls = [box((0.2, 0.05, 0.085), (0, -0.05, -0.2 + i * 0.105), 0.03, 2) for i in range(5)]          # горизонтальные валики
-    side = [box((0.045, 0.1, 0.5), (sx * 0.1, -0.035, 0.0), 0.02, 2) for sx in (-1, 1)]                  # боковые валики
-    knee = box((0.25, 0.09, 0.12), (0, -0.02, 0.24), 0.04, 2)                                           # наколенник
-    toe = box((0.24, 0.16, 0.09), (0, -0.045, -0.265), 0.035, 2)                                        # «ботинок» щитка
+    base = box((0.23, 0.11, 0.56), (0, 0, 0), 0.045, 1)
+    rolls = [box((0.2, 0.05, 0.085), (0, -0.05, -0.2 + i * 0.105), 0.03, 1) for i in range(5)]          # горизонтальные валики
+    side = [box((0.045, 0.1, 0.5), (sx * 0.1, -0.035, 0.0), 0.02, 1) for sx in (-1, 1)]                  # боковые валики
+    knee = box((0.25, 0.09, 0.12), (0, -0.02, 0.24), 0.04, 1)                                           # наколенник
+    toe = box((0.24, 0.16, 0.09), (0, -0.045, -0.265), 0.035, 1)                                        # «ботинок» щитка
     V, F, C = from_bpy([(base, 2)] + [(r, 2 if i != 2 else 0) for i, r in enumerate(rolls)] + [(s, 1) for s in side] + [(knee, 0), (toe, 2)])
     write('gpad', V, F, C)
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    board = box((0.21, 0.05, 0.36), (0, 0, 0.02), 0.022, 2)
-    stripe = box((0.215, 0.055, 0.07), (0, 0, 0.1), 0.02, 2)
-    edge = box((0.215, 0.055, 0.04), (0, 0, -0.13), 0.015, 2)
-    cuff = box((0.15, 0.1, 0.12), (0, 0.06, -0.03), 0.04, 2)
+    board = box((0.21, 0.05, 0.36), (0, 0, 0.02), 0.022, 1)
+    stripe = box((0.215, 0.055, 0.07), (0, 0, 0.1), 0.02, 1)
+    edge = box((0.215, 0.055, 0.04), (0, 0, -0.13), 0.015, 1)
+    cuff = box((0.15, 0.1, 0.12), (0, 0.06, -0.03), 0.04, 1)
     V, F, C = from_bpy([(board, 2), (stripe, 0), (edge, 1), (cuff, 4)])
     write('gblocker', V, F, C)
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
     def mitt(v):                                     # ловушка: шире сверху, «клюв» в сторону большого пальца
         v.co.x *= 1.0 + 0.35 * max(0, v.co.z / 0.2)
-    body = box((0.3, 0.1, 0.36), (0, 0, 0.03), 0.07, 2, mitt)
-    pocket = box((0.17, 0.05, 0.2), (0.02, -0.05, 0.07), 0.05, 2)
+    body = box((0.3, 0.1, 0.36), (0, 0, 0.03), 0.07, 1, mitt)
+    pocket = box((0.17, 0.05, 0.2), (0.02, -0.05, 0.07), 0.05, 1)
     web = [box((0.012, 0.03, 0.17), (-0.05 + i * 0.035, -0.07, 0.08), 0.004, 1) for i in range(5)]
-    cuff2 = box((0.2, 0.1, 0.12), (0, 0.02, -0.19), 0.04, 2)
-    band = box((0.205, 0.105, 0.035), (0, 0.02, -0.16), 0.012, 2)
+    cuff2 = box((0.2, 0.1, 0.12), (0, 0.02, -0.19), 0.04, 1)
+    band = box((0.205, 0.105, 0.035), (0, 0.02, -0.16), 0.012, 1)
     V, F, C = from_bpy([(body, 2), (pocket, 4), (cuff2, 2), (band, 0)] + [(w, 1) for w in web])
     write('gcatcher', V, F, C)
 goalie_gear()
