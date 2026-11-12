@@ -21,7 +21,17 @@ namespace Hockey
         readonly Dictionary<string, GUIStyle> fills = new Dictionary<string, GUIStyle>();
         Texture2D hudRing, hudReticle, hudPuck, hudStickE, hudStickF, hudBladeE, hudBladeF, hudRink, hudRays;
         readonly Texture2D[] hudShield = new Texture2D[2];
-        GUIStyle sBoard, sBubbleText, sPillRed, sPillBlue, sIce;
+        GUIStyle sBoard, sBubbleText, sPillRed, sPillBlue, sIce, sSection;
+
+        /// Заголовок раздела: жёлтая плашка с тёмно-синим текстом и шайбой — как табличка на борту.
+        void Section(string title)
+        {
+            GUILayout.Space(6);
+            var r = GUILayoutUtility.GetRect(new GUIContent(title), sSection, GUILayout.ExpandWidth(false));
+            GUI.Label(r, title, sSection);
+            GUI.DrawTexture(new Rect(r.x + 10, r.center.y - 10, 30, 19), hudPuck);
+            GUILayout.Space(4);
+        }
         Font bubbleFont;
         Texture2D bubSoap; readonly Texture2D[] bubTeam = new Texture2D[2];
         readonly int[] shownScore = { 0, 0 };
@@ -166,6 +176,9 @@ namespace Hockey
             hudBladeE = HudArt.Blade(false); hudBladeF = HudArt.Blade(true);
             hudRink = HudArt.Rink(320);
             hudRays = HudArt.Rays();
+            sSection = new GUIStyle(sLabel) { font = uiFont, fontSize = 21, alignment = TextAnchor.MiddleLeft, wordWrap = false, padding = new RectOffset(48, 22, 7, 11), border = new RectOffset(16, 16, 16, 20), fixedHeight = 44 };
+            sSection.normal.background = TexArt.RoundRect(44, 14, Mats.Hex("#ffe27a"), Mats.Hex("#ffb92e"), Mats.Hex("#1b1f52"), 3, 4);
+            sSection.normal.textColor = Mats.Hex("#1b1f52");
             sIce = new GUIStyle { border = new RectOffset(28, 28, 28, 34) };
             sIce.normal.background = TexArt.RoundRect(72, 26, new Color(0.93f, 0.97f, 1f, 0.2f), new Color(0.75f, 0.86f, 1f, 0.12f), new Color(1, 1, 1, 0.65f), 3, 6);
             bubSoap = HudArt.BubbleBall(Color.white, true);
@@ -721,13 +734,13 @@ namespace Hockey
             GUILayout.Label("Настройки", sH1);
             GUILayout.BeginHorizontal();
             GUILayout.BeginVertical(GUILayout.Width(w / 2 - 40));
-            GUILayout.Label("Звук", sH2);
+            Section("Звук");
             Settings.Master = Slider("Общая громкость", Settings.Master, 0, 1, $"{Settings.Master * 100:0}%");
             Settings.Sfx = Slider("Эффекты", Settings.Sfx, 0, 1, $"{Settings.Sfx * 100:0}%");
             Settings.Crowd = Slider("Трибуны", Settings.Crowd, 0, 1, $"{Settings.Crowd * 100:0}%");
             Settings.Music = Slider("Музыка", Settings.Music, 0, 1, $"{Settings.Music * 100:0}%");
             GUILayout.Space(8);
-            GUILayout.Label("Графика", sH2);
+            Section("Графика");
             GUILayout.Label("Качество", sSmall);
             int q = Choice(Settings.Quality, new[] { "Низкое", "Среднее", "Высокое" });
             if (q != Settings.Quality) { Settings.Quality = q; ApplySettings(); }
@@ -736,14 +749,14 @@ namespace Hockey
             GUILayout.EndVertical();
             GUILayout.Space(30);
             GUILayout.BeginVertical();
-            GUILayout.Label("Камера и управление", sH2);
+            Section("Камера и управление");
             Settings.Fov = Slider("Угол обзора", Settings.Fov, 50, 85, $"{Settings.Fov:0}°");
             Settings.CamDistance = Slider("Дистанция камеры", Settings.CamDistance, 0.7f, 1.5f, $"{Settings.CamDistance:0.0}×");
             Settings.MouseSens = Slider("Чувствительность мыши", Settings.MouseSens, 0.2f, 3f, $"{Settings.MouseSens:0.0}");
             Settings.InvertY = Toggle("Инвертировать по вертикали", Settings.InvertY);
             Settings.AutoCamera = Toggle("Камера сама за спину", Settings.AutoCamera);
             GUILayout.Space(8);
-            GUILayout.Label("Интерфейс", sH2);
+            Section("Интерфейс");
             Settings.Names = Toggle("Имена над игроками", Settings.Names);
             Settings.ScreenShake = Toggle("Тряска экрана", Settings.ScreenShake);
             Settings.UiScale = Slider("Размер интерфейса", Settings.UiScale, 0.7f, 1.4f, $"{Settings.UiScale * 100:0}%");
@@ -783,8 +796,11 @@ namespace Hockey
             GUILayout.BeginArea(new Rect(x, screen == UiScreen.Match ? 60 : 200, w, VH - (screen == UiScreen.Match ? 120 : 220)), sPanel);
             scroll = GUILayout.BeginScrollView(scroll);
             GUILayout.Label("Управление", sH1);
+            Section("Как играть");
+            GUILayout.Label("Бросок и пас летят в прицел по центру экрана: наведи камеру на угол ворот, подними её — шайба пойдёт верхом. Короткое нажатие — быстрый кистевой бросок, держи дольше — мощный щелчок.", sLabel);
             GUILayout.Label("Жми направление — игрок поедет туда относительно камеры. Пробел на месте — прыжок (перепрыгни силовой приём!), в движении — нырок «рыбкой» за шайбой. Стик против движения — эффектная остановка. R — удар кулаком: ответь обидчику, и начнётся драка — жми R чаще соперника!", sSmall);
             GUILayout.Space(8);
+            Section("Кнопки");
             string[] head = { "", "Один игрок / по сети", "Игрок 1", "Игрок 2", "Геймпад" };
             GUILayout.BeginHorizontal();
             for (int c = 0; c < 5; c++) GUILayout.Label($"<b>{head[c]}</b>", sSmall, GUILayout.Width(c == 0 ? 300 : 200));
@@ -797,7 +813,7 @@ namespace Hockey
                 GUILayout.EndHorizontal();
             }
             GUILayout.Space(10);
-            GUILayout.Label("<b>Бонусы в режиме «Аркада»</b>", sH2);
+            Section("Бонусы в режиме «Аркада»");
             for (int i = 0; i < Fx.ItemNames.Length; i++)
                 GUILayout.Label($"<color={Fx.ItemColors[i]}>●</color> <b>{Fx.ItemNames[i]}</b> — {Fx.ItemHints[i]}", sLabel);
             GUILayout.Space(10);
