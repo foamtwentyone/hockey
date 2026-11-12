@@ -922,9 +922,21 @@ namespace Hockey
                 foreach (var k in myKeys) { var e = roster.Find(r => r.Human == k); if (e != null) myTeams.Add(e.Team); }
                 if (myTeams.Count == 1) title = myTeams.Contains(win) ? "ПОБЕДА!" : "Почти получилось…";
             }
-            var r0 = GUILayoutUtility.GetRect(w - 60, 70);
-            Shadowed(r0, title, sH1, Mats.Hex("#ffd23f"), Mats.Hex("#ff4f5e"), 4);
-            GUILayout.Label($"<color=#ff8a7f>{v.Score0}</color>  :  <color=#8fbcff>{v.Score1}</color>", new GUIStyle(sTitle) { fontSize = 72, alignment = TextAnchor.MiddleCenter });
+            float tEnd = Time.realtimeSinceStartup - endShownAt;
+            var r0 = GUILayoutUtility.GetRect(w - 60, 74);
+            float tp = 1 + Mathf.Max(0, 0.35f - tEnd) * 1.6f + Mathf.Sin(tEnd * 3) * 0.02f;   // заголовок «выпрыгивает»
+            Shadowed(r0, title, new GUIStyle(sH1) { fontSize = (int)(44 * tp) }, Mats.Hex("#ffd23f"), Mats.Hex("#ff4f5e"), 4);
+            // счёт в шарах цвета команд, как на табло
+            var sr = GUILayoutUtility.GetRect(w - 60, 110);
+            for (int t = 0; t < 2; t++)
+            {
+                float d = 100, cx = sr.center.x + (t == 0 ? -90 : 90);
+                float pop = Mathf.Clamp01((tEnd - 0.25f - t * 0.15f) * 5);
+                float dd = d * (pop < 1 ? Mathf.Lerp(0.2f, 1.12f, pop) : 1);
+                GUI.DrawTexture(new Rect(cx - dd / 2, sr.center.y - dd / 2, dd, dd), bubTeam[t]);
+                Shadowed(new Rect(cx - dd / 2, sr.center.y - dd / 2 + 2, dd, dd), (t == 0 ? v.Score0 : v.Score1).ToString(), new GUIStyle(sHudNum) { fontSize = (int)(56 * dd / d) }, Color.white, Mats.Hex("#0d1030"), 3);
+            }
+            Shadowed(new Rect(sr.center.x - 20, sr.y, 40, sr.height), ":", new GUIStyle(sHudNum) { fontSize = 50 }, Color.white, Mats.Hex("#0d1030"), 3);
             var rows = new List<int>();
             for (int i = 0; i < roster.Count && i < v.Players.Length; i++) if (!roster[i].Goalie) rows.Add(i);
             rows.Sort((a, b) => (v.Players[b].Goals * 2 + v.Players[b].Assists).CompareTo(v.Players[a].Goals * 2 + v.Players[a].Assists));
@@ -933,9 +945,13 @@ namespace Hockey
             GUILayout.BeginHorizontal();
             GUILayout.Label("Игрок", sSmall, GUILayout.Width(360)); GUILayout.Label("Голы", sSmall, GUILayout.Width(120)); GUILayout.Label("Пасы", sSmall);
             GUILayout.EndHorizontal();
+            int rowN = 0;
             foreach (int i in rows)
             {
                 var r = roster[i];
+                // строки выезжают по очереди
+                float rk = Mathf.Clamp01((tEnd - 0.5f - rowN++ * 0.08f) * 6);
+                GUI.color = new Color(1, 1, 1, rk);
                 string col = r.Team == 0 ? "#ff8a7f" : "#8fbcff";
                 string nm = r.Human != null ? $"<b>{r.Name}</b>" : r.Name;
                 GUILayout.BeginHorizontal();
@@ -943,6 +959,7 @@ namespace Hockey
                 GUILayout.Label(v.Players[i].Goals.ToString(), sLabel, GUILayout.Width(120));
                 GUILayout.Label(v.Players[i].Assists.ToString(), sLabel);
                 GUILayout.EndHorizontal();
+                GUI.color = Color.white;
             }
             GUILayout.FlexibleSpace();
             if (mode != Mode.Client) { if (Button("Ещё матч!", BtnMain, GUILayout.Height(66))) NewMatch(); }

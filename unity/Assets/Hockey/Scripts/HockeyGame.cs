@@ -72,7 +72,7 @@ namespace Hockey
         readonly Dictionary<int, Transform> rings = new Dictionary<int, Transform>();
         readonly List<CharacterRig> showcase = new List<CharacterRig>();
         LockerRoom locker;
-        bool lockerShown; float lockerFade;
+        bool lockerShown; float lockerFade, endShownAt;
         static readonly Vector3 ShowPos0 = new Vector3(-1.3f, 0, 0.4f);
         Transform puck, puckRing, puckFire;
         LineRenderer trail;
@@ -650,7 +650,7 @@ namespace Hockey
                 {
                     if (endTimer < 0) { endTimer = 1.2f; fx.ConfettiRain(Vector3.zero, 400); }
                     endTimer -= Time.unscaledDeltaTime;
-                    if (endTimer <= 0) { endShown = true; paused = false; }
+                    if (endTimer <= 0) { endShown = true; paused = false; endShownAt = Time.realtimeSinceStartup; }
                 }
             }
             else if (!inMatch) MenuScene(dt);

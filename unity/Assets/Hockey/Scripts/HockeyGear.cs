@@ -351,7 +351,7 @@ namespace Hockey
                 return list;
             }
             var tc = TeamColors.All[Mathf.Clamp(team, 0, 1)];
-            var visorM = Mats.Fade("#8fd8ff", 0.3f, true); visorM.SetFloat("_Glossiness", 0.25f);
+            var visorM = Mats.Fade("#bfe8ff", 0.16f, true); visorM.SetFloat("_Glossiness", 0.25f);   // прозрачнее — лицо и эмоции видны
             var helmRot = rot * Quaternion.Euler(-6, 0, 0);
             var helmScale = hs * 1.02f;
             bool ext = HasExt("helmet");
