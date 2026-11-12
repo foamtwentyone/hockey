@@ -55,7 +55,8 @@ namespace Hockey
         Transform torso, hem, hemStripe, pants, headT, shoulderL, shoulderR, numberT, crestT;
         Transform uaL, faL, elL, stL, uaR, faR, elR, stR, thL, shL, knL, s1L, s2L, btL, blL, thR, shR, knR, s1R, s2R, btR, blR, fistL, fistR;
         int team;
-        Transform padL, padR, blocker, catcher;
+        Transform padL, padR, blocker, catcher, openL, browL, browR, eyeL, eyeR, mouthT;
+        float blinkT, nextBlink = 2, emoAngry, emoHappy, emoSad, emoOpen;
         Pose cur, mid; bool poseInit, parts;
         const float BaseScale = 1.18f;
         float phase, swingT = 9, punchT = 9, heldCharge, relCharge, wWind, wShot, wCel, wSad, wAir, wDive, wFall, wSit, wPunch, celT, headKick, headKickV, time;
@@ -103,6 +104,7 @@ namespace Hockey
 
         public static ProBody Create(int team, int skin, int tape, int number, Transform parent, bool goalie = false)
         {
+            int helmColor = Mathf.Abs(tape) / 8; tape = Mathf.Abs(tape) % 8;   // в одном числе: обмотка и цвет шлема
             var b = new ProBody { team = team, Goalie = goalie };
             b.Model = new GameObject("ProBody").transform;
             b.Model.SetParent(parent, false);
@@ -151,22 +153,25 @@ namespace Hockey
             // голова: лицо в духе прежней модели — большие глаза, нос, улыбка, румянец; волосы под шлемом
             b.headT = b.Make(sph, skinM);
             b.Head = b.headT;
-            void Face(Mesh m, Material mat, Vector3 pos, Vector3 scale)
+            Transform Face(Mesh m, Material mat, Vector3 pos, Vector3 scale)
             {
                 var f = new GameObject("f").transform; f.SetParent(b.headT, false); f.localPosition = pos; f.localScale = scale;
                 f.gameObject.AddComponent<MeshFilter>().sharedMesh = m;
                 var mr = f.gameObject.AddComponent<MeshRenderer>(); mr.sharedMaterial = mat; mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                return f;
             }
             var eye = Mats.Get("#1d1b26", 0.9f);
             foreach (float sx in new[] { -1f, 1f })
             {
-                Face(sph, eye, new Vector3(sx * 0.19f, 0.0f, 0.44f), new Vector3(0.13f, 0.2f, 0.08f));
+                var ey = Face(sph, eye, new Vector3(sx * 0.19f, 0.0f, 0.44f), new Vector3(0.13f, 0.2f, 0.08f));
+                if (sx < 0) b.eyeL = ey; else b.eyeR = ey;
                 Face(sph, Mats.Emissive("#ffffff", 0.6f), new Vector3(sx * 0.19f + 0.025f, 0.05f, 0.475f), new Vector3(0.04f, 0.05f, 0.03f));
                 Face(sph, Mats.Get("#ff9a96", 0.1f), new Vector3(sx * 0.3f, -0.16f, 0.36f), new Vector3(0.12f, 0.07f, 0.05f));
-                Face(sph, hair, new Vector3(sx * 0.19f, 0.2f, 0.42f), new Vector3(0.17f, 0.04f, 0.06f));   // брови
+                var br = Face(sph, hair, new Vector3(sx * 0.19f, 0.2f, 0.42f), new Vector3(0.17f, 0.04f, 0.06f));   // брови
+                if (sx < 0) b.browL = br; else b.browR = br;
             }
             Face(sph, skinM, new Vector3(0, -0.1f, 0.5f), new Vector3(0.13f, 0.11f, 0.12f));                 // нос
-            Face(sph, Mats.Get("#6e2c2a", 0.2f), new Vector3(0, -0.27f, 0.42f), new Vector3(0.2f, 0.05f, 0.08f));   // улыбка
+            b.mouthT = Face(sph, Mats.Get("#6e2c2a", 0.2f), new Vector3(0, -0.27f, 0.42f), new Vector3(0.2f, 0.05f, 0.08f));   // рот
             Face(sph, hair, new Vector3(0, 0.08f, -0.06f), new Vector3(1.05f, 0.95f, 0.98f));                // волосы (видны по бокам из-под шлема)
 
             // номер и эмблема
@@ -203,6 +208,7 @@ namespace Hockey
 
             // краги-кулаки и шлем — модели экипировки
             b.fistL = HockeyGear.Fist(team, b.Model, FistS, false); b.fistR = HockeyGear.Fist(team, b.Model, FistS, true);
+            if (!goalie) b.openL = HockeyGear.OpenGlove(team, b.Model, 0.27f, false);
             if (b.fistL != null) b.fistL.gameObject.SetActive(true);
             if (b.fistR != null) b.fistR.gameObject.SetActive(true);
             if (goalie)
@@ -239,7 +245,7 @@ namespace Hockey
             }
             b.time = Random.value * 10;
             b.Solve(goalie ? GStance : Stance, 0);
-            b.HelmetParts = HockeyGear.HeadGear(b.headT, b.headT.position, new Vector3(0.52f, 0.5f, 0.54f) * b.Model.localScale.x, b.Model.rotation, team, goalie);
+            b.HelmetParts = HockeyGear.HeadGear(b.headT, b.headT.position, new Vector3(0.52f, 0.5f, 0.54f) * b.Model.localScale.x, b.Model.rotation, team, goalie, helmColor);
             return b;
         }
 
@@ -391,6 +397,25 @@ namespace Hockey
             // голова, откинутая ударом шайбы, — пружиной
             float w = 2.2f * Mathf.PI * 2;
             headKickV += (-w * w * headKick - 2 * 0.25f * w * headKickV) * dt; headKick += headKickV * dt;
+            // лицо: моргание и эмоции — сосредоточен при замахе, рад при голе, расстроен после пропущенной, «о» при ударе и падении
+            blinkT += dt;
+            if (blinkT > nextBlink) { blinkT = 0; nextBlink = 1.5f + Random.value * 3.5f; }
+            float blink = blinkT < 0.12f ? 0.12f : 1;
+            emoAngry += ((charging || shooting || wPunch > 0.3f ? 1 : 0) - emoAngry) * K(12);
+            emoHappy += ((celebrate || dance ? 1 : 0) - emoHappy) * K(8);
+            emoSad += ((sad ? 1 : 0) - emoSad) * K(6);
+            emoOpen += ((s.Stun || lostT < 0.5f || (shooting && swingT < 0.2f) ? 1 : 0) - emoOpen) * K(14);
+            if (eyeL != null)
+            {
+                var es = new Vector3(0.13f, 0.2f * blink * (1 + 0.25f * emoOpen - 0.3f * emoAngry), 0.08f);
+                eyeL.localScale = es; eyeR.localScale = es;
+                float tilt = 22 * emoAngry - 20 * emoSad, lift = 0.03f * emoHappy + 0.04f * emoOpen - 0.03f * emoAngry;
+                browL.localPosition = new Vector3(-0.19f, 0.2f + lift, 0.42f); browR.localPosition = new Vector3(0.19f, 0.2f + lift, 0.42f);
+                browL.localRotation = Quaternion.Euler(0, 0, -tilt); browR.localRotation = Quaternion.Euler(0, 0, tilt);
+                mouthT.localScale = new Vector3(Mathf.Lerp(0.2f, 0.11f, emoOpen) + 0.08f * emoHappy - 0.06f * emoSad, 0.05f + 0.11f * emoOpen + 0.05f * emoHappy, 0.08f);
+                mouthT.localPosition = new Vector3(0, -0.27f - 0.02f * emoSad, 0.42f);
+            }
+
             // сглаживание в два прохода: движения начинаются и заканчиваются плавно, без рывков между позами
             if (!poseInit) { mid = cur = p; poseInit = true; }
             float ks = K(shooting || charging ? 30 : 16);
@@ -456,6 +481,20 @@ namespace Hockey
             Stick.localPosition = top; Stick.localRotation = Quaternion.LookRotation(bladeFwd.normalized, -dir);
             Fist(fistR, top, elbowR, dir, false, 1);
             Fist(fistL, hl, elbowL, dir, true, 1 - p.FreeL);
+            if (openL != null && fistL != null)
+            {   // свободная левая рука — раскрытая ладонь (машет, лежит на колене), на клюшке — кулак
+                bool open = p.FreeL > 0.5f;
+                if (openL.gameObject.activeSelf != open) openL.gameObject.SetActive(open);
+                if (fistL.gameObject.activeSelf == open) fistL.gameObject.SetActive(!open);
+                if (open)
+                {
+                    var fore = (hl - elbowL).sqrMagnitude > 1e-8f ? (hl - elbowL).normalized : Vector3.down;
+                    var back = Vector3.ProjectOnPlane(-(qc * Vector3.right) + qc * Vector3.forward * 0.4f, fore);
+                    if (back.sqrMagnitude < 1e-6f) back = Vector3.ProjectOnPlane(Vector3.up, fore);
+                    openL.localPosition = hl + fore * 0.07f;
+                    openL.localRotation = Quaternion.LookRotation(back.normalized, fore);
+                }
+            }
             if (Goalie)
             {
                 blocker.localPosition = top + qc * new Vector3(0.02f, 0.02f, 0.09f); blocker.localRotation = qc; blocker.localScale = Vector3.one;

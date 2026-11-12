@@ -57,7 +57,9 @@ namespace Hockey
         string message = "";
         string playerName, address;
         bool splitCoop;
-        int profNum = 17, profSkin, profTape;   // профиль игрока из «Раздевалки»
+        int profNum = 17, profSkin, profTape, profHelm;   // профиль игрока из «Раздевалки»
+        /// Обмотка клюшки и цвет шлема одним числом (так они передаются и по сети).
+        int ProfLook => profTape + 8 * profHelm;
         float flash;                            // белая вспышка экрана на гол
         PlayerInput clientInput;
 
@@ -104,6 +106,7 @@ namespace Hockey
             profNum = PlayerPrefs.GetInt("hockey.num", 17);
             profSkin = PlayerPrefs.GetInt("hockey.skin", 0);
             profTape = PlayerPrefs.GetInt("hockey.tape", 0);
+            profHelm = Mathf.Clamp(PlayerPrefs.GetInt("hockey.helm", 0), 0, 3);
 
             arena = new Arena(transform);
             audioFx = new GameAudio(gameObject);
@@ -194,7 +197,7 @@ namespace Hockey
         {
             var specs = new (int team, int skin, int hair, int num, bool goalie, Vector3 pos, float yaw)[]
             {
-                (0, profSkin, profTape, profNum, false, new Vector3(-1.3f, 0, 0.4f), 200),
+                (0, profSkin, ProfLook, profNum, false, new Vector3(-1.3f, 0, 0.4f), 200),
                 (1, 3, 1, 9, false, new Vector3(1.4f, 0, 0.2f), 160),
                 (0, 4, 3, 1, true, new Vector3(0.05f, 0, 1.6f), 180),
             };
@@ -214,7 +217,7 @@ namespace Hockey
             var old = showcase[0];
             var pos = old.Root.localPosition; var rot = old.Root.localRotation; bool act = old.Root.gameObject.activeSelf;
             Destroy(old.Root.gameObject);
-            var c = CharacterRig.Build(0, profSkin, profTape, profNum, false, transform);
+            var c = CharacterRig.Build(0, profSkin, ProfLook, profNum, false, transform);
             c.Root.localPosition = pos; c.Root.localRotation = rot; c.Root.gameObject.SetActive(act);
             showcase[0] = c;
             locker?.SetNumber(profNum);
@@ -234,6 +237,7 @@ namespace Hockey
             PlayerPrefs.SetInt("hockey.num", profNum);
             PlayerPrefs.SetInt("hockey.skin", profSkin);
             PlayerPrefs.SetInt("hockey.tape", profTape);
+            PlayerPrefs.SetInt("hockey.helm", profHelm);
             PlayerPrefs.Save();
         }
 
@@ -246,7 +250,7 @@ namespace Hockey
             SavePrefs();
             mode = Mode.Local;
             sources.Clear(); myKeys.Clear();
-            lobby = new List<LobbyEntry> { new LobbyEntry { Key = "local0", Name = MyName, Team = 0, Number = profNum, Skin = profSkin, Hair = profTape } };
+            lobby = new List<LobbyEntry> { new LobbyEntry { Key = "local0", Name = MyName, Team = 0, Number = profNum, Skin = profSkin, Hair = ProfLook } };
             if (!split)
                 sources.Add(new InputSource { Key = "local0", Scheme = Scheme.Solo, Pad = 0, Mouse = true });
             else
@@ -386,7 +390,7 @@ namespace Hockey
             sources.Clear(); myKeys.Clear();
             sources.Add(new InputSource { Key = "local0", Scheme = Scheme.Solo, Pad = 0, Mouse = true });
             myKeys.Add("local0");
-            lobby = new List<LobbyEntry> { new LobbyEntry { Key = "local0", Name = MyName, Team = 0, Number = profNum, Skin = profSkin, Hair = profTape } };
+            lobby = new List<LobbyEntry> { new LobbyEntry { Key = "local0", Name = MyName, Team = 0, Number = profNum, Skin = profSkin, Hair = ProfLook } };
             session.InMatch = false; session.Seq++;
             host.InMatch = false;
             host.GetSession = () =>
@@ -436,7 +440,7 @@ namespace Hockey
         {
             CloseNet();
             SavePrefs();
-            try { client = new ClientNet(addr, MyName, Time.realtimeSinceStartupAsDouble, profNum, profSkin, profTape); }
+            try { client = new ClientNet(addr, MyName, Time.realtimeSinceStartupAsDouble, profNum, profSkin, ProfLook); }
             catch (System.Exception e) { message = e.Message; return; }
             mode = Mode.Client;
             screen = UiScreen.Lobby;

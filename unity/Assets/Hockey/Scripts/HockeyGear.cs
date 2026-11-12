@@ -316,7 +316,33 @@ namespace Hockey
         public static Texture2D CrestTexture() => CrestTex();
 
         /// Шлем с визором для головы произвольной модели: центр hc и размеры hs головы (мировые), поворот rot.
-        public static List<Transform> HeadGear(Transform head, Vector3 hc, Vector3 hs, Quaternion rot, int team, bool goalie = false)
+        public static readonly string[] HelmetColors = { null, "#f6f6f2", "#2b2b33", "#ffd23f" };   // null — цвет команды
+
+        /// Раскрытая крага (Resources/Gear/glove): пальцы по +Y, раструб снизу. Возвращает держатель или null.
+        public static Transform OpenGlove(int team, Transform parent, float size, bool mirror)
+        {
+            var prefab = LoadExt("glove");
+            if (prefab == null) return null;
+            var holder = new GameObject("gear_open_glove").transform;
+            holder.SetParent(parent, false);
+            var go = Object.Instantiate(prefab, holder, false);
+            var em = ExtMaterial("glove", Mats.Hex(TeamColors.All[Mathf.Clamp(team, 0, 1)].Main), team);
+            float maxDim = 1e-3f;
+            foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+            {
+                var mats = r.sharedMaterials;
+                for (int k = 0; k < mats.Length; k++) mats[k] = em;
+                r.sharedMaterials = mats;
+                var mf = r.GetComponent<MeshFilter>();
+                if (mf != null && mf.sharedMesh != null) maxDim = Mathf.Max(maxDim, mf.sharedMesh.bounds.size.y);
+            }
+            float k0 = size / maxDim / Mathf.Max(1e-4f, parent.lossyScale.x);
+            go.transform.localScale = new Vector3(mirror ? -k0 : k0, k0, k0);
+            holder.gameObject.SetActive(false);
+            return holder;
+        }
+
+        public static List<Transform> HeadGear(Transform head, Vector3 hc, Vector3 hs, Quaternion rot, int team, bool goalie = false, int helmColor = 0)
         {
             var list = new List<Transform>();
             if (goalie)
@@ -329,7 +355,8 @@ namespace Hockey
             var helmRot = rot * Quaternion.Euler(-6, 0, 0);
             var helmScale = hs * 1.02f;
             bool ext = HasExt("helmet");
-            list.Add(Gear("helmet", GearModels.Helmet(Mats.Hex(tc.Main), Mats.Hex(tc.Dark), Mats.Hex("#2b2b33")), Mats.Get("#ffffff", 0.1f), hc, helmRot, head, helmScale, Mats.Hex(tc.Main)));
+            string hcHex = HelmetColors[Mathf.Clamp(helmColor, 0, HelmetColors.Length - 1)] ?? tc.Main;
+            list.Add(Gear("helmet", GearModels.Helmet(Mats.Hex(hcHex), Mats.Hex(tc.Dark), Mats.Hex("#2b2b33")), Mats.Get("#ffffff", 0.1f), hc, helmRot, head, helmScale, Mats.Hex(hcHex)));
             list.Add(Piece(GearModels.Visor(), visorM, hc + (ext ? rot * Vector3.forward * hs.z * 0.02f - Vector3.up * hs.y * 0.13f : Vector3.zero), helmRot, head, false, ext ? helmScale * 0.98f : helmScale));
             return list;
         }

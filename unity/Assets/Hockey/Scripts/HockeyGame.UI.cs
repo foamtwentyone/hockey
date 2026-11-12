@@ -575,9 +575,11 @@ namespace Hockey
             int skin = Swatches(profSkin, CharacterRig.Skins);
             GUILayout.Label("Обмотка клюшки", sSmall);
             int tape = Swatches(profTape, KayKitCharacter.TapeColors);
-            if (num != profNum || skin != profSkin || tape != profTape)
+            GUILayout.Label("Цвет шлема", sSmall);
+            int helm = Swatches(profHelm, new[] { TeamColors.All[0].Main, "#f6f6f2", "#2b2b33", "#ffd23f" });
+            if (num != profNum || skin != profSkin || tape != profTape || helm != profHelm)
             {
-                profNum = num; profSkin = skin; profTape = tape;
+                profNum = num; profSkin = skin; profTape = tape; profHelm = helm;
                 SavePrefs();
                 RebuildPreview();
             }
