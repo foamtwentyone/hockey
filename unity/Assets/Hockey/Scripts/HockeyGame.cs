@@ -674,6 +674,23 @@ namespace Hockey
             var who = PlayerPos(st, e.Who);
             switch (e.Type)
             {
+                case EvType.Shot:
+                    {   // бросок: ледяная крошка из-под крюка, кольцо по льду; сильный щелчок — искры и лёгкая встряска
+                        var pp = new Vector3(st.PuckX, 0.05f, st.PuckZ);
+                        var sd = who.sqrMagnitude > 0 ? (pp - new Vector3(who.x, 0.05f, who.z)).normalized : Vector3.forward;
+                        fx.Chips(pp, sd, 4 + (int)(e.Value * 10), 3 + e.Value * 4);
+                        fx.Shockwave(pp, new Color(1, 1, 1, 0.8f), 0.9f + e.Value * 1.3f);
+                        if (e.Value > 0.7f)
+                        {
+                            fx.Sparks(pp + Vector3.up * 0.1f, Mats.Hex("#ffd23f"), 10, 5);
+                            fx.Pow(pp + Vector3.up * 0.5f, 0.5f);
+                            if (Settings.ScreenShake) shake = Mathf.Max(shake, 0.1f);
+                        }
+                        break;
+                    }
+                case EvType.Pass:
+                    fx.Chips(new Vector3(st.PuckX, 0.05f, st.PuckZ), Vector3.up, 3, 2);
+                    break;
                 case EvType.Hit:
                     if (Settings.ScreenShake) shake = Mathf.Max(shake, 0.25f);
                     fx.Sparks(who + Vector3.up * 1.6f, Mats.Hex("#ffd23f"), 18);

@@ -874,6 +874,10 @@ namespace Hockey
         {
             Dim();
             float w = 460;
+            DrawTitle((VW - 300) / 2 + 10, VH / 2 - 420, 0.85f);   // логотип над панелью
+            // счёт матча на паузе
+            if (view != null)
+                Shadowed(new Rect(0, VH / 2 + 262, VW, 44), $"Красные  {view.Score0} : {view.Score1}  Синие", new GUIStyle(sH2) { alignment = TextAnchor.MiddleCenter, fontSize = 28 }, Color.white, Mats.Hex("#0d1030"), 3);
             GUILayout.BeginArea(new Rect((VW - w) / 2, VH / 2 - 250, w, 500), sPanel);
             GUILayout.Label("Пауза", sH1);
             if (mode != Mode.Local) GUILayout.Label("В сетевом матче игра не останавливается", new GUIStyle(sSmall) { alignment = TextAnchor.MiddleCenter });
