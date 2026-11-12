@@ -288,7 +288,7 @@ namespace Hockey
             // конец матча
             sim.Time = 0.4f;
             if (sim.Score[0] == sim.Score[1]) sim.Score[0]++;
-            yield return Wait(3f);
+            yield return Wait(4.5f);
             yield return Shot("21_end");
 
             // сплит-скрин

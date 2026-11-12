@@ -913,63 +913,65 @@ namespace Hockey
 
         void DrawEnd()
         {
-            Dim(0.45f);
             var v = view;
             if (v == null) return;
-            float w = 720;
-            GUILayout.BeginArea(new Rect((VW - w) / 2, 50, w, VH - 100), sPanel);
-            string title = "Ничья!";
+            float tEnd = Time.realtimeSinceStartup - endShownAt;
+            // лёгкое затемнение только сверху и снизу — сцена с героями остаётся на виду
+            for (int i = 0; i < 24; i++)
+            {
+                float a = 0.55f * (1 - i / 24f);
+                GUI.color = new Color(0.04f, 0.05f, 0.16f, a);
+                GUI.DrawTexture(new Rect(0, i * 12, VW, 12), white);
+                GUI.DrawTexture(new Rect(0, VH - (i + 1) * 10, VW, 10), white);
+            }
+            GUI.color = Color.white;
+            string title = "НИЧЬЯ!";
             if (v.Score0 != v.Score1)
             {
                 int win = v.Score0 > v.Score1 ? 0 : 1;
-                title = "Победа: " + Rink.TeamNames[win] + "!";
+                title = "ПОБЕДА " + (win == 0 ? "КРАСНЫХ!" : "СИНИХ!");
                 var myTeams = new HashSet<int>();
                 foreach (var k in myKeys) { var e = roster.Find(r => r.Human == k); if (e != null) myTeams.Add(e.Team); }
-                if (myTeams.Count == 1) title = myTeams.Contains(win) ? "ПОБЕДА!" : "Почти получилось…";
+                if (myTeams.Count == 1) title = myTeams.Contains(win) ? "ПОБЕДА!" : "ПОРАЖЕНИЕ";
             }
-            float tEnd = Time.realtimeSinceStartup - endShownAt;
-            var r0 = GUILayoutUtility.GetRect(w - 60, 74);
-            float tp = 1 + Mathf.Max(0, 0.35f - tEnd) * 1.6f + Mathf.Sin(tEnd * 3) * 0.02f;   // заголовок «выпрыгивает»
-            Shadowed(r0, title, new GUIStyle(sH1) { fontSize = (int)(44 * tp) }, Mats.Hex("#ffd23f"), Mats.Hex("#ff4f5e"), 4);
-            // счёт в шарах цвета команд, как на табло
-            var sr = GUILayoutUtility.GetRect(w - 60, 110);
+            // заголовок выпрыгивает
+            float tp = 1 + Mathf.Max(0, 0.35f - tEnd) * 1.8f + Mathf.Sin(tEnd * 3) * 0.02f;
+            var ts = new GUIStyle(sTitle) { fontSize = (int)(96 * tp), alignment = TextAnchor.MiddleCenter };
+            Shadowed(new Rect(0, 28, VW, 120), title, ts, Mats.Hex("#ffd23f"), Mats.Hex("#c2422f"), 7);
+            // счёт: гербы команд со звездой и числом, между ними «vs»
+            float cy = 210, bw = 180, bh = 96;
             for (int t = 0; t < 2; t++)
             {
-                float d = 100, cx = sr.center.x + (t == 0 ? -90 : 90);
                 float pop = Mathf.Clamp01((tEnd - 0.25f - t * 0.15f) * 5);
-                float dd = d * (pop < 1 ? Mathf.Lerp(0.2f, 1.12f, pop) : 1);
-                GUI.DrawTexture(new Rect(cx - dd / 2, sr.center.y - dd / 2, dd, dd), bubTeam[t]);
-                Shadowed(new Rect(cx - dd / 2, sr.center.y - dd / 2 + 2, dd, dd), (t == 0 ? v.Score0 : v.Score1).ToString(), new GUIStyle(sHudNum) { fontSize = (int)(56 * dd / d) }, Color.white, Mats.Hex("#0d1030"), 3);
+                float sc = pop < 1 ? Mathf.Lerp(0.3f, 1.1f, pop) : 1;
+                float cx = VW / 2 + (t == 0 ? -1 : 1) * 160;
+                var r = new Rect(cx - bw * sc / 2, cy - bh * sc / 2, bw * sc, bh * sc);
+                GUI.Label(r, "", t == 0 ? sPillRed : sPillBlue);
+                float sh = r.height * 0.95f;
+                GUI.DrawTexture(new Rect(t == 0 ? r.x - sh * 0.35f : r.xMax - sh * 0.65f, r.center.y - sh * 0.55f, sh * 0.84f, sh), hudShield[t]);
+                var nr = t == 0 ? new Rect(r.x + r.width * 0.4f, r.y, r.width * 0.55f, r.height - 8) : new Rect(r.x + r.width * 0.05f, r.y, r.width * 0.55f, r.height - 8);
+                Shadowed(nr, (t == 0 ? v.Score0 : v.Score1).ToString(), new GUIStyle(sHudNum) { fontSize = (int)(64 * sc) }, Color.white, Mats.Hex("#0d1030"), 3);
             }
-            Shadowed(new Rect(sr.center.x - 20, sr.y, 40, sr.height), ":", new GUIStyle(sHudNum) { fontSize = 50 }, Color.white, Mats.Hex("#0d1030"), 3);
-            var rows = new List<int>();
-            for (int i = 0; i < roster.Count && i < v.Players.Length; i++) if (!roster[i].Goalie) rows.Add(i);
-            rows.Sort((a, b) => (v.Players[b].Goals * 2 + v.Players[b].Assists).CompareTo(v.Players[a].Goals * 2 + v.Players[a].Assists));
-            if (rows.Count > 0 && v.Players[rows[0]].Goals + v.Players[rows[0]].Assists > 0)
-                GUILayout.Label($"Звезда матча: <b><color=#ffd23f>{roster[rows[0]].Name}</color></b>", sCenter);
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Игрок", sSmall, GUILayout.Width(360)); GUILayout.Label("Голы", sSmall, GUILayout.Width(120)); GUILayout.Label("Пасы", sSmall);
-            GUILayout.EndHorizontal();
-            int rowN = 0;
-            foreach (int i in rows)
+            Shadowed(new Rect(VW / 2 - 40, cy - 30, 80, 56), "vs", new GUIStyle(sHudNum) { fontSize = 34 }, Color.white, Mats.Hex("#0d1030"), 3);
+            // звезда матча
+            int best = -1, bestScore = 0;
+            for (int i = 0; i < roster.Count && i < v.Players.Length; i++)
             {
-                var r = roster[i];
-                // строки выезжают по очереди
-                float rk = Mathf.Clamp01((tEnd - 0.5f - rowN++ * 0.08f) * 6);
-                GUI.color = new Color(1, 1, 1, rk);
-                string col = r.Team == 0 ? "#ff8a7f" : "#8fbcff";
-                string nm = r.Human != null ? $"<b>{r.Name}</b>" : r.Name;
-                GUILayout.BeginHorizontal();
-                GUILayout.Label($"<color={col}>●</color> {nm}", sLabel, GUILayout.Width(360));
-                GUILayout.Label(v.Players[i].Goals.ToString(), sLabel, GUILayout.Width(120));
-                GUILayout.Label(v.Players[i].Assists.ToString(), sLabel);
-                GUILayout.EndHorizontal();
-                GUI.color = Color.white;
+                if (roster[i].Goalie) continue;
+                int sc = v.Players[i].Goals * 2 + v.Players[i].Assists;
+                if (sc > bestScore) { bestScore = sc; best = i; }
             }
-            GUILayout.FlexibleSpace();
-            if (mode != Mode.Client) { if (Button("Ещё матч!", BtnMain, GUILayout.Height(66))) NewMatch(); }
-            else GUILayout.Label("Хост может начать новый матч", sCenter);
-            if (Button("В меню", BtnGhost, GUILayout.Height(56))) ToMenu();
+            if (best >= 0)
+                Shadowed(new Rect(0, cy + 62, VW, 34), $"Звезда матча: {roster[best].Name}  ·  голы {v.Players[best].Goals}, пасы {v.Players[best].Assists}", new GUIStyle(sH2) { alignment = TextAnchor.MiddleCenter, fontSize = 22 }, Color.white, Mats.Hex("#0d1030"), 2);
+            // кнопки внизу
+            float bwid = 300, by = VH - 110;
+            GUILayout.BeginArea(new Rect((VW - bwid * 2 - 20) / 2, by, bwid * 2 + 20, 80));
+            GUILayout.BeginHorizontal();
+            if (mode != Mode.Client) { if (Button("Ещё матч!", Btn("#ffe27a", "#ffb92e", 26), GUILayout.Width(bwid), GUILayout.Height(66))) NewMatch(); }
+            else GUILayout.Label("Хост может начать новый матч", sCenter, GUILayout.Width(bwid), GUILayout.Height(66));
+            GUILayout.Space(20);
+            if (Button("В меню", BtnGhost, GUILayout.Width(bwid), GUILayout.Height(66))) ToMenu();
+            GUILayout.EndHorizontal();
             GUILayout.EndArea();
         }
 

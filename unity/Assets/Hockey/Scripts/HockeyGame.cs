@@ -867,6 +867,17 @@ namespace Hockey
                 var c = chars[i]; var s = st.Players[i];
                 c.Root.localPosition = new Vector3(s.X, s.Y, s.Z);
                 c.Root.localRotation = Quaternion.Euler(0, s.H * Mathf.Rad2Deg, 0);
+                if (endShown)
+                {   // итоги матча: победители радуются шеренгой в центре, проигравшие понуро стоят сбоку (только картинка)
+                    int win = celebrateTeam >= 0 ? celebrateTeam : 0;
+                    int k = 0, n = 0;
+                    for (int j = 0; j < chars.Count; j++) if (chars[j].Team == c.Team) { if (j < i) k++; n++; }
+                    bool winner = c.Team == win;
+                    float x = winner ? (k - (n - 1) / 2f) * 1.25f : 3.4f + k * 1.0f;
+                    float z = winner ? (Mathf.Abs(k - (n - 1) / 2f) * -0.35f) : 0.6f + k * 0.45f;
+                    c.Root.localPosition = new Vector3(x, 0, z);
+                    c.Root.localRotation = Quaternion.Euler(0, winner ? 180 : 215, 0);
+                }
                 c.Animate(s, new CharacterRig.AnimCtx { HasPuck = st.PuckOwner == i, Celebrate = c.Team == celebrateTeam && !c.Goalie, Sad = celebrateTeam >= 0 && c.Team != celebrateTeam, Dt = dt, Time = time + i, LookAt = puckPos });
                 if (rings.TryGetValue(i, out var ring)) ring.localPosition = new Vector3(s.X, 0.015f, s.Z);
                 // ледяная крошка из-под коньков на скорости и в нырке
@@ -953,6 +964,13 @@ namespace Hockey
                 if (!v.Init) { v.Pos = target; v.Look = look; v.Init = true; }
                 v.Pos = Vector3.Lerp(v.Pos, target, 1 - Mathf.Exp(-dt * 10));
                 v.Look = Vector3.Lerp(v.Look, look, 1 - Mathf.Exp(-dt * 12));
+                if (endShown)
+                {   // камера итогов: спереди на шеренгу, медленно наезжает
+                    float te = Time.realtimeSinceStartup - endShownAt;
+                    v.Pos = new Vector3(0.6f + Mathf.Sin(te * 0.3f) * 0.6f, 1.55f, -7.2f + Mathf.Min(te, 6) * 0.15f);
+                    v.Look = new Vector3(0.6f, 0.95f, 0);
+                    if (Random.value < dt * 3) fx.Confetti(new Vector3(Random.Range(-3f, 3f), 3.5f, Random.Range(-1f, 1f)), 25);
+                }
                 var pos = v.Pos;
                 if (shake > 0) pos += new Vector3(Random.Range(-0.5f, 0.5f), Random.Range(-0.5f, 0.5f), 0) * shake;
                 v.Cam.transform.position = pos;
