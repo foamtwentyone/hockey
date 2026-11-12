@@ -845,8 +845,8 @@ namespace Hockey
             lockerOrbit = Mathf.Clamp(lockerOrbit, -1.1f, 1.1f);
             float orb = lockerOrbit + Mathf.Sin(time * 0.3f) * 0.08f;
             var seat = inLocker ? locker.Seat + Vector3.up * 0.85f : Vector3.zero;
-            if (!inLocker && showcase.Count > 2) { showcase[2].Root.localPosition = new Vector3(-2.6f, 0, 2.6f); showcase[2].Root.localRotation = Quaternion.Euler(0, 165, 0); }
-            var camT = inLocker ? seat + new Vector3(Mathf.Sin(orb) * 3.0f - 0.35f, 0.4f + lockerTilt, -Mathf.Cos(orb) * 3.0f) : new Vector3(-0.6f + sway * 0.25f, 1.25f, -3.4f);   // крупно на героя
+            if (!inLocker && showcase.Count > 2) { showcase[2].Root.localPosition = new Vector3(-3.4f, 0, 3.4f); showcase[2].Root.localRotation = Quaternion.Euler(0, 165, 0); }
+            var camT = inLocker ? seat + new Vector3(Mathf.Sin(orb) * 3.0f - 0.35f, 0.4f + lockerTilt, -Mathf.Cos(orb) * 3.0f) : new Vector3(-0.7f + sway * 0.25f, 1.35f, -4.5f);   // крупно на героя, в полный рост
             var lookT = inLocker ? seat + new Vector3(-0.45f, -0.05f, 0) : new Vector3(-2.3f + sway * 0.2f, 1.0f, 0.6f);   // герой справа от кнопок
             float ck = 1 - Mathf.Exp(-dt * 4);
             bool jump = menuCamPos == Vector3.zero || (menuCamPos - camT).sqrMagnitude > 400;   // между ареной и раздевалкой — склейка
