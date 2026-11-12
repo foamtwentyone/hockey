@@ -784,9 +784,20 @@ namespace Hockey
             {
                 var c = showcase[i];
                 bool sit = inLocker && i == 0;
-                var pv = new PlayerView { H = c.Root.localEulerAngles.y * Mathf.Deg2Rad, Save = c.Goalie ? Mathf.Max(0, Mathf.Sin(time * 1.3f)) * 0.3f : 0 };
-                bool dance = !sit && i != 2 && Mathf.Repeat(time + i * 3, 9) > 4.5f;
-                c.Animate(pv, new CharacterRig.AnimCtx { Dt = dt, Time = time + i * 1.7f, Dance = dance, Sit = sit, Celebrate = !sit && !dance && i == 0 && Mathf.Repeat(time, 9) > 3, LookAt = menuCam.transform.position });
+                var pv = new PlayerView { H = c.Root.localEulerAngles.y * Mathf.Deg2Rad, Save = c.Goalie ? Mathf.Max(0, Mathf.Sin(time * 0.9f) - 0.75f) * 2.4f : 0 };
+                bool hasPuckMenu = false;
+                if (i == 1)
+                {   // живая сцена: синий игрок катается по кругу с шайбой за спинами остальных
+                    float ang = time * 0.55f, rx = 5.2f, rz = 2.6f;
+                    var pos = new Vector3(1.2f + Mathf.Cos(ang) * rx, 0, 3.4f + Mathf.Sin(ang) * rz);
+                    var vel = new Vector3(-Mathf.Sin(ang) * rx, 0, Mathf.Cos(ang) * rz) * 0.55f;
+                    c.Root.localPosition = pos;
+                    pv.H = Mathf.Atan2(vel.x, vel.z); pv.Spd = vel.magnitude * 2.2f;
+                    c.Root.localRotation = Quaternion.Euler(0, pv.H * Mathf.Rad2Deg, 0);
+                    hasPuckMenu = true;
+                }
+                bool dance = !sit && i == 0 && Mathf.Repeat(time, 14) > 11.5f;
+                c.Animate(pv, new CharacterRig.AnimCtx { Dt = dt, Time = time + i * 1.7f, Dance = dance, Sit = sit, HasPuck = hasPuckMenu, LookAt = menuCam.transform.position });
             }
             if (!inLocker && Mathf.Repeat(time, 6) < dt) fx.Confetti(new Vector3(0, 0.5f, 0.5f), 80);
             float sway = Mathf.Sin(time * 0.25f) * 0.6f;

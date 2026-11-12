@@ -229,17 +229,34 @@ namespace Hockey
             GUI.color = old;
         }
 
+        readonly Dictionary<string, float> btnAnim = new Dictionary<string, float>();
+
+        /// Кнопка с анимацией: плавно увеличивается под курсором, «проседает» при нажатии, на ней появляется шайба.
         bool Button(string text, GUIStyle style, params GUILayoutOption[] opts)
         {
-            bool r = GUILayout.Button(text, style, opts);
-            if (Event.current.type == EventType.Repaint && GUILayoutUtility.GetLastRect().Contains(Event.current.mousePosition))
+            var rect = GUILayoutUtility.GetRect(new GUIContent(text), style, opts);
+            var ev = Event.current;
+            bool over = rect.Contains(ev.mousePosition);
+            btnAnim.TryGetValue(text, out float h);
+            if (ev.type == EventType.Repaint)
             {
-                hoverNow = text;
-                // шайба-указатель на кнопке под курсором
-                var hr = GUILayoutUtility.GetLastRect();
-                float ph = Mathf.Min(34, hr.height * 0.5f), pwd = ph * 1.6f;
-                GUI.DrawTexture(new Rect(hr.xMax - pwd - 14 + Mathf.Sin(Time.realtimeSinceStartup * 7) * 3, hr.center.y - ph / 2 - 2, pwd, ph), hudPuck);
+                h = Mathf.MoveTowards(h, over ? 1 : 0, Time.unscaledDeltaTime * 9);
+                btnAnim[text] = h;
+                if (over) hoverNow = text;
             }
+            bool pressed = over && GUIUtility.hotControl != 0;
+            float sc = 1 + 0.045f * Mathf.SmoothStep(0, 1, h) - (pressed ? 0.05f : 0);
+            var old = GUI.matrix;
+            GUIUtility.ScaleAroundPivot(new Vector2(sc, sc), GUIUtility.GUIToScreenPoint(rect.center));
+            bool r = GUI.Button(rect, text, style);
+            if (ev.type == EventType.Repaint && h > 0.01f)
+            {
+                float ph = Mathf.Min(34, rect.height * 0.5f), pwd = ph * 1.6f;
+                GUI.color = new Color(1, 1, 1, h);
+                GUI.DrawTexture(new Rect(rect.xMax - pwd - 14 + Mathf.Sin(Time.realtimeSinceStartup * 7) * 3, rect.center.y - ph / 2 - 2, pwd, ph), hudPuck);
+                GUI.color = Color.white;
+            }
+            GUI.matrix = old;
             if (r) audioFx.Ui(true);
             return r;
         }
