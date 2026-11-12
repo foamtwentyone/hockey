@@ -72,7 +72,8 @@ namespace Hockey
         readonly Dictionary<int, Transform> rings = new Dictionary<int, Transform>();
         readonly List<CharacterRig> showcase = new List<CharacterRig>();
         LockerRoom locker;
-        bool lockerShown; float lockerFade, endShownAt, lockerOrbit, lockerTilt;
+        bool lockerShown; float lockerFade, endShownAt, lockerOrbit, lockerTilt, phaseWipe;
+        Phase lastPhase;
         static readonly Vector3 ShowPos0 = new Vector3(-1.3f, 0, 0.4f);
         Transform puck, puckRing, puckFire;
         LineRenderer trail;
@@ -645,6 +646,11 @@ namespace Hockey
 
             if (view != null && inMatch && chars.Count == view.Players.Length)
             {
+                if (view.Phase != lastPhase)
+                {   // смена фазы матча: короткая «шторка» с шайбой перед вбрасыванием после гола
+                    if (lastPhase == Phase.Goal && view.Phase == Phase.Faceoff) phaseWipe = 1;
+                    lastPhase = view.Phase;
+                }
                 UpdateScene(view, dt);
                 if (view.Phase == Phase.End && !endShown)
                 {
@@ -805,7 +811,9 @@ namespace Hockey
             for (int i = 0; i < showcase.Count; i++)
             {
                 var c = showcase[i];
-                bool sit = inLocker && i == 0;
+                // раздевалка: игрок время от времени встаёт и показывает экипировку, потом садится обратно
+                bool showOff = inLocker && i == 0 && Mathf.Repeat(time, 11) > 8.2f;
+                bool sit = inLocker && i == 0 && !showOff;
                 var pv = new PlayerView { H = c.Root.localEulerAngles.y * Mathf.Deg2Rad, Save = c.Goalie ? Mathf.Max(0, Mathf.Sin(time * 0.9f) - 0.75f) * 2.4f : 0 };
                 bool hasPuckMenu = false;
                 if (i == 1)
@@ -819,7 +827,17 @@ namespace Hockey
                     hasPuckMenu = true;
                 }
                 bool dance = !sit && i == 0 && Mathf.Repeat(time, 14) > 11.5f;
-                c.Animate(pv, new CharacterRig.AnimCtx { Dt = dt, Time = time + i * 1.7f, Dance = dance, Sit = sit, HasPuck = hasPuckMenu, LookAt = menuCam.transform.position });
+                // меню: герои следят за катающимся товарищем и машут ему, когда он проезжает рядом
+                var look = menuCam.transform.position;
+                bool wave = false;
+                if (!inLocker && i != 1 && showcase.Count > 1)
+                {
+                    var mate = showcase[1].Root.position;
+                    float dm = (mate - c.Root.position).magnitude;
+                    if (dm < 4.5f) look = mate + Vector3.up;
+                    wave = i == 0 && dm < 2.6f;
+                }
+                c.Animate(pv, new CharacterRig.AnimCtx { Dt = dt, Time = time + i * 1.7f, Dance = dance || showOff, Celebrate = wave, Sit = sit, HasPuck = hasPuckMenu, LookAt = look });
             }
             if (!inLocker && Mathf.Repeat(time, 6) < dt) fx.Confetti(new Vector3(0, 0.5f, 0.5f), 80);
             float sway = Mathf.Sin(time * 0.25f) * 0.6f;

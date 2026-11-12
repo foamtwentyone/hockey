@@ -1008,6 +1008,16 @@ namespace Hockey
 
         void DrawHud(ViewState st)
         {
+            if (phaseWipe > 0)
+            {   // шторка: тёмно-синяя полоса с шайбой проезжает через экран
+                if (Event.current.type == EventType.Repaint) phaseWipe = Mathf.Max(0, phaseWipe - Time.unscaledDeltaTime * 1.6f);
+                float t = 1 - phaseWipe, x = Mathf.Lerp(-VW * 0.6f, VW * 1.1f, t);
+                GUI.color = new Color(0.05f, 0.06f, 0.18f, 0.92f);
+                GUI.DrawTexture(new Rect(x - VW * 0.5f, 0, VW * 0.5f, VH), white);
+                GUI.color = Mats.Hex("#ffd23f"); GUI.DrawTexture(new Rect(x, 0, 8, VH), white);
+                GUI.color = Color.white;
+                GUI.DrawTexture(new Rect(x - 120, VH / 2 - 70, 220, 138), hudPuck);
+            }
             // табло хоккейной арены: часы-шайба посередине, по бокам «борта» с гербами команд, счётом и бросками
             for (int t = 0; t < 2; t++)
             {
