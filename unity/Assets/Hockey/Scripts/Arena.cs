@@ -133,6 +133,11 @@ namespace Hockey
         }
 
         readonly List<GoalNet> nets = new List<GoalNet>();
+        readonly List<(int sgn, Material mat, Light light)> goalLamps = new List<(int, Material, Light)>();
+        readonly float[] lampT = { 0, 0 };
+
+        /// Гол в ворота со стороны sgn (+1 — правые, −1 — левые): лампа за ними мигает несколько секунд.
+        public void GoalFlash(int sgn) { lampT[sgn > 0 ? 0 : 1] = 3.5f; }
         static Texture2D netTex;
 
         /// Сетки ворот реагируют на шайбу (мировые координаты).
@@ -155,6 +160,16 @@ namespace Hockey
 
             netTex ??= GoalNet.Texture();
             nets.Add(new GoalNet(g, Mats.Cutout(netTex, Color.white), W, H, D));
+            // гол-лампа за воротами: красный фонарь на стойке, вспыхивает и мигает при голе в эти ворота
+            Obj("LampPost", MeshKit.Cylinder(0.05f, 1.9f, 12), Mats.Get("#3d4260", 0.4f), g, new Vector3(D + 1.5f, 0.95f, 0));
+            Obj("LampBase", MeshKit.Cylinder(0.16f, 0.08f, 16), Mats.Get("#23232b", 0.4f), g, new Vector3(D + 1.5f, 1.92f, 0));
+            var lm = new Material(Mats.Emissive("#ff3b30", 0.15f));
+            var lamp = Obj("GoalLamp", MeshKit.Sphere(0.2f, 16, 0), lm, g, new Vector3(D + 1.5f, 2.12f, 0));
+            lamp.transform.localScale = new Vector3(1, 1.25f, 1);
+            var gl = new GameObject("GoalLight").AddComponent<Light>();
+            gl.transform.SetParent(g, false); gl.transform.localPosition = new Vector3(D + 1.2f, 2.3f, 0);
+            gl.type = LightType.Point; gl.color = Mats.Hex("#ff4a3d"); gl.range = 14; gl.intensity = 0; gl.shadows = LightShadows.None;
+            goalLamps.Add((sgn, lm, gl));
         }
 
         void BuildStands()
@@ -361,6 +376,14 @@ namespace Hockey
 
         public void Update(float dt, float time)
         {
+            foreach (var (sgn, mat, light) in goalLamps)
+            {
+                int k = sgn > 0 ? 0 : 1;
+                lampT[k] = Mathf.Max(0, lampT[k] - dt * 0.5f);   // два ворот-прохода за кадр не бывает: по лампе на сторону
+                float on = lampT[k] > 0 ? 0.55f + 0.45f * Mathf.Sin(time * 16) : 0;
+                mat.SetColor("_EmissionColor", Mats.Hex("#ff3b30") * (0.15f + on * 2.2f));
+                light.intensity = on * 2.4f * Mathf.Clamp01(lampT[k]);
+            }
             if (!probeRendered && probe.enabled) { probe.RenderProbe(); probeRendered = true; }
             Excite = Mathf.Max(0, Excite - dt * 0.25f);
             if (time > nextWave) { waveT = time; nextWave = time + 25 + Mathf.Repeat(time * 7.3f, 15); }

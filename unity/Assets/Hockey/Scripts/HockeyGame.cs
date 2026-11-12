@@ -727,6 +727,7 @@ namespace Hockey
                     {
                         if (Settings.ScreenShake) shake = 0.4f;
                         arena.Excite = 1;
+                        arena.GoalFlash(Mathf.Clamp((int)e.Value, 0, 1) == 0 ? 1 : -1);
                         int team = Mathf.Clamp((int)e.Value, 0, 1);
                         float gx = team == 0 ? Rink.GoalX : -Rink.GoalX;
                         fx.Confetti(new Vector3(gx, 1.2f, 0), 260, Mats.Hex(TeamColors.All[team].Main));
