@@ -243,6 +243,15 @@ namespace Hockey
         }
 
         readonly Dictionary<string, float> btnAnim = new Dictionary<string, float>();
+        Texture2D[] icons;
+        Texture2D pendingIcon;   // иконка для следующей кнопки (рисуется слева на ней)
+
+        bool IconButton(int icon, string text, GUIStyle style, params GUILayoutOption[] opts)
+        {
+            if (icons == null) { icons = new Texture2D[8]; for (int i = 0; i < 8; i++) icons[i] = HudArt.Icon(i); }
+            pendingIcon = icons[icon];
+            return Button(text, style, opts);
+        }
 
         /// Кнопка с анимацией: плавно увеличивается под курсором, «проседает» при нажатии, на ней появляется шайба.
         bool Button(string text, GUIStyle style, params GUILayoutOption[] opts)
@@ -262,6 +271,12 @@ namespace Hockey
             var old = GUI.matrix;
             GUIUtility.ScaleAroundPivot(new Vector2(sc, sc), GUIUtility.GUIToScreenPoint(rect.center));
             bool r = GUI.Button(rect, text, style);
+            if (pendingIcon != null && ev.type == EventType.Repaint)
+            {
+                float isz = Mathf.Min(rect.height * 0.62f, 46);
+                GUI.DrawTexture(new Rect(rect.x + 18, rect.center.y - isz / 2 - 2, isz, isz), pendingIcon);
+            }
+            pendingIcon = null;
             if (ev.type == EventType.Repaint && h > 0.01f)
             {
                 float ph = Mathf.Min(34, rect.height * 0.5f), pwd = ph * 1.6f;
@@ -340,7 +355,7 @@ namespace Hockey
                 case UiScreen.Menu: DrawMenu(); break;
                 case UiScreen.Lobby: DrawLobby(); break;
                 case UiScreen.Match:
-                    if (view != null) DrawHud(view);
+                    if (view != null && !endShown) DrawHud(view);   // на итогах — без табло и мини-карты
                     if (endShown) DrawEnd();
                     else if (paused) { if (uiPage == UiPage.Settings) DrawSettingsPanel(); else if (uiPage == UiPage.Controls) DrawControlsPanel(); else DrawPause(); }
                     break;
@@ -450,15 +465,6 @@ namespace Hockey
             }
             GUI.color = Color.white;
             // «ледовая» панель под кнопками: полупрозрачный лёд с красной и синей линиями и кругом вбрасывания
-            if (uiPage == UiPage.Main)
-            {
-                var ice = new Rect(36, 212, 528, VH - 300);
-                GUI.color = new Color(1, 1, 1, 0.9f); GUI.Label(ice, "", sIce);
-                GUI.color = new Color(0.9f, 0.25f, 0.24f, 0.55f); GUI.DrawTexture(new Rect(ice.x + 14, ice.y + 16, 5, ice.height - 38), white);
-                GUI.color = new Color(0.2f, 0.45f, 0.9f, 0.55f); GUI.DrawTexture(new Rect(ice.xMax - 19, ice.y + 16, 5, ice.height - 38), white);
-                GUI.color = new Color(0.9f, 0.25f, 0.24f, 0.16f); GUI.DrawTexture(new Rect(ice.xMax - 190, ice.yMax - 200, 230, 230), hudRing);
-                GUI.color = Color.white;
-            }
             DrawTitle(60, 40);
             if (uiPage != lastPage) { lastPage = uiPage; pageT = Time.realtimeSinceStartup; scroll = Vector2.zero; }
             float k = Mathf.Clamp01((Time.realtimeSinceStartup - pageT) * 4.5f);
@@ -527,26 +533,25 @@ namespace Hockey
                 GUI.matrix = baseM * Matrix4x4.Translate(new Vector3((1 - e) * -220, 0, 0));
                 idx++;
             }
-            GUILayout.BeginArea(new Rect(60, 226, 480, VH - 372));
-            // кнопки с подписями: крупное название и строка пояснения
-            string Cap(string title, string sub, int ts, int ss = 14) => $"<size={ts}>{title}</size>\n<size={ss}><color=#ffffffcc>{sub}</color></size>";
+            GUILayout.BeginArea(new Rect(60, 250, 430, VH - 330));
+            // кнопки как на макете: крупные «леденцы» с иконкой слева, без мелких подписей
             Enter();
             float pulse = 1 + Mathf.Sin(time * 3.2f) * 0.015f;
-            var playStyle = Btn("#ffb347", "#ff4f5e", 20);
-            if (Button(Cap("ИГРАТЬ", "матч против ботов — один или с друзьями", (int)(38 * pulse), 15), playStyle, GUILayout.Height(104))) uiPage = UiPage.Play;
-            GUILayout.Space(4);
-            Enter(); if (Button(Cap("Вдвоём на одном экране", "сплит-скрин: WASD и стрелки или геймпады", 23), BtnBlue, GUILayout.Height(70))) uiPage = UiPage.Split;
-            Enter(); if (Button(Cap("Игра по сети", "создай матч или найди игру друзей", 23), BtnGreen, GUILayout.Height(70))) uiPage = UiPage.Online;
-            Enter(); if (Button(Cap("Раздевалка", "имя, номер, обмотка клюшки", 22), Btn("#ffd23f", "#f29a1f", 20), GUILayout.Height(66))) uiPage = UiPage.Locker;
+            if (IconButton(0, "ИГРАТЬ", Btn("#ffb347", "#ff6a2e", (int)(34 * pulse)), GUILayout.Height(84))) uiPage = UiPage.Play;
+            GUILayout.Space(6);
+            Enter(); if (IconButton(1, "Вдвоём", Btn("#6aa8ff", "#3a63d8", 26), GUILayout.Height(66))) uiPage = UiPage.Split;
+            Enter(); if (IconButton(2, "По сети", Btn("#4fe39a", "#1fa863", 26), GUILayout.Height(66))) uiPage = UiPage.Online;
+            Enter(); if (IconButton(3, "Раздевалка", Btn("#b07cff", "#7a3fe0", 26), GUILayout.Height(66))) uiPage = UiPage.Locker;
+            GUILayout.Space(6);
             Enter();
             GUILayout.BeginHorizontal();
-            if (Button("Настройки", BtnGhost, GUILayout.Height(50))) { settingsReturn = UiPage.Main; uiPage = UiPage.Settings; }
-            if (Button("Управление", BtnGhost, GUILayout.Height(50))) { settingsReturn = UiPage.Main; uiPage = UiPage.Controls; }
+            if (IconButton(4, "Настройки", BtnGhost, GUILayout.Height(54))) { settingsReturn = UiPage.Main; uiPage = UiPage.Settings; }
+            if (IconButton(5, "Управление", BtnGhost, GUILayout.Height(54))) { settingsReturn = UiPage.Main; uiPage = UiPage.Controls; }
             GUILayout.EndHorizontal();
             Enter();
             GUILayout.BeginHorizontal();
-            if (Button("Авторы", BtnGhost, GUILayout.Height(46))) uiPage = UiPage.Credits;
-            if (Button("Выход", BtnGhost, GUILayout.Height(46))) uiPage = UiPage.Quit;
+            if (IconButton(6, "Авторы", BtnGhost, GUILayout.Height(54))) uiPage = UiPage.Credits;
+            if (IconButton(7, "Выход", BtnGhost, GUILayout.Height(54))) uiPage = UiPage.Quit;
             GUILayout.EndHorizontal();
             if (!string.IsNullOrEmpty(message)) GUILayout.Label($"<color=#ffd23f>{message}</color>", sLabel);
             GUILayout.EndArea();

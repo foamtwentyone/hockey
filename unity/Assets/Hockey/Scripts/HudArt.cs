@@ -349,6 +349,57 @@ namespace Hockey
             });
         }
 
+        // ---------- иконки кнопок меню: белый знак с тёмно-синей обводкой ----------
+        /// 0 играть, 1 вдвоём, 2 сеть, 3 раздевалка, 4 настройки, 5 управление, 6 авторы, 7 выход
+        public static Texture2D Icon(int kind)
+        {
+            const int N = 96; var c0 = new Vector2(N / 2f, N / 2f);
+            return Make(N, N, p =>
+            {
+                var q = p - c0; float d = 1e3f;
+                switch (kind)
+                {
+                    case 0: { // треугольник «играть»
+                        float a = Mathf.Max(-q.x - 22, Mathf.Max(q.x * 0.55f + Mathf.Abs(q.y) - 20, -1e3f));
+                        d = Mathf.Max(a, q.x - 30) - 4; break; }
+                    case 1: // двое
+                        d = Mathf.Min(Mathf.Min((q - new Vector2(-14, 12)).magnitude - 11, (q - new Vector2(14, 12)).magnitude - 11),
+                                      Mathf.Min(RoundBox(p, c0 + new Vector2(-14, -18), new Vector2(15, 12), 10), RoundBox(p, c0 + new Vector2(14, -18), new Vector2(15, 12), 10)));
+                        break;
+                    case 2: { // глобус
+                        float r = q.magnitude; float ring = Mathf.Abs(r - 30) - 4;
+                        float mer = Mathf.Max(Mathf.Abs(Ellipse(p, c0, new Vector2(13, 30))) - 3.5f, r - 30);
+                        float eq = Mathf.Max(Mathf.Abs(q.y) - 3.5f, r - 30);
+                        d = Mathf.Min(ring, Mathf.Min(mer, eq)); break; }
+                    case 3: // свитер
+                        d = Mathf.Min(RoundBox(p, c0 + new Vector2(0, -6), new Vector2(18, 26), 5),
+                            Mathf.Min(RoundBox(p, c0 + new Vector2(-24, 10), new Vector2(10, 12), 5), RoundBox(p, c0 + new Vector2(24, 10), new Vector2(10, 12), 5)));
+                        d = Mathf.Max(d, -((q - new Vector2(0, 22)).magnitude - 7)); break;
+                    case 4: { // шестерёнка
+                        float a = Mathf.Atan2(q.y, q.x); float r = q.magnitude;
+                        float teeth = 26 + 7 * Mathf.Clamp(Mathf.Cos(a * 8) * 3, -1, 1);
+                        d = Mathf.Max(r - teeth, -(r - 10)); break; }
+                    case 5: // геймпад
+                        d = Mathf.Min(RoundBox(p, c0, new Vector2(32, 17), 16), 1e3f);
+                        d = Mathf.Max(d, -Mathf.Min(Mathf.Min(RoundBox(p, c0 + new Vector2(-16, 0), new Vector2(9, 3), 1), RoundBox(p, c0 + new Vector2(-16, 0), new Vector2(3, 9), 1)),
+                                                    Mathf.Min((q - new Vector2(15, 5)).magnitude - 4, (q - new Vector2(21, -3)).magnitude - 4)));
+                        break;
+                    case 6: { // звезда
+                        var s = q / 34; float a = Mathf.Atan2(s.y, s.x) - Mathf.PI / 2; float seg = Mathf.PI * 2 / 5;
+                        float k = Mathf.Repeat(a, seg) / seg; d = (s.magnitude - Mathf.Lerp(1, 0.45f, 1 - Mathf.Abs(k * 2 - 1))) * 34; break; }
+                    default: { // выход: дверь и стрелка
+                        float door = Mathf.Max(Mathf.Abs(RoundBox(p, c0 + new Vector2(-10, 0), new Vector2(16, 28), 3)) - 3.5f, -(q.x - 2));
+                        float shaft = RoundBox(p, c0 + new Vector2(10, 0), new Vector2(16, 4), 2);
+                        float head = Mathf.Max(Mathf.Abs(q.y) + (q.x - 32) * 1.0f, -(q.x - 16));
+                        d = Mathf.Min(door, Mathf.Min(shaft, head)); break; }
+                }
+                var col = new Color(0, 0, 0, 0);
+                col = Over(col, new Color(0.05f, 0.06f, 0.2f, 0.9f), A(d - 4));
+                col = Over(col, Color.white, A(d));
+                return col;
+            });
+        }
+
         // ---------- прицел ----------
         /// Четыре дуги-скобы с тёмной обводкой и короткие засечки внутрь — читается на светлом льду и тёмных трибунах.
         public static Texture2D Reticle()

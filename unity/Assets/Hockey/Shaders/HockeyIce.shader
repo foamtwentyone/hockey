@@ -6,7 +6,7 @@ Shader "Hockey/Ice"
     {
         _MainTex ("Ice", 2D) = "white" {}
         _ReflTex ("Reflection", 2D) = "black" {}
-        _Refl ("Reflection Strength", Range(0,1)) = 0.25
+        _Refl ("Reflection Strength", Range(0,1)) = 0.38
         _Gloss ("Gloss", Range(0,1)) = 0.18
     }
     SubShader

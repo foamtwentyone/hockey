@@ -62,7 +62,7 @@ namespace Hockey
             reflCam.Render();
             GL.invertCulling = false;
             mat.SetTexture("_ReflTex", rt);
-            mat.SetFloat("_Refl", 0.25f);
+            mat.SetFloat("_Refl", 0.38f);   // глянцевый лёд с отражениями
             rendering = false;
         }
 

@@ -54,7 +54,7 @@ namespace Hockey
             var t = new Texture2D(w, h, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Clamp, anisoLevel = 16, filterMode = FilterMode.Trilinear };
             var px = new Color[w * h];
             float pxm = 1f / ppm;
-            Color iceA = Mats.Hex("#f4f9ff"), iceB = Mats.Hex("#dbeafa"), red = Mats.Hex("#e8443c"), blue = Mats.Hex("#2f74e4");
+            Color iceA = Mats.Hex("#e6f0ff"), iceB = Mats.Hex("#bcd5f3"), red = Mats.Hex("#e8443c"), blue = Mats.Hex("#2f74e4");
             Color crease = Mats.Hex("#8cc4ff"), logoA = Mats.Hex("#ffd23f"), logoB = Mats.Hex("#3f86e8"), logoC = Mats.Hex("#e2483d");
             for (int y = 0; y < h; y++)
             {
