@@ -203,7 +203,7 @@ namespace Hockey
                     yield return Shot("17_goalie");
                 }
                 // лицо и шлем крупно
-                var head = p + Vector3.up * 1.35f;
+                var head = p + Vector3.up * 1.62f;   // голова новой модели выше
                 cam.transform.position = head + fwd * 1.5f + Vector3.up * 0.1f + Vector3.Cross(Vector3.up, fwd) * 0.5f;
                 cam.transform.LookAt(head);
                 yield return Wait(0.4f);

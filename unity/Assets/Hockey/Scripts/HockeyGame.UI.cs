@@ -1147,7 +1147,7 @@ namespace Hockey
                     ix += 136;
                 }
                 // всплывающее сообщение о бонусе
-                if (v.ToastT > 0 && !string.IsNullOrEmpty(v.Toast))
+                if (v.ToastT > 0 && !string.IsNullOrEmpty(v.Toast) && !endShown)   // под итогами матча сообщения не показываем
                 {
                     float a = Mathf.Clamp01(v.ToastT * 2);
                     var ts = new GUIStyle(sH2) { alignment = TextAnchor.MiddleCenter, fontSize = 34 };
