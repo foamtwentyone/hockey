@@ -557,6 +557,11 @@ namespace Hockey
 
         void DrawLocker()
         {
+            // перетаскивание мышью справа от панели — облёт камеры вокруг игрока
+            var ev = Event.current;
+            if (ev.type == EventType.MouseDrag && ev.mousePosition.x > 680)
+            { lockerOrbit += ev.delta.x * 0.006f; lockerTilt = Mathf.Clamp(lockerTilt - ev.delta.y * 0.004f, -0.35f, 0.6f); ev.Use(); }
+            GUI.Label(new Rect(VW - 470, VH - 60, 440, 30), "Потяни мышью, чтобы осмотреть игрока", new GUIStyle(sSmall) { alignment = TextAnchor.MiddleRight });
             GUILayout.BeginArea(new Rect(60, 226, 600, VH - 290), sPanel);
             scroll = GUILayout.BeginScrollView(scroll);
             GUILayout.Label("Раздевалка", sH1);

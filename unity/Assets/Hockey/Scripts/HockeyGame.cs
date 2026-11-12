@@ -72,7 +72,7 @@ namespace Hockey
         readonly Dictionary<int, Transform> rings = new Dictionary<int, Transform>();
         readonly List<CharacterRig> showcase = new List<CharacterRig>();
         LockerRoom locker;
-        bool lockerShown; float lockerFade, endShownAt;
+        bool lockerShown; float lockerFade, endShownAt, lockerOrbit, lockerTilt;
         static readonly Vector3 ShowPos0 = new Vector3(-1.3f, 0, 0.4f);
         Transform puck, puckRing, puckFire;
         LineRenderer trail;
@@ -823,8 +823,12 @@ namespace Hockey
             }
             if (!inLocker && Mathf.Repeat(time, 6) < dt) fx.Confetti(new Vector3(0, 0.5f, 0.5f), 80);
             float sway = Mathf.Sin(time * 0.25f) * 0.6f;
-            var camT = inLocker ? locker.CamPos + new Vector3(sway * 0.25f, 0, 0) : new Vector3(-2.6f + sway, 1.7f, -6.4f);
-            var lookT = inLocker ? locker.CamLook : new Vector3(-1.5f + sway * 0.5f, 1.0f, 0.6f);
+            // раздевалка: камеру можно водить вокруг игрока (перетаскивание мышью), без касания — медленно «дышит»
+            lockerOrbit = Mathf.Clamp(lockerOrbit, -1.1f, 1.1f);
+            float orb = lockerOrbit + Mathf.Sin(time * 0.3f) * 0.08f;
+            var seat = inLocker ? locker.Seat + Vector3.up * 0.85f : Vector3.zero;
+            var camT = inLocker ? seat + new Vector3(Mathf.Sin(orb) * 3.0f - 0.35f, 0.4f + lockerTilt, -Mathf.Cos(orb) * 3.0f) : new Vector3(-2.6f + sway, 1.7f, -6.4f);
+            var lookT = inLocker ? seat + new Vector3(-0.45f, -0.05f, 0) : new Vector3(-1.5f + sway * 0.5f, 1.0f, 0.6f);
             float ck = 1 - Mathf.Exp(-dt * 4);
             bool jump = menuCamPos == Vector3.zero || (menuCamPos - camT).sqrMagnitude > 400;   // между ареной и раздевалкой — склейка
             menuCamPos = jump ? camT : Vector3.Lerp(menuCamPos, camT, ck);
