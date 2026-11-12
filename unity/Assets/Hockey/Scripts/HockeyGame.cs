@@ -29,7 +29,7 @@ namespace Hockey
             public Vector3 Pos, Look; public Rect Rect;
             public string Toast; public Color ToastColor; public float ToastT;
             public bool HudInit; public float ChargeA, LastCharge;
-            public float Side;
+            public float Side, GoalW;
         }
 
         // ---------- состояние ----------
@@ -904,6 +904,20 @@ namespace Hockey
                 float cz = Mathf.Clamp(s.Z - fz * horiz, -Rink.W / 2 - 3.2f, Rink.W / 2 + 3.2f);
                 var target = new Vector3(cx, 1.3f + dist * Mathf.Sin(pe) + s.Y * 0.5f, cz);
                 var look = new Vector3(s.X + fx2 * 2.2f, 1.1f + lift + s.Y * 0.5f, s.Z + fz * 2.2f);
+                // гол: камера облетает автора гола спереди — показываем празднование
+                int scorer = st.LastGoal != null ? st.LastGoal.Scorer : -1;
+                bool goalShow = st.Phase == Phase.Goal && scorer >= 0 && scorer < st.Players.Length && st.PhaseT > 0.5f;
+                v.GoalW = Mathf.Lerp(v.GoalW, goalShow ? 1 : 0, 1 - Mathf.Exp(-dt * (goalShow ? 3.5f : 6)));
+                if (v.GoalW > 0.01f && scorer >= 0 && scorer < st.Players.Length)
+                {
+                    var sc = st.Players[scorer];
+                    var sf = new Vector3(Mathf.Sin(sc.H), 0, Mathf.Cos(sc.H)); var sr = new Vector3(sf.z, 0, -sf.x);
+                    var sp0 = new Vector3(sc.X, sc.Y, sc.Z);
+                    var gpos = sp0 + sf * 3.6f + sr * Mathf.Sin(time * 0.7f) * 1.6f + Vector3.up * 1.5f;
+                    gpos.x = Mathf.Clamp(gpos.x, -Rink.L / 2 + 0.8f, Rink.L / 2 - 0.8f); gpos.z = Mathf.Clamp(gpos.z, -Rink.W / 2 + 0.8f, Rink.W / 2 - 0.8f);
+                    target = Vector3.Lerp(target, gpos, v.GoalW);
+                    look = Vector3.Lerp(look, sp0 + Vector3.up * 0.95f, v.GoalW);
+                }
                 // с шайбой камера уходит за правое плечо (клюшка и шайба слева): игрок смещается влево на экране
                 // и не загораживает ворота и прицел — как прицеливание «из-за плеча» в играх от третьего лица
                 bool aiming = st.PuckOwner == v.Follow || s.Charge > 0.02f;
