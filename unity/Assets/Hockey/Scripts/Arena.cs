@@ -50,6 +50,7 @@ namespace Hockey
             BuildGoal(-1);
             BuildStands();
             BuildScoreboard();
+            BuildDecor();
             BuildProbe();
         }
 
@@ -292,6 +293,67 @@ namespace Hockey
                 }
         }
 
+        /// Глубина и масштаб арены: верхний ярус с ложами, ферма с прожекторами под крышей, вымпелы команд над трибунами,
+        /// скамейки запасных за бортом. Всё вне льда — внимание остаётся на игроках.
+        void BuildDecor()
+        {
+            Material dark = Mats.Get("#23264e", 0.1f), truss = Mats.Get("#3a3f7a", 0.3f), glow = Mats.Emissive("#fff3c8", 1.1f), boxGlow = Mats.Emissive("#ffd58a", 0.7f);
+            // верхний ярус и ложи со светящимися окнами
+            Obj("Upper", MeshKit.RingWall(11.2f, 15f, 9f, 9.4f, true, true, true), dark, Root, Vector3.zero, false, false).layer = CrowdLayer;
+            Obj("UpperWall", MeshKit.RingWall(15f, 15.6f, 9.4f, 15f, true, false, true), Mats.Get("#1c1f45"), Root, Vector3.zero, false, false).layer = CrowdLayer;
+            var up = MeshKit.Perimeter(14.9f, 30); float upLen = MeshKit.Length(up); int kk = 0;
+            for (float d = 0; d < upLen; d += 4.2f, kk++)
+            {
+                var p = MeshKit.PointAt(up, d);
+                var w = Obj("Suite", MeshKit.RoundedBox(2.6f, 1.3f, 0.12f, 0.08f), kk % 3 == 0 ? Mats.Emissive("#8fd8ff", 0.6f) : boxGlow, Root, new Vector3(p.X, 11.4f, p.Z), false, false);
+                w.transform.rotation = Quaternion.LookRotation(new Vector3(p.Nx, 0, p.Nz)); w.layer = CrowdLayer;
+            }
+            // ферма под крышей: овальное кольцо над бортами с прожекторами, направленными на лёд
+            Obj("Truss", MeshKit.RingWall(1.2f, 1.7f, 14.2f, 14.6f, true, true, true), truss, Root, Vector3.zero, false, false).layer = CrowdLayer;
+            Obj("Truss2", MeshKit.RingWall(1.2f, 1.7f, 15.3f, 15.5f, true, true, true), truss, Root, Vector3.zero, false, false).layer = CrowdLayer;
+            var tr = MeshKit.Perimeter(1.45f, 30); float trLen = MeshKit.Length(tr); kk = 0;
+            for (float d = 0; d < trLen; d += 5.5f, kk++)
+            {
+                var p = MeshKit.PointAt(tr, d);
+                var rot = Quaternion.LookRotation(new Vector3(p.Nx, 0, p.Nz));
+                Obj("TrussPost", MeshKit.Box(0.14f, 1.3f, 0.14f), truss, Root, new Vector3(p.X, 14.85f, p.Z), false, false).layer = CrowdLayer;
+                var sp = Obj("Spot", MeshKit.RoundedBox(0.9f, 0.35f, 0.5f, 0.1f), glow, Root, new Vector3(p.X, 14.0f, p.Z), false, false);
+                sp.transform.rotation = rot * Quaternion.Euler(-25, 0, 0); sp.layer = CrowdLayer;
+            }
+            // вымпелы над трибунами: цвета команд, белый и жёлтый — с эмблемой-щитом
+            string[] cols = { TeamColors.All[0].Main, "#f6f6f2", TeamColors.All[1].Main, "#ffd23f" };
+            var crest = Mats.Cutout(HockeyGear.CrestTexture(), Color.white);
+            var bp = MeshKit.Perimeter(7.5f, 30); float bLen = MeshKit.Length(bp); kk = 0;
+            for (float d = 2; d < bLen; d += 7f, kk++)
+            {
+                var p = MeshKit.PointAt(bp, d);
+                var rot = Quaternion.LookRotation(new Vector3(p.Nx, 0, p.Nz));
+                var b = Obj("Banner", MeshKit.RoundedBox(1.5f, 2.6f, 0.05f, 0.03f), Mats.Get(cols[kk % cols.Length], 0.1f), Root, new Vector3(p.X, 11.6f, p.Z), false, false);
+                b.transform.rotation = rot; b.layer = CrowdLayer;
+                var tip = Obj("BannerTip", MeshKit.RoundedBox(1.06f, 1.06f, 0.05f, 0.03f), Mats.Get(cols[kk % cols.Length], 0.1f), b.transform, new Vector3(0, -1.3f, 0), false, false);
+                tip.transform.localRotation = Quaternion.Euler(0, 0, 45); tip.layer = CrowdLayer;
+                foreach (float zz in new[] { -0.04f, 0.04f })
+                {
+                    var c = Obj("Crest", MeshKit.Plane(1.0f, 1.2f), crest, b.transform, new Vector3(0, 0.2f, zz), false, false);
+                    if (zz > 0) c.transform.localRotation = Quaternion.Euler(0, 180, 0);
+                    c.layer = CrowdLayer;
+                }
+                Obj("BannerRod", MeshKit.Box(1.7f, 0.06f, 0.06f), truss, b.transform, new Vector3(0, 1.33f, 0), false, false).layer = CrowdLayer;
+                banners.Add(b.transform);
+            }
+            // скамейки запасных и штрафной бокс за бортом вдоль длинных сторон
+            Material bench = Mats.Get("#c08a55", 0.2f), boxM = Mats.Get("#e9ecf5", 0.2f);
+            foreach (float z in new[] { -1f, 1f })
+                for (int i = -1; i <= 1; i += 2)
+                {
+                    float bz = z * (Rink.W / 2 + 1.0f), bx = i * 9f;
+                    Obj("Bench", MeshKit.RoundedBox(7f, 0.12f, 0.5f, 0.04f), bench, Root, new Vector3(bx, 0.45f, bz));
+                    Obj("BenchBack", MeshKit.RoundedBox(7f, 0.6f, 0.1f, 0.04f), z > 0 ? Mats.Get(TeamColors.All[i > 0 ? 0 : 1].Main, 0.1f) : boxM, Root, new Vector3(bx, 0.9f, bz + z * 0.3f));
+                    foreach (float e in new[] { -3.3f, 3.3f }) Obj("BenchLeg", MeshKit.Box(0.1f, 0.45f, 0.4f), Mats.Get("#3d4260", 0.3f), Root, new Vector3(bx + e, 0.22f, bz));
+                }
+        }
+        readonly List<Transform> banners = new List<Transform>();
+
         void BuildScoreboard()
         {
             var cube = new GameObject("Jumbotron").transform;
@@ -401,6 +463,12 @@ namespace Hockey
                     bob += Mathf.Max(0, 1 - d / 0.5f) * 0.6f;
                 }
                 crowdGroups[i].localPosition = new Vector3(0, bob, 0);
+            }
+            // вымпелы слегка покачиваются, сильнее — когда трибуны шумят
+            for (int i = 0; i < banners.Count; i++)
+            {
+                var e = banners[i].localEulerAngles;
+                banners[i].localRotation = Quaternion.Euler(Mathf.Sin(time * 1.1f + i * 1.7f) * (2.5f + Excite * 9), e.y, 0);
             }
             for (int i = 0; i < beams.Count; i++)
             {
